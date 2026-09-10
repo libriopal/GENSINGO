@@ -1,59 +1,63 @@
 package com.discomplemented.ginseng.data.repository
 
-import com.discomplemented.ginseng.data.local.database.TrackNodeDao
-import com.discomplemented.ginseng.data.local.database.TrackNodeEntity
-import com.discomplemented.ginseng.domain.model.TrackNode
+import com.discomplemented.ginseng.data.local.database.dao.TrackNodeDao
+import com.discomplemented.ginseng.data.local.database.entity.TrackNodeEntity
 import com.discomplemented.ginseng.domain.repository.TrackRepository
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
-import androidx.sqlite.db.SimpleSQLiteQuery
-import java.util.UUID
+import javax.inject.Inject
 
-class TrackRepositoryImpl(
+/**
+ * Implementation of TrackRepository using Room database.
+ * Follows persist-first pattern: writes immediately to Room.
+ */
+class TrackRepositoryImpl @Inject constructor(
     private val trackNodeDao: TrackNodeDao
 ) : TrackRepository {
 
-    override fun getTrackHistory(): Flow<List<TrackNode>> {
-        return trackNodeDao.getAll().map { entities ->
-            entities.map { it.toDomain() }
-        }
+    override suspend fun insertTrack(node: TrackNodeEntity): Long {
+        return trackNodeDao.insert(node)
     }
 
-    override suspend fun saveTrackNode(node: TrackNode) {
-        trackNodeDao.insert(node.toEntity())
+    override suspend fun insertBatch(nodes: List<TrackNodeEntity>): List<Long> {
+        return trackNodeDao.insertBatch(nodes)
     }
 
-    override suspend fun saveTrackNodes(nodes: List<TrackNode>) {
-        trackNodeDao.insertAll(nodes.map { it.toEntity() })
+    override suspend fun getById(id: String): TrackNodeEntity? {
+        return trackNodeDao.getById(id)
     }
 
-    override suspend fun getTrackNodesInBounds(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double): List<TrackNode> {
-        val query = SimpleSQLiteQuery(
-            "SELECT t.* FROM track_nodes t JOIN track_nodes_rtree r ON t.rowId = r.id WHERE r.minLat <= ? AND r.maxLat >= ? AND r.minLon <= ? AND r.maxLon >= ?",
-            arrayOf(maxLat, minLat, maxLon, minLon)
-        )
-        return trackNodeDao.getNodesInBoundingBox(query).map { it.toDomain() }
+    override fun getBySessionIdFlow(sessionId: String): Flow<List<TrackNodeEntity>> {
+        return trackNodeDao.getBySessionIdFlow(sessionId)
     }
 
-    private fun TrackNodeEntity.toDomain(): TrackNode {
-        return TrackNode(
-            id = UUID.fromString(uuid),
-            timestamp = timestamp,
-            latitude = latitude,
-            longitude = longitude,
-            altitude = altitude,
-            accuracy = accuracy
-        )
+    override suspend fun getBySessionId(sessionId: String, limit: Int): List<TrackNodeEntity> {
+        return trackNodeDao.getBySessionId(sessionId, limit)
     }
 
-    private fun TrackNode.toEntity(): TrackNodeEntity {
-        return TrackNodeEntity(
-            uuid = id.toString(),
-            timestamp = timestamp,
-            latitude = latitude,
-            longitude = longitude,
-            altitude = altitude,
-            accuracy = accuracy
-        )
+    override suspend fun queryBoundingBox(
+        minLat: Double,
+        maxLat: Double,
+        minLon: Double,
+        maxLon: Double,
+        minTime: Long,
+        maxTime: Long
+    ): List<TrackNodeEntity> {
+        return trackNodeDao.queryBoundingBox(minLat, maxLat, minLon, maxLon, minTime, maxTime)
+    }
+
+    override suspend fun getUnsynced(batchSize: Int): List<TrackNodeEntity> {
+        return trackNodeDao.getUnsynced(batchSize)
+    }
+
+    override suspend fun markSynced(ids: List<String>, syncedAt: Long) {
+        trackNodeDao.markSynced(ids, syncedAt)
+    }
+
+    override suspend fun deleteOldSynced(cutoffTime: Long): Int {
+        return trackNodeDao.deleteOldSynced(cutoffTime)
+    }
+
+    override suspend fun getUnsyncedCount(): Int {
+        return trackNodeDao.getUnsyncedCount()
     }
 }

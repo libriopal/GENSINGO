@@ -1,21 +1,25 @@
 package com.discomplemented.ginseng.location.tracker
 
-import com.discomplemented.ginseng.domain.model.TrackNode
+import com.discomplemented.ginseng.data.local.database.entity.TrackNodeEntity
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * Interface for high-accuracy GPS location tracking.
+ */
 interface LocationTracker {
     /**
-     * Returns a flow of high-accuracy location updates.
+     * Starts continuous location updates.
+     * Emits location updates as Flow.
      */
-    fun getLocationUpdates(): Flow<TrackNode>
+    fun startTracking(): Flow<TrackNodeEntity>
 
     /**
-     * Starts tracking location.
-     */
-    fun startTracking()
-
-    /**
-     * Stops tracking location.
+     * Stops tracking.
      */
     fun stopTracking()
+
+    /**
+     * Returns true if tracking is active.
+     */
+    fun isTracking(): Boolean
 }

@@ -1,64 +1,60 @@
 package com.discomplemented.ginseng.data.repository
 
-import com.discomplemented.ginseng.data.local.database.GinsengPatchDao
-import com.discomplemented.ginseng.data.local.database.GinsengPatchEntity
-import com.discomplemented.ginseng.domain.model.GinsengPatch
+import com.discomplemented.ginseng.data.local.database.dao.GinsengPatchDao
+import com.discomplemented.ginseng.data.local.database.entity.GinsengPatchEntity
 import com.discomplemented.ginseng.domain.repository.GinsengPatchRepository
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
-import androidx.sqlite.db.SimpleSQLiteQuery
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
-import java.util.UUID
+import javax.inject.Inject
 
-class GinsengPatchRepositoryImpl(
-    private val ginsengPatchDao: GinsengPatchDao,
-    private val gson: Gson
+/**
+ * Implementation of GinsengPatchRepository using Room database.
+ */
+class GinsengPatchRepositoryImpl @Inject constructor(
+    private val ginsengPatchDao: GinsengPatchDao
 ) : GinsengPatchRepository {
 
-    override fun getAllPatches(): Flow<List<GinsengPatch>> {
-        return ginsengPatchDao.getAll().map { entities ->
-            entities.map { it.toDomain(gson) }
-        }
+    override suspend fun insert(patch: GinsengPatchEntity): Long {
+        return ginsengPatchDao.insert(patch)
     }
 
-    override suspend fun savePatch(patch: GinsengPatch) {
-        ginsengPatchDao.insert(patch.toEntity(gson))
+    override suspend fun insertBatch(patches: List<GinsengPatchEntity>): List<Long> {
+        return ginsengPatchDao.insertBatch(patches)
     }
 
-    override suspend fun getPatchById(id: String): GinsengPatch? {
-        return ginsengPatchDao.getById(id)?.toDomain(gson)
+    override suspend fun update(patch: GinsengPatchEntity) {
+        ginsengPatchDao.update(patch)
     }
 
-    override suspend fun getPatchesInBounds(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double): List<GinsengPatch> {
-        val query = SimpleSQLiteQuery(
-            "SELECT p.* FROM ginseng_patches p JOIN ginseng_patches_rtree r ON p.uuid = r.id WHERE r.minLat <= ? AND r.maxLat >= ? AND r.minLon <= ? AND r.maxLon >= ?",
-            arrayOf(maxLat, minLat, maxLon, minLon)
-        )
-        return ginsengPatchDao.getPatchesInBoundingBox(query).map { it.toDomain(gson) }
+    override fun getAllFlow(): Flow<List<GinsengPatchEntity>> {
+        return ginsengPatchDao.getAllFlow()
     }
 
-    private fun GinsengPatchEntity.toDomain(gson: Gson): GinsengPatch {
-        val type = object : TypeToken<Map<String, String>>() {}.type
-        val metadata: Map<String, String> = gson.fromJson(metadata, type)
-        return GinsengPatch(
-            id = UUID.fromString(id),
-            latitude = latitude,
-            longitude = longitude,
-            timestamp = timestamp,
-            confidence = confidence,
-            metadata = metadata
-        )
+    override suspend fun getAll(): List<GinsengPatchEntity> {
+        return ginsengPatchDao.getAll()
     }
 
-    private fun GinsengPatch.toEntity(gson: Gson): GinsengPatchEntity {
-        return GinsengPatchEntity(
-            id = id.toString(),
-            latitude = latitude,
-            longitude = longitude,
-            timestamp = timestamp,
-            confidence = confidence,
-            metadata = gson.toJson(metadata)
-        )
+    override suspend fun getById(id: String): GinsengPatchEntity? {
+        return ginsengPatchDao.getById(id)
+    }
+
+    override suspend fun queryBoundingBox(
+        minLat: Double,
+        maxLat: Double,
+        minLon: Double,
+        maxLon: Double
+    ): List<GinsengPatchEntity> {
+        return ginsengPatchDao.queryBoundingBox(minLat, maxLat, minLon, maxLon)
+    }
+
+    override suspend fun getUnsynced(batchSize: Int): List<GinsengPatchEntity> {
+        return ginsengPatchDao.getUnsynced(batchSize)
+    }
+
+    override suspend fun markSynced(ids: List<String>) {
+        ginsengPatchDao.markSynced(ids)
+    }
+
+    override suspend fun delete(id: String): Int {
+        return ginsengPatchDao.delete(id)
     }
 }
