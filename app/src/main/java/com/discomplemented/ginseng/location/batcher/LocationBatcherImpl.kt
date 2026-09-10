@@ -1,71 +1,47 @@
 package com.discomplemented.ginseng.location.batcher
 
-import com.discomplemented.ginseng.domain.model.TrackNode
+import com.discomplemented.ginseng.data.local.database.entity.TrackNodeEntity
 import com.discomplemented.ginseng.domain.repository.TrackRepository
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
+import javax.inject.Singleton
 
+/**
+ * Implementation of LocationBatcher.
+ * Persist-first strategy: each location is written to Room immediately,
+ * flagged as unsynced, then batched for later network transmission.
+ */
+@Singleton
 class LocationBatcherImpl @Inject constructor(
     private val trackRepository: TrackRepository
 ) : LocationBatcher {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val mutex = Mutex()
-    private val buffer = mutableListOf<TrackNode>()
+    private val inMemoryBuffer = mutableListOf<TrackNodeEntity>()
+    private val BUFFER_SIZE = 50
+    private val FLUSH_INTERVAL_MS = 60_000L // 60 seconds
 
-    private var batchJob: Job? = null
-    private val batchSize = 50
-    private val flushIntervalMs = 60_000L // 1 minute
+    override suspend fun addNode(node: TrackNodeEntity) {
+        // Persist first (non-synced)
+        trackRepository.insertTrack(node)
+        inMemoryBuffer.add(node)
 
-    override suspend fun collectAndBatch(nodes: Flow<TrackNode>) {
-        batchJob = scope.launch {
-            // Start the periodic flush timer
-            launch {
-                while (isActive) {
-                    delay(flushIntervalMs)
-                    flush()
-                }
-            }
-
-            // Collect nodes from the flow
-            nodes.collect { node ->
-                mutex.withLock {
-                    buffer.add(node)
-                    if (buffer.size >= batchSize) {
-                        flushInternal()
-                    }
-                }
-            }
+        // Auto-flush if buffer reaches threshold
+        if (inMemoryBuffer.size >= BUFFER_SIZE) {
+            flush()
         }
     }
 
     override suspend fun flush() {
-        mutex.withLock {
-            flushInternal()
+        if (inMemoryBuffer.isNotEmpty()) {
+            // All nodes are already persisted; just clear buffer
+            inMemoryBuffer.clear()
         }
     }
 
-    override suspend fun stop() {
-        batchJob?.cancelAndJoin()
-        flush()
-        scope.cancel()
+    override suspend fun getUnsyncedBatch(batchSize: Int): List<TrackNodeEntity> {
+        return trackRepository.getUnsynced(batchSize)
     }
 
-    private suspend fun flushInternal() {
-        if (buffer.isEmpty()) return
-
-        val nodesToSave = buffer.toList()
-        buffer.clear()
-
-        try {
-            trackRepository.saveTrackNodes(nodesToSave)
-        } catch (e: Exception) {
-            // In a real app, we might want to re-add nodes to the buffer or log the error
-            // For now, we log and move on to avoid infinite retry loops
-            e.printStackTrace()
-        }
+    override suspend fun markAsSynced(ids: List<String>) {
+        trackRepository.markSynced(ids, System.currentTimeMillis())
     }
 }

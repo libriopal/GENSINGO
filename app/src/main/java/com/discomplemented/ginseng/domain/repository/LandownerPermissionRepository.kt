@@ -1,11 +1,15 @@
 package com.discomplemented.ginseng.domain.repository
 
-import com.discomplemented.ginseng.domain.model.LandownerPermission
+import com.discomplemented.ginseng.data.local.database.entity.LandownerPermissionEntity
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * Repository interface for landowner permission operations.
+ */
 interface LandownerPermissionRepository {
-    fun getAllPermissions(): Flow<List<LandownerPermission>>
-    suspend fun savePermission(permission: LandownerPermission)
-    suspend fun getPermissionById(id: String): LandownerPermission?
-    suspend fun getPermissionsInBounds(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double): List<LandownerPermission>
+    suspend fun insert(permission: LandownerPermissionEntity): Long
+    fun getAllFlow(): Flow<List<LandownerPermissionEntity>>
+    suspend fun getAll(): List<LandownerPermissionEntity>
+    suspend fun getById(id: String): LandownerPermissionEntity?
+    suspend fun delete(id: String): Int
 }

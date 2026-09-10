@@ -1,22 +1,31 @@
 package com.discomplemented.ginseng.location.batcher
 
-import com.discomplemented.ginseng.domain.model.TrackNode
+import com.discomplemented.ginseng.data.local.database.entity.TrackNodeEntity
 
+/**
+ * Interface for batching location updates.
+ * Implements persist-first strategy: writes immediately to Room,
+ * then batches for network transmission.
+ */
 interface LocationBatcher {
     /**
-     * Starts collecting location updates from the provided flow and
-     * manages the batching/persistence logic.
+     * Adds a location node to the batch.
+     * Persists immediately to database.
      */
-    suspend fun collectAndBatch(nodes: kotlinx.coroutines.flow.Flow<TrackNode>)
+    suspend fun addNode(node: TrackNodeEntity)
 
     /**
-     * Forces an immediate flush of any currently buffered nodes to the repository.
-     * This is used for the "Emergency Flush" mechanism.
+     * Flushes accumulated batch to database.
      */
     suspend fun flush()
 
     /**
-     * Stops the collection and performs a final flush.
+     * Returns unsynced batch for network transmission.
      */
-    suspend fun stop()
+    suspend fun getUnsyncedBatch(batchSize: Int = 50): List<TrackNodeEntity>
+
+    /**
+     * Marks a batch as synced.
+     */
+    suspend fun markAsSynced(ids: List<String>)
 }

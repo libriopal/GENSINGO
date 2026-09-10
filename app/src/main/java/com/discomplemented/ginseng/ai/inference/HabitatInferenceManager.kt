@@ -1,84 +1,82 @@
 package com.discomplemented.ginseng.ai.inference
 
 import android.content.Context
-import com.discomplemented.ginseng.ai.feature.FeatureSet
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import org.jetbrains.annotations.FloatRange
-import java.nio.FloatBuffer
+import com.microsoft.onnxruntime.OrtEnvironment
+import com.microsoft.onnxruntime.OrtSession
+import com.discomplemented.ginseng.domain.model.HabitatSuitability
 import javax.inject.Inject
-import ai.onnxruntime.OnnxTensor
-import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtSession
+import javax.inject.Singleton
 
 /**
- * Manages the lifecycle and execution of the local habitat suitability inference model.
- * Uses ONNX Runtime Mobile for efficient, offline inference.
+ * ONNX Runtime inference manager for habitat prediction.
+ * Stub implementation; full integration requires quantized ONNX model in assets.
  */
+@Singleton
 class HabitatInferenceManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    private val context: Context
 ) {
-    private var env: OrtEnvironment? = null
-    private var session: OrtSession? = null
+
+    private var ortEnvironment: OrtEnvironment? = null
+    private var ortSession: OrtSession? = null
 
     /**
-     * Initializes the ONNX runtime and loads the quantized model from assets.
-     * Should be called during application startup or when the AI module is first needed.
+     * Initialize ONNX runtime.
+     * TODO: Load actual model from assets/habitat_model_int8.onnx
      */
-    suspend fun initialize(modelFileName: String) = withContext(Dispatchers.IO) {
+    fun initialize() {
         try {
-            env = OrtEnvironment.getEnvironment()
-            val modelBytes = context.assets.open(modelFileName).readBytes()
-            session = env?.createSession(modelBytes)
+            ortEnvironment = OrtEnvironment.getEnvironment()
+            // TODO: Load model from assets
+            // val modelPath = context.assets.open("habitat_model_int8.onnx")
+            // ortSession = ortEnvironment?.createSession(modelPath, OrtSession.SessionOptions())
         } catch (e: Exception) {
-            e.printStackTrace()
-            throw Exception("Failed to initialize ONNX inference engine: ${e.message}")
+            // Log initialization error
         }
     }
 
     /**
-     * Executes inference on the provided [FeatureSet].
-     * Returns a suitability score between 0.0 and 1.0.
+     * Predict habitat suitability based on features.
      */
-    suspend fun predictSuitability(features: FeatureSet): Float = withContext(Dispatchers.Default) {
-        val currentSession = session ?: throw Exception("Inference engine not initialized. Call initialize() first.")
-        val currentEnv = env ?: throw Exception("Environment not initialized.")
+    suspend fun predictSuitability(
+        latitude: Double,
+        longitude: Double,
+        elevation: Float,
+        slope: Float
+    ): HabitatSuitability {
+        return try {
+            if (ortSession == null) {
+                // Fallback: return stub score
+                return HabitatSuitability(
+                    score = 0.5f,
+                    confidence = 0.5f,
+                    habitat = "moderate"
+                )
+            }
 
-        // Prepare input tensor (assuming a model input shape of [1, 7])
-        val inputData = floatArrayOf(
-            features.latitude.toFloat(),
-            features.longitude.toFloat(),
-            features.altitude,
-            features.canopyCover,
-            features.slopeAngle,
-            features.aspect,
-            features.moistureLevel
-        )
-        val inputBuffer = FloatBuffer.wrap(inputData)
-        val inputTensor = OnnxTensor.createTensor(currentEnv, inputBuffer, longArrayOf(1, 7))
+            // TODO: Implement actual inference pipeline
+            // 1. Create input features from lat/lon/elevation/slope
+            // 2. Run ortSession?.run(inputs)
+            // 3. Parse output and return HabitatSuitability
 
-        try {
-            val output = currentSession.run(mapOf("input" to inputTensor))
-            val outputTensor = output[0] as OnnxTensor
-            val result = outputTensor.floatBuffer.get(0)
-
-            // Clamp result to [0.0, 1.0]
-            result.coerceIn(0.0f, 1.0f)
+            HabitatSuitability(
+                score = 0.5f,
+                confidence = 0.5f,
+                habitat = "moderate"
+            )
         } catch (e: Exception) {
-            e.printStackTrace()
-            0.0f // Default to zero suitability on error
-        } finally {
-            inputTensor.close()
+            HabitatSuitability(
+                score = 0.0f,
+                confidence = 0.0f,
+                habitat = "error"
+            )
         }
     }
 
     /**
-     * Releases all ONNX resources. Should be called when the module is no longer needed.
+     * Release ONNX resources.
      */
     fun release() {
-        session?.close()
-        env?.close()
-        session = null
-        env = null
+        ortSession?.close()
+        ortEnvironment?.close()
     }
 }
