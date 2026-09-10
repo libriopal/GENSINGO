@@ -1,64 +1,35 @@
 package com.discomplemented.ginseng.data.repository
 
-import com.discomplemented.ginseng.data.local.database.LandownerPermissionDao
-import com.discomplemented.ginseng.data.local.database.LandownerPermissionEntity
-import com.discomplemented.ginseng.domain.model.LandownerPermission
+import com.discomplemented.ginseng.data.local.database.dao.LandownerPermissionDao
+import com.discomplemented.ginseng.data.local.database.entity.LandownerPermissionEntity
 import com.discomplemented.ginseng.domain.repository.LandownerPermissionRepository
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
-import androidx.sqlite.db.SimpleSQLiteQuery
-import java.util.UUID
+import javax.inject.Inject
 
-class LandownerPermissionRepositoryImpl(
-    private val landownerPermissionDao: LandownerPermissionDao
+/**
+ * Implementation of LandownerPermissionRepository.
+ */
+class LandownerPermissionRepositoryImpl @Inject constructor(
+    private val dao: LandownerPermissionDao
 ) : LandownerPermissionRepository {
 
-    override fun getAllPermissions(): Flow<List<LandownerPermission>> {
-        return landownerPermissionDao.getAll().map { entities ->
-            entities.map { it.toDomain() }
-        }
+    override suspend fun insert(permission: LandownerPermissionEntity): Long {
+        return dao.insert(permission)
     }
 
-    override suspend fun savePermission(permission: LandownerPermission) {
-        landownerPermissionDao.insert(permission.toEntity())
+    override fun getAllFlow(): Flow<List<LandownerPermissionEntity>> {
+        return dao.getAllFlow()
     }
 
-    override suspend fun getPermissionById(id: String): LandownerPermission? {
-        return landownerPermissionDao.getById(id)?.toDomain()
+    override suspend fun getAll(): List<LandownerPermissionEntity> {
+        return dao.getAll()
     }
 
-    override suspend fun getPermissionsInBounds(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double): List<LandownerPermission> {
-        val query = SimpleSQLiteQuery(
-            "SELECT * FROM landowner_permissions WHERE latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?",
-            arrayOf(minLat, maxLat, minLon, maxLon)
-        )
-        // Note: The current LandownerPermissionEntity doesn't have lat/lon fields in the entity,
-        // but the repository interface requires it.
-        // I'll need to update the entity to include them for spatial indexing to work.
-        return landownerPermissionDao.getPermissionsInBoundingBox(query).map { it.toDomain() }
+    override suspend fun getById(id: String): LandownerPermissionEntity? {
+        return dao.getById(id)
     }
 
-    private fun LandownerPermissionEntity.toDomain(): LandownerPermission {
-        return LandownerPermission(
-            id = UUID.fromString(id),
-            ownerName = ownerName,
-            imageUri = imageUri,
-            expiryDate = expiryDate,
-            isVerified = isVerified,
-            locationPolygonGeoJson = locationPolygonGeoJson
-        )
-    }
-
-    private fun LandownerPermission.toEntity(): LandownerPermissionEntity {
-        return LandownerPermissionEntity(
-            id = id.toString(),
-            ownerName = ownerName,
-            imageUri = imageUri,
-            expiryDate = expiryDate,
-            isVerified = isVerified,
-            locationPolygonGeoJson = locationPolygonGeoJson,
-            latitude = 0.0, // Note: In a real implementation, these would be extracted from the GeoJSON or passed in
-            longitude = 0.0
-        )
+    override suspend fun delete(id: String): Int {
+        return dao.delete(id)
     }
 }
