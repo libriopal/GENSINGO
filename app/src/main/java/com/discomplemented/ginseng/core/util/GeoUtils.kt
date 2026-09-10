@@ -1,38 +1,36 @@
 package com.discomplemented.ginseng.core.util
 
-import com.discomplemented.ginseng.domain.model.LatLng
-import kotlin.math.*
+import kotlin.math.acos
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.PI
 
 /**
- * Utility functions for geospatial calculations.
+ * Geographic and mathematical utilities.
  */
 object GeoUtils {
-
-    private const val EARTH_RADIUS_METERS = 6371000.0
+    private const val EARTH_RADIUS_KM = 6371.0
 
     /**
-     * Calculates the great-circle distance between two points on the Earth's surface
-     * using the Haversine formula.
-     *
-     * @param start The starting [LatLng].
-     * @param end The ending [LatLng].
-     * @return The distance in meters.
+     * Haversine formula: calculate distance between two lat/lon points.
      */
-    fun distanceBetween(start: LatLng, end: LatLng): Double {
-        val lat1Rad = Math.toRadians(start.latitude)
-        val lon1Rad = Math.toRadians(start.longitude)
-        val lat2Rad = Math.toRadians(end.latitude)
-        val lon2Rad = Math.toRadians(end.longitude)
-
-        val dLat = lat2Rad - lat1Rad
-        val dLon = lon2Rad - lon1Rad
-
-        val a = sin(dLat / 2).pow(2.0) +
-                cos(lat1Rad) * cos(lat2Rad) *
-                sin(dLon / 2).pow(2.0)
-
-        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-
-        return EARTH_RADIUS_METERS * c
+    fun haversineDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = sin(dLat / 2) * sin(dLat / 2) +
+                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+                sin(dLon / 2) * sin(dLon / 2)
+        val c = 2 * acos(kotlin.math.sqrt(a))
+        return EARTH_RADIUS_KM * c
     }
+
+    /**
+     * Convert degrees to radians.
+     */
+    fun toRadians(degrees: Double): Double = degrees * PI / 180.0
+
+    /**
+     * Convert radians to degrees.
+     */
+    fun toDegrees(radians: Double): Double = radians * 180.0 / PI
 }
