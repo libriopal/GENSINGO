@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- PRD §5.1 -->
+    <color name="base_background">#06100B</color>
+    <color name="surface_container">#0D1B13</color>
+    <color name="primary_accent">#00FF88</color>
+    <color name="warning_accent">#FFC857</color>
+    <color name="alert_accent">#FF4D6D</color>
+    <color name="text_primary">#E6F4EC</color>
+    <color name="text_secondary">#8BA897</color>
+    <color name="hairline_border">#1A3324</color>
+</resources>

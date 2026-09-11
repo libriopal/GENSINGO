@@ -1,0 +1,27 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Three-prong ginseng silhouette: the legal-maturity mark the whole app turns on. -->
+    <path
+        android:fillColor="#00FF88"
+        android:pathData="M54,30 L58,38 L54,46 L50,38 Z" />
+    <path
+        android:fillColor="#00FF88"
+        android:pathData="M36,44 L42,50 L40,60 L32,54 Z" />
+    <path
+        android:fillColor="#00FF88"
+        android:pathData="M72,44 L76,54 L68,60 L66,50 Z" />
+    <path
+        android:fillColor="#00FF88"
+        android:pathData="M53,46 L55,46 L55,72 L53,72 Z" />
+    <!-- berry cluster -->
+    <path
+        android:fillColor="#FF4D6D"
+        android:pathData="M54,26 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    <!-- root -->
+    <path
+        android:fillColor="#8BA897"
+        android:pathData="M54,72 L58,80 L54,88 L50,80 Z" />
+</vector>

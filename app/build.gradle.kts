@@ -1,122 +1,131 @@
+import java.util.Properties
+
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    id("com.google.dagger.hilt.android")
-    id("kotlin-kapt")
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
+// Release signing (PRD §9). The keystore lives OUTSIDE version control: this reads
+// keystore.properties from the repo root if present, else the equivalent environment
+// variables, else falls back to unsigned so a clean checkout still builds.
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
+}
+fun secret(key: String, env: String): String? =
+    keystoreProps.getProperty(key) ?: System.getenv(env)
+
+val releaseStorePath = secret("storeFile", "GENSINGO_STORE_FILE")
+val hasReleaseSigning = releaseStorePath != null && rootProject.file(releaseStorePath).exists()
+
 android {
-    namespace = "com.discomplemented.ginseng"
+    namespace = "com.ginsengo.steward"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.discomplemented.ginseng"
+        applicationId = "com.ginsengo.steward"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        vectorDrawables {
-            useSupportLibrary = true
+        vectorDrawables { useSupportLibrary = true }
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(releaseStorePath!!)
+                storePassword = secret("storePassword", "GENSINGO_STORE_PASSWORD")
+                keyAlias = secret("keyAlias", "GENSINGO_KEY_ALIAS")
+                keyPassword = secret("keyPassword", "GENSINGO_KEY_PASSWORD")
+            }
         }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            // Left off deliberately for v1: Room, kotlinx-serialization and the ONNX JNI
+            // bridge all resolve reflectively, and a shrink misconfiguration fails at
+            // RUNTIME rather than at build time. Shipping a verifiable APK outranks a
+            // smaller one. Recorded as open in EINCOL_REPORT.md §Open.
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
         }
         debug {
+            applicationIdSuffix = ".debug"
             isMinifyEnabled = false
-            isDebuggable = true
         }
     }
-    
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-    
+    kotlinOptions { jvmTarget = "17" }
+
     buildFeatures {
         compose = true
         buildConfig = true
     }
-    
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.1"
-    }
-    
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "/META-INF/DEPENDENCIES"
         }
     }
+
+    // MBTiles and the ONNX graph are read byte-exact from assets; compressing them is
+    // fine for size but SQLite-backed MBTiles must be opened from a real file, so the
+    // app copies it out to filesDir on first run rather than relying on no-compress.
+    androidResources { noCompress += listOf("onnx", "bin") }
+
+    testOptions { unitTests { isReturnDefaultValues = true } }
 }
 
 dependencies {
-    // Core Android & Lifecycle
-    implementation("androidx.core:core-ktx:1.12.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2")
-    implementation("androidx.activity:activity-compose:1.8.0")
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.activity.compose)
 
-    // Jetpack Compose
-    val composeBom = platform("androidx.compose:compose-bom:2023.10.01")
-    implementation(composeBom)
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.foundation:foundation")
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
+    debugImplementation(libs.androidx.compose.ui.tooling)
 
-    // Dependency Injection (Hilt)
-    implementation("com.google.dagger:hilt-android:2.48")
-    kapt("com.google.dagger:hilt-android-compiler:2.48")
-    implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
+    implementation(libs.androidx.navigation.compose)
 
-    // Room Database
-    val roomVersion = "2.6.0"
-    implementation("androidx.room:room-runtime:$roomVersion")
-    implementation("androidx.room:room-ktx:$roomVersion")
-    kapt("androidx.room:room-compiler:$roomVersion")
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 
-    // MapLibre Native
-    implementation("org.maplibre.gl:android-sdk:11.0.0")
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.coroutines.android)
 
-    // ONNX Runtime Mobile
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.0")
+    implementation(libs.play.services.location)
 
-    // Location Services
-    implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
 
-    // Jetpack Security
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation(libs.coil.compose)
+    implementation(libs.maplibre.android.sdk)
+    implementation(libs.onnxruntime.android)
 
-    // Navigation Compose
-    implementation("androidx.navigation:navigation-compose:2.7.4")
-
-    // JSON Serialization
-    implementation("com.google.code.gson:gson:2.10.1")
-
-    // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-
-    // Testing
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2023.10.01"))
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
 }

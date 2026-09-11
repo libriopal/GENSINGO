@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Patch photos live in app-private internal storage only (PRD §7, §8.3).
+         Sharing happens through a time-limited FileProvider grant, never a public
+         MediaStore path. -->
+    <files-path name="patch_photos" path="patch_photos/" />
+    <files-path name="exports" path="exports/" />
+</paths>
