@@ -67,3 +67,40 @@ Tracked in `EINCOL_REPORT.md` (items 27–36) and `implementation_production_bui
 The load-bearing ones: no offline tiles, the 3D overlay has never been exercised on real
 hardware, the alignment witness has never produced a number, and the app fetches elevation at
 runtime which conflicts with the original offline-only instruction.
+
+---
+
+## Added after the second audit
+
+**"Where am I" — on the home screen, in Field tools.** The second audit named the largest
+omission in the whole project: nothing addressed being alone, on a steep slope, with a digging
+tool, out of signal, hurt. This screen shows your position in **degrees and decimal minutes**
+(what US dispatch and county SAR expect) *and* decimal degrees, in large monospaced type you can
+read aloud. It always shows the accuracy and **the age of the fix**, because a twenty-minute-old
+position displayed as current is how someone gets sent to the wrong ridge. "Send position by
+text" composes an SMS, because a text needs one brief moment of marginal signal and keeps
+retrying where a data request will not.
+
+**Please actually test this one on the trail.** Read the numbers out to someone and have them
+find you on a map.
+
+## Two things the second audit changed my mind about
+
+**The heatmap's resolution claim was overstated, and I had not noticed.** The elevation tiles are
+about 3.8 m per pixel at these latitudes, but the US source beneath them is mostly ~10 m data.
+So the surface renders fine structure it cannot actually know, and that structure looks
+convincing. Read the heatmap at hillside scale — which slope, which side of the ridge — and never
+at the scale of a single cove within it.
+
+**The county-tier idea is dead.** The web app carries 25 North Carolina county "tiers", and I had
+listed them as a possible way to finally validate the model. The audit was right that this is
+invalid even with perfect provenance: county-level labels cannot validate a metre-scale
+prediction, and those labels most likely encode *where people dig* rather than where ginseng
+grows — which for a stewardship app points you at already-depleted ground. Discarded, and not
+shipped.
+
+## Still not built, and you should plan around it
+
+No offline tiles. No breadcrumb trail yet. No battery figure — **carry a power bank.** Screen-on
+map plus continuous GPS plus the 3D overlay will not last a full day, and a phone in direct sun
+on a south slope will throttle.

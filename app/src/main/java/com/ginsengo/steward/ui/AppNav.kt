@@ -6,6 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.ginsengo.steward.ui.screens.PositionScreen
 import com.ginsengo.steward.ui.screens.GuideScreen
 import com.ginsengo.steward.ui.screens.HabitatReadingScreen
 import com.ginsengo.steward.ui.screens.HomeScreen
@@ -25,6 +26,7 @@ object Routes {
     const val PATCH_DETAIL = "patch/{id}"
     const val GUIDE = "guide"
     const val SETTINGS = "settings"
+    const val POSITION = "position"
 
     fun patchDetail(id: String) = "patch/$id"
     fun logWithScore(score: Double?) = if (score == null) "log?score=" else "log?score=$score"
@@ -96,6 +98,10 @@ fun AppNav(vm: FieldViewModel, onRequestLocationPermission: () -> Unit) {
 
         composable(Routes.GUIDE) {
             GuideScreen(vm = vm, onBack = { nav.popBackStack() })
+        }
+
+        composable(Routes.POSITION) {
+            PositionScreen(vm = vm, onBack = { nav.popBackStack() })
         }
 
         composable(Routes.SETTINGS) {

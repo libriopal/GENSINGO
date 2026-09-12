@@ -297,6 +297,7 @@ private fun HomeSheet(patchCount: Int, onNavigate: (String) -> Unit) {
             fontWeight = FontWeight.Bold,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SecondaryAction("Where am I", { onNavigate(Routes.POSITION) }, Modifier.weight(1f))
             SecondaryAction("My Patches ($patchCount)", { onNavigate(Routes.PATCHES) }, Modifier.weight(1f))
             SecondaryAction("Stewardship", { onNavigate(Routes.GUIDE) }, Modifier.weight(1f))
         }
