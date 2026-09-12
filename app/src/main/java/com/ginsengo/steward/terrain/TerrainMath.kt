@@ -93,8 +93,30 @@ object TerrainMath {
                 0.482 * cos(folded) * sin(s)
     }
 
-    /** Maps the raw McCune-Keon value onto 0 (coolest) .. 1 (hottest). */
-    fun normaliseHeatLoad(raw: Double): Double = ((raw - 0.2) / 1.0).coerceIn(0.0, 1.0)
+    /**
+     * Maps the raw McCune-Keon value onto 0 (coolest) .. 1 (hottest).
+     *
+     * The bounds are the ATTAINABLE range of [heatLoadIndex] over the domain this app actually
+     * covers, not round numbers. Sweeping latitude 33-47 (Alabama to Minnesota and Vermont,
+     * the extent of the 19 jurisdictions), slope 0-45 degrees and all aspects gives
+     * 0.2865 .. 1.1136. The previous bounds of 0.2 .. 1.2 were plausible-looking guesses that
+     * left 17% of the output range physically unreachable, compressing the signal for no reason.
+     *
+     * Worth being clear about what this does NOT fix. Heat load varies much less over real
+     * terrain than its 0.28 weight implies, and rescaling only recovers about a fifth of that.
+     * The rest is correct physics: the aspect term carries a factor of sin(slope), so on gentle
+     * ground every aspect genuinely receives near-identical insolation and there is no north-east
+     * bonus to detect. Measured on real Boone terrain, heat load's Spearman correlation with the
+     * final score is +0.137 - up from +0.114 before this rescale - while slope position,
+     * curvature and wetness reach +0.657, +0.647 and +0.545. See WeightSensitivityTest: the
+     * weight table does not describe what drives the ranking, and the fix for that is honest
+     * reporting, not a bigger multiplier.
+     */
+    const val HEAT_LOAD_MIN = 0.2865
+    const val HEAT_LOAD_MAX = 1.1136
+
+    fun normaliseHeatLoad(raw: Double): Double =
+        ((raw - HEAT_LOAD_MIN) / (HEAT_LOAD_MAX - HEAT_LOAD_MIN)).coerceIn(0.0, 1.0)
 
     // ---------------------------------------------------------------- position on slope
 
