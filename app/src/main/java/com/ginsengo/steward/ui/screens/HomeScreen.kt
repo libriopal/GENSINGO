@@ -40,6 +40,7 @@ import com.ginsengo.steward.ui.components.ProvenanceTag
 import com.ginsengo.steward.ui.components.SecondaryAction
 import com.ginsengo.steward.ui.components.StatusPill
 import com.ginsengo.steward.terrain.SuitabilityRasterizer
+import com.ginsengo.steward.terrain3d.Terrain3DStatus
 import com.ginsengo.steward.ui.map.FieldMap
 import com.ginsengo.steward.ui.map.LayerPanel
 import com.ginsengo.steward.ui.map.MapLayerState
@@ -62,6 +63,7 @@ fun HomeScreen(
     var layerState by remember { mutableStateOf(MapLayerState()) }
     var showLayers by remember { mutableStateOf(false) }
     var heatStatus by remember { mutableStateOf<SuitabilityRasterizer.Raster?>(null) }
+    var terrainStatus by remember { mutableStateOf(Terrain3DStatus()) }
 
     val scaffoldState = rememberBottomSheetScaffoldState(
         bottomSheetState = rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded)
@@ -92,6 +94,7 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxSize(),
                     onStyleFailed = { mapFailed = true },
                     onHeatmapStatus = { heatStatus = it },
+                    onTerrainStatus = { terrainStatus = it },
                 )
             } else {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -194,9 +197,14 @@ fun HomeScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 SecondaryAction(
-                    if (layerState.habitatHeatmap) "Forecast on" else "Layers",
+                    when {
+                        layerState.terrainMesh -> "3D on"
+                        layerState.habitatHeatmap -> "Forecast on"
+                        else -> "Layers"
+                    },
                     { showLayers = !showLayers },
-                    accent = if (layerState.habitatHeatmap) Gen.Primary else Gen.TextSecondary,
+                    accent = if (layerState.habitatHeatmap || layerState.terrainMesh)
+                        Gen.Primary else Gen.TextSecondary,
                 )
                 SecondaryAction(
                     if (followMe) "Following" else "Recentre",
@@ -215,6 +223,7 @@ fun HomeScreen(
                         state = layerState,
                         onChange = { layerState = it },
                         heatStatus = heatStatus,
+                        terrainStatus = terrainStatus,
                     )
                 }
             }

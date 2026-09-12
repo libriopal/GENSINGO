@@ -517,3 +517,160 @@ project exists to avoid. The classifier now treats any catalogue-code filename
 14. **Terrain tiles stream.** The heatmap and relief need network on first visit to new
     ground, then cache. The habitat *model* remains fully offline on the bundled grid; the
     two elevation sources are deliberately separate.
+
+---
+
+# Phase 3 — the real 3D terrain mesh
+
+Third pass, against "build the 3D mesh with the GLSurfaceView overlay" — the option Phase 2
+listed as open item 10 and deliberately did not ship blind.
+
+## Step 1 — Measuring what the platform actually allows
+
+Two facts decided the whole design, and both came from unpacking artifacts rather than
+reading documentation:
+
+- **`CustomLayer` is unreachable from Kotlin.** Its only usable constructor is
+  `CustomLayer(String, long)` — a pointer to a C++ host object. Rendering *inside*
+  MapLibre's own GL context, which would have handed over the correct matrix for free, needs
+  NDK code. Ruled out.
+- **`Projection` exposes no matrix of any kind** — only `toScreenLocation`,
+  `fromScreenLocation` and `getMetersPerPixelAtLatitude`.
+
+`DESIGN_LOD_HYBRID.md` assumed the opposite: *"Accept the ModelViewProjection (MVP) matrix
+directly from the MapLibre camera."* That assumption is false, and it is why the original
+engine could never have worked as specified even if someone had written its GL calls.
+
+So the overlay has to **reconstruct** MapLibre's camera from the public `CameraPosition`.
+
+## Step 2 — Distribution
+
+| p | Candidate for "what makes this overlay wrong rather than merely rough" |
+|---|---|
+| 0.30 | The shaders don't compile on device and the overlay is silently blank. |
+| 0.22 | The reconstructed camera is subtly wrong, so terrain renders convincingly in the wrong place. |
+| 0.16 | float32 can't hold Web Mercator world coordinates at high zoom; vertices jitter by metres. |
+| 0.12 | Tile-edge cracks where adjacent mesh loads disagree. |
+| 0.10 | A transparent GLSurfaceView over a MapView z-orders wrongly and hides the map. |
+| **0.07** | **The verification itself is wrong — the alignment check reports its own rounding error as a map misalignment, or passes because it only ever tests the one point that cannot fail.** |
+| 0.03 | The mesh is built on the main thread and the map stutters. |
+
+## Step 3 — The tail
+
+Row 0.07 is the finding, and it is the same shape as every other finding in this project:
+**the instrument is part of the system under test.**
+
+Two concrete ways an alignment check silently lies:
+
+1. **It only probes the centre.** The camera target is the fixed point of the projection —
+   it lands at the viewport centre under *any* scale error, any field-of-view error, any
+   tile-size error. A check that probes the centre passes for a projection that is wrong
+   everywhere else. `AlignmentCheck.probesFor` therefore samples a 3×3 grid at 15%/50%/85%
+   across the visible region, and `detectsAScaleErrorThatPreservesTheCentre` pins that a
+   5% scale error — which leaves the centre exactly right — is caught.
+2. **It spends its own budget on rounding.** See the defect below.
+
+## Step 4 — Falsifying my own claim
+
+**First formulation:** *"Verify the camera offline by writing a reference implementation of
+MapLibre's transform and asserting the Kotlin matches it."*
+
+**Rejected before writing it**, on EINCOL §2's rule: *never let the subject be its own
+witness.* A reference implementation written by the same author from the same reading of the
+same algorithm agrees precisely when that reading is wrong. It would have produced a
+confident green suite and a mesh floating off the ground.
+
+**Corrected approach, which is what shipped** — two witnesses, neither of them a copy of my
+arithmetic:
+
+- **Offline: geometric invariants.** Properties that must hold for *any* correct
+  implementation — the target lands at the viewport centre; an unpitched camera maps world
+  pixels to screen pixels exactly 1:1; a bearing change preserves distance from centre;
+  ground resolution matches the Web Mercator definition computed independently; zooming one
+  level doubles displacement; pitch compresses distant ground without inverting its order;
+  the local-origin matrix agrees with the absolute one.
+- **On device: MapLibre's own projection.** `AlignmentCheck` runs every time the camera
+  settles, comparing against `Projection.toScreenLocation` — a genuinely independent
+  implementation written by other people. **If the mean residual exceeds 2 px the mesh is
+  not drawn** and the layer panel says why. Failing visibly beats floating a hillside.
+
+## Step 5 — Evaluators, and what they caught
+
+### Rung 2 — a real compiler, executed on the shader code
+
+`glslangValidator` (ESSL) compiles both stages via `tools/validate_shaders.sh`. This is the
+only evaluator available that *executes* shader code, since there is no device here. Proven
+capable of failing: injecting `dot(vec3, float)` produced
+`ERROR: 0:42: 'dot' : no matching overloaded function found`, and the real sources compile
+clean.
+
+### Rung 1 — invariants and mutation
+
+91 tests, 0 failures. Four failed on the first run, and the split is the point:
+
+**Three were my tests being wrong, not the code.** I had asserted that at bearing 90 north
+moves right (it moves *left* — bearing is the direction the camera faces, so facing east
+puts north on the left); that pitch raises distant ground (it *lowers* nearby ground as the
+horizon opens above); and that ground far to the north passes behind a pitched camera (it is
+ground to the *south* that does — `clip.w = d + dy·sin(pitch)` only grows northward). In
+each case I checked the geometry analytically before touching anything. **"The test failed
+so change the code" is exactly how a correct projection gets broken**, and all three
+corrected tests now record what the geometry actually does.
+
+**One was a real defect, and it was in the instrument.** `project()` — the function
+`AlignmentCheck` depends on — projected through the **float32** matrix. The translation
+column carries the camera centre in world pixels: ~33.5 million at zoom 17, where float32's
+step is 4 world pixels. Because world pixels shrink as zoom grows while the centre
+coordinate grows to match, this works out at a **constant ~1.9 m of ground error at every
+zoom level** — 0.59 px off centre at z17. The alignment witness would have been spending a
+fifth of its 2 px budget reporting its own rounding, and could have tripped on it. Fixed by
+keeping `project()` in double precision throughout; `viewProjectionMatrix()` stays float and
+is now documented as safe only for local-origin geometry.
+
+Pinned by `projectionAccuracyDoesNotDecayWithZoom` and a 0.05 px tolerance on the centre
+test. Mutation-checked: reverting `project()` to the float matrix fails exactly those two
+tests and nothing else.
+
+### The precision design, separately verified
+
+`vertexPositionsStaySmallEnoughForFloat32` asserts three things at once: stored coordinates
+stay small, the **origin carries the magnitude** (proving it was actually subtracted rather
+than the test passing vacuously on a mesh that happens to sit near the origin), and float32's
+step at the largest stored coordinate is still sub-5-cm.
+
+## What shipped
+
+- `MapCamera` — MapLibre's transform reconstructed in double precision, with a
+  local-origin MVP so float32 never sees a world coordinate.
+- `TerrainMesh` — adaptive 96–192 vertex grid, central-difference normals, per-vertex
+  suitability, and a skirt ring so adjacent mesh loads show no see-through crack.
+- `TerrainShaders` — GLSL ES 3.00, compile-verified offline, with the hypsometric and
+  forecast ramps matching the 2D layers so the same ground is the same colour in both views.
+- `TerrainGlRenderer` — one program, one interleaved VBO, one draw call. Deliberately thin:
+  everything with arithmetic in it lives in tested pure-Kotlin classes.
+- `Terrain3DOverlay` — transparent `GLSurfaceView`, `RENDERMODE_WHEN_DIRTY`, mesh rebuilt
+  off the main thread on camera settle, matrix resynced on every camera move.
+- Layer panel: 3D toggle, opacity, 1–4× exaggeration, "tint 3D by forecast", and a live
+  status line reporting triangles, grid, DEM zoom and the measured alignment residual.
+
+This is the "Managed Overlay Injection" pattern `DESIGN_LOD_HYBRID.md` specified — now with
+the GL calls its `onDraw()` never had.
+
+## Open after Phase 3
+
+15. **Still no on-device run.** The shaders compile under glslang, the maths is covered by
+    91 tests, and the APK builds and signs — but no frame has ever been rendered. What
+    offline work cannot check: whether `setZOrderMediaOverlay(true)` composites correctly
+    above MapLibre's own surface on real hardware, whether the reconstructed camera matches
+    MapLibre's to within 2 px in practice, and frame pacing. The alignment check is built to
+    answer the second of those on first run, and to hide the mesh rather than mislead if the
+    answer is no.
+16. **`RENDERMODE_WHEN_DIRTY` may lag during fling.** The matrix is resynced from
+    `OnCameraMoveListener`, which fires per frame, but if it lags the mesh will swim
+    slightly against the map. Continuous render mode fixes it at a battery cost that matters
+    for an app carried all day; the right choice needs a device to judge.
+17. **Mesh rebuilds only on camera idle**, so a long pan shows terrain from the previous
+    viewport until it settles. Tile-level LOD streaming would fix it and is a larger piece
+    of work.
+18. **The overlay draws above all map layers**, including patch pins. Depth-sorting the
+    pins against terrain would need them rendered in the same GL pass.

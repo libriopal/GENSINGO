@@ -35,7 +35,8 @@ Free movement throughout — pan, zoom, rotate and tilt.
 | **Dark / Satellite / Topo** | OpenFreeMap vector dark, or USGS imagery and topo (public domain, to z16) |
 | **Height map** | GPU colour relief over AWS Terrarium elevation tiles, ramp tuned to the Appalachian band, opacity slider |
 | **Hillshade** | GPU relief shading from the same elevation source |
-| **Pitched relief** | 55° camera tilt with deepened shading. **Not a 3D mesh** — MapLibre Android exposes no terrain API; the app says so where you toggle it |
+| **Pitched relief** | 55° camera tilt with deepened shading — flat geometry that reads as depth, free |
+| **3D terrain** | A real triangle mesh in a transparent GL surface over the map: adaptive 96–192 grid, per-vertex normals, skirts, 1–4× exaggeration, optionally tinted by the ginseng forecast |
 | **Habitat heatmap** | The ginseng forecast, below |
 
 ### The habitat forecast
@@ -62,6 +63,20 @@ is pinned by tests that fail if anyone makes it monotonic again.
 
 Antialiasing adapts to the DEM-cell to output-pixel ratio: supersample and integrate when
 one pixel covers many cells, interpolate when one cell covers many pixels.
+
+### How the 3D terrain stays on the map
+
+MapLibre Android exposes no terrain API and no projection matrix, and its `CustomLayer`
+takes a native pointer, so the overlay **reconstructs** MapLibre's camera from the public
+`CameraPosition`. A reconstruction that is subtly wrong still renders convincing terrain —
+just not where the ground is — so every time the camera settles the app projects nine points
+through its own matrix and compares them against MapLibre's `toScreenLocation`. **If the mean
+residual exceeds 2 px the mesh is hidden** and the layer panel says why, rather than drawing
+a hillside out of register. The measured residual is shown live.
+
+Vertex positions are stored relative to a local origin: Web Mercator spans 16.7 million
+units at zoom 15, where float32 resolves only 1–2 units, so absolute coordinates would jitter
+by metres. The origin is folded back into the matrix in double precision.
 
 **What it cannot see:** soil calcium — among the strongest published predictors of ginseng
 ground (Burkhart: ~3,360 kg/ha marks promising sites) and not derivable from elevation. The

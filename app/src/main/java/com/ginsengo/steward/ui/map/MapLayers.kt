@@ -34,21 +34,37 @@ enum class Basemap(val label: String, val attribution: String) {
 /**
  * Everything the user can toggle on the map.
  *
- * `terrain3d` is named honestly: it tilts and exaggerates relief shading to read as depth.
- * It is NOT a 3D terrain mesh — MapLibre Android exposes no terrain API at any published
- * version (verified against the 13.6.1 artifact: no Terrain class, no setTerrain, and
- * raster-dem is wired only to hillshade). See EINCOL_REPORT.md for what a real 3D mesh
- * would take.
+ * Two distinct things are on offer here and they are deliberately not merged:
+ *
+ *  - [pitchedRelief] tilts the camera and deepens hillshade so relief reads as depth. It is
+ *    flat geometry that looks three-dimensional, and it costs nothing.
+ *  - [terrainMesh] is an actual 3D triangle mesh, drawn in a separate GL surface layered
+ *    over the map, because MapLibre Android exposes no terrain API at any published version
+ *    (verified against the 13.6.1 artifact: no Terrain class, no setTerrain; raster-dem is
+ *    wired only into hillshade).
+ *
+ * Keeping them separate matters because the mesh can fail in ways the relief cannot — no
+ * elevation tiles, no GL context, or a camera reconstruction that disagrees with the map —
+ * and when it does, the app should fall back to something honest rather than to nothing.
  */
 data class MapLayerState(
     val basemap: Basemap = Basemap.DARK,
     val hillshade: Boolean = false,
     val heightOverlay: Boolean = false,
     val habitatHeatmap: Boolean = false,
-    val terrain3d: Boolean = false,
+    val pitchedRelief: Boolean = false,
+    val terrainMesh: Boolean = false,
     val heightOpacity: Float = 0.55f,
     val heatmapOpacity: Float = 0.75f,
+    val meshOpacity: Float = 0.85f,
+    /** Vertical multiplier for the mesh. 1.0 is true scale. */
+    val meshExaggeration: Float = 1.5f,
+    /** Colour the mesh by the ginseng forecast instead of by elevation. */
+    val meshForecastTint: Boolean = false,
 ) {
     /** True when anything needs the elevation tile source loaded. */
-    val needsDem: Boolean get() = hillshade || heightOverlay || terrain3d
+    val needsDem: Boolean get() = hillshade || heightOverlay || pitchedRelief || terrainMesh
+
+    /** The mesh needs a tilted camera to read as 3D at all. */
+    val wantsTilt: Boolean get() = pitchedRelief || terrainMesh
 }

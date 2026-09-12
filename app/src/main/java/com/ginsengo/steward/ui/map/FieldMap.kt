@@ -3,11 +3,18 @@ package com.ginsengo.steward.ui.map
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.ginsengo.steward.terrain3d.Terrain3DOverlay
+import com.ginsengo.steward.terrain3d.Terrain3DStatus
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
@@ -74,9 +81,11 @@ private const val RELIEF_RAMP =
  *
  * On 3D: MapLibre Android has no terrain API at any published version — verified against
  * the 13.6.1 artifact, which contains no Terrain class and no setTerrain, and wires
- * raster-dem only into hillshade. "terrain3d" here tilts the camera and pushes hillshade
- * exaggeration so relief reads as depth. It is a pitched relief view, not a terrain mesh,
- * and it is labelled that way in the UI.
+ * raster-dem only into hillshade. Two things are offered instead. "Pitched relief" tilts
+ * the camera and pushes hillshade exaggeration so flat geometry reads as depth. The real
+ * 3D terrain is a triangle mesh drawn by [Terrain3DOverlay] in a transparent GL surface
+ * layered above this map, aligned by reconstructing MapLibre's camera and verified against
+ * the map's own projection every time the camera settles.
  */
 @SuppressLint("MissingPermission")
 @Composable
@@ -89,10 +98,13 @@ fun FieldMap(
     modifier: Modifier = Modifier,
     onStyleFailed: () -> Unit = {},
     onHeatmapStatus: (SuitabilityRasterizer.Raster?) -> Unit = {},
+    onTerrainStatus: (Terrain3DStatus) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
+    // Published so the 3D overlay can attach camera listeners to the same map instance.
+    var liveMap by remember { mutableStateOf<MapLibreMap?>(null) }
 
     remember { runCatching { MapLibre.getInstance(context) } }
 
@@ -179,11 +191,13 @@ fun FieldMap(
         }
     }
 
+    Box(modifier) {
     AndroidView(
-        modifier = modifier,
+        modifier = Modifier.fillMaxSize(),
         factory = {
             mapView.getMapAsync { map ->
                 mapRef[0] = map
+                liveMap = map
 
                 // ---- free movement (PRD: unrestricted pan/zoom/rotate/tilt) ----
                 map.uiSettings.apply {
@@ -230,8 +244,8 @@ fun FieldMap(
                 refreshHeatmap(map, force = false)
             }
 
-            // Pitch for the relief "3D" read.
-            val targetTilt = if (want.terrain3d) 55.0 else 0.0
+            // Pitch: both the relief look and the real mesh need a tilted camera.
+            val targetTilt = if (want.wantsTilt) 55.0 else 0.0
             if (kotlin.math.abs(map.cameraPosition.tilt - targetTilt) > 1.0) {
                 runCatching {
                     map.animateCamera(
@@ -255,6 +269,19 @@ fun FieldMap(
             }
         },
     )
+
+        // The real 3D mesh, in its own transparent GL surface above the map.
+        Terrain3DOverlay(
+            map = liveMap,
+            demStore = demStore,
+            enabled = layers.terrainMesh,
+            opacity = layers.meshOpacity,
+            suitabilityMix = if (layers.meshForecastTint) 1f else 0f,
+            exaggeration = layers.meshExaggeration,
+            onStatus = onTerrainStatus,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
 }
 
 private fun applyStyle(
@@ -391,11 +418,11 @@ private fun syncLayers(style: Style, s: MapLayerState) {
         )
         style.getLayer(LYR_HILLSHADE)?.setProperties(
             PropertyFactory.visibility(
-                if (s.hillshade || s.terrain3d) Property.VISIBLE else Property.NONE
+                if (s.hillshade || s.pitchedRelief) Property.VISIBLE else Property.NONE
             ),
             // Exaggeration is pushed when the pitched view is on: on a tilted camera the
             // extra relief is what sells depth, since there is no real mesh to cast it.
-            PropertyFactory.hillshadeExaggeration(if (s.terrain3d) 0.95f else 0.6f),
+            PropertyFactory.hillshadeExaggeration(if (s.pitchedRelief) 0.95f else 0.6f),
         )
         style.getLayer(LYR_HEAT)?.setProperties(
             PropertyFactory.visibility(if (s.habitatHeatmap) Property.VISIBLE else Property.NONE),
