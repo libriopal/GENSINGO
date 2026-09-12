@@ -182,24 +182,49 @@ object SuitabilityRasterizer {
     }
 
     /**
-     * Colour ramp in the app's palette (PRD §5.1): transparent -> deep teal -> emerald ->
-     * amber at the top. Alpha ramps with the score as well as colour, so the strongest
-     * ground reads as the brightest AND the most opaque and the map underneath stays
-     * legible everywhere else.
+     * Sequential colour ramp: deep forest -> emerald -> pale chartreuse, monotonically
+     * increasing in perceived lightness.
+     *
+     * The previous ramp ran deep teal -> luminous green (#00FF88, the brand accent) -> field
+     * amber, and it was measured wrong in a way no screenshot would have shown. Its lightness
+     * PEAKED in the middle: L* climbed to 88.6 at score 0.5 and then fell back to 83.6 at 1.0.
+     * A ramp whose brightest point is the middle tells the digger that mediocre ground is the
+     * best ground. Worse, the green-to-amber half separated its bands by a dE2000 of only 6.1,
+     * which is below the threshold for reading a categorical legend - and, counter-intuitively,
+     * that half was WORSE for normal colour vision (6.1) than for a deuteranope (10.7), so
+     * "check it for colour blindness" would have found the defect while mis-attributing it.
+     *
+     * This ramp is monotonic in L* under normal, deuteranope and protanope simulation, with a
+     * minimum adjacent-band separation of 12.6 dE2000 in all three. It gives up the brand
+     * accent at the top end, which is the correct trade: #00FF88 is an identity colour and this
+     * raster is data. The accent still owns the UI chrome.
+     *
+     * Measured and pinned by ColourRampTest; generated and cross-checked by
+     * tools/check_palette.py. Alpha still ramps with the score, so the strongest ground is the
+     * brightest AND most opaque and the basemap stays legible everywhere else.
      */
+    private val RAMP = intArrayOf(
+        0x041E1A, // 0.00  deep forest, nearly the base colour
+        0x0B4D3A, // 0.25  shaded cove
+        0x148F5B, // 0.50  emerald
+        0x7FCE7A, // 0.75  new growth
+        0xEAF6C8, // 1.00  pale chartreuse
+    )
+
     fun colourFor(score: Double, minScore: Double): Int {
         if (score < minScore) return 0
         val t = ((score - minScore) / (1.0 - minScore)).coerceIn(0.0, 1.0)
-        val (r, g, b) = when {
-            t < 0.5 -> {
-                val u = t / 0.5
-                Triple(lerp(0x0E, 0x00, u), lerp(0x4A, 0xFF, u), lerp(0x5A, 0x88, u))
-            }
-            else -> {
-                val u = (t - 0.5) / 0.5
-                Triple(lerp(0x00, 0xFF, u), lerp(0xFF, 0xC8, u), lerp(0x88, 0x57, u))
-            }
-        }
+
+        val segments = RAMP.size - 1
+        val pos = t * segments
+        val i = pos.toInt().coerceAtMost(segments - 1)
+        val u = pos - i
+        val c0 = RAMP[i]
+        val c1 = RAMP[i + 1]
+        val r = lerp((c0 shr 16) and 0xFF, (c1 shr 16) and 0xFF, u)
+        val g = lerp((c0 shr 8) and 0xFF, (c1 shr 8) and 0xFF, u)
+        val b = lerp(c0 and 0xFF, c1 and 0xFF, u)
+
         val a = (70 + 150 * t).roundToInt().coerceIn(0, 255)
         return (a shl 24) or (r shl 16) or (g shl 8) or b
     }
