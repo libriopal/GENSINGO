@@ -242,7 +242,10 @@ private fun ComplianceBar(
     val seasonAccent = when (season) {
         SeasonStatus.OPEN -> Gen.Primary
         SeasonStatus.CLOSED -> Gen.Warning
-        SeasonStatus.UNKNOWN -> Gen.TextSecondary
+        // Warning, not secondary grey. Grey reads as "nothing to report"; the app reaches
+        // UNKNOWN precisely when it cannot rule out that harvest here is currently illegal,
+        // which is something to report. Only the wording distinguishes it from CLOSED.
+        SeasonStatus.UNKNOWN -> Gen.Warning
     }
     GenCard {
         Row(

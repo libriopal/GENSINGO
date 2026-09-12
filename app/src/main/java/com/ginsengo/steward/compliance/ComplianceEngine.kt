@@ -110,14 +110,29 @@ class ComplianceEngine(private val reference: ReferenceRepository) {
 
         val today0 = MonthDay.from(today)
 
-        // End date is frequently unpublished. Report the honest half-answer rather than
-        // inventing a closing date the digger might rely on.
+        // End date is frequently unpublished - 14 of 19 jurisdictions. Past the opening date
+        // the app knows the season STARTED and does not know whether it has ENDED, so the only
+        // answer it can give is UNKNOWN.
+        //
+        // Returning OPEN here would be the app answering a question it was not asked. A digger
+        // checking in September would be told "SEASON OPEN" and given no reason to check again
+        // in December, when the same code would still say OPEN because "past the opening date"
+        // is all it ever tested. The two errors are not comparable: a false CLOSED costs a
+        // wasted afternoon, a false OPEN can be a prosecution.
+        //
+        // Before the opening date is different - that date IS sourced, so CLOSED is a real
+        // finding rather than an absence of one, and saying so keeps UNKNOWN meaningful
+        // instead of letting it swallow every answer the app can still give honestly.
         val end = parseMonthDay(state.seasonEnd).takeIf { state.seasonEndVerified }
         if (end == null) {
-            val open = today0 >= start
-            return (if (open) SeasonStatus.OPEN else SeasonStatus.CLOSED) to
-                    "${state.stateName} opens ${state.seasonStart}. Closing date is not " +
-                    "published federally - confirm with ${state.agency}."
+            if (today0 < start) {
+                return SeasonStatus.CLOSED to
+                        "${state.stateName} does not open until ${state.seasonStart}."
+            }
+            return SeasonStatus.UNKNOWN to
+                    "${state.stateName} opened ${state.seasonStart}, but its closing date is " +
+                    "not published federally and this app has not sourced it. Treat the " +
+                    "season as closed until you have confirmed it with ${state.agency}."
         }
 
         val inSeason =

@@ -128,11 +128,18 @@ fun LogPatchScreen(
 
         // ---- Compliance warning, never a block ----
         compliance?.let { c ->
-            if (c.season == SeasonStatus.CLOSED || c.isProhibitedLand || c.needsPermit) {
+            // UNKNOWN is grouped with CLOSED deliberately. An unsourced closing date is not
+            // an absence of restriction, and a banner that appears only when the app is
+            // CERTAIN would stay silent in exactly the 14 jurisdictions where the digger most
+            // needs to go and ask someone.
+            val seasonNotConfirmedOpen =
+                c.season == SeasonStatus.CLOSED || c.season == SeasonStatus.UNKNOWN
+            if (seasonNotConfirmedOpen || c.isProhibitedLand || c.needsPermit) {
                 GenCard {
-                    if (c.season == SeasonStatus.CLOSED) {
+                    if (seasonNotConfirmedOpen) {
                         Text(
-                            "Season is closed here",
+                            if (c.season == SeasonStatus.CLOSED) "Season is closed here"
+                            else "Season status unconfirmed here",
                             style = MaterialTheme.typography.titleMedium,
                             color = Gen.Warning,
                         )

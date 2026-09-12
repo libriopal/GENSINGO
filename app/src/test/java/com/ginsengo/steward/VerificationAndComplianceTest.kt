@@ -130,12 +130,18 @@ class SeasonTest {
      * The honesty case. FWS publishes no closing date for most states, so an unverified end
      * must never render as a confident date - the message has to send the digger to the
      * state agency instead.
+     *
+     * This test used to assert OPEN here, and was wrong in a way worth leaving on the record:
+     * it checked that the MESSAGE was honest while pinning the STATUS as confident permission.
+     * Half the defect was caught and the other half was blessed by the same test. The status is
+     * UNKNOWN - see UnknownSeasonIsNotPermissionTest for why a false OPEN and a false CLOSED
+     * are not comparable errors.
      */
     @Test
     fun unverifiedEndDateNeverAssertsAClosingDate() {
         val s = state(end = null, endVerified = false)
         val (status, detail) = ComplianceEngine.seasonOf(s, LocalDate.of(2026, 10, 1))
-        assertEquals(SeasonStatus.OPEN, status)
+        assertEquals(SeasonStatus.UNKNOWN, status)
         assertTrue("must point at the agency, got: $detail", detail.contains("Test Agency"))
         assertTrue(detail.contains("not", ignoreCase = true))
         assertEquals("confirm with Test Agency", s.seasonEndDisplay)
