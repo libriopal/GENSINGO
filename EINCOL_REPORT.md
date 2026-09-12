@@ -326,3 +326,194 @@ prongs**; stem scars read 4 ≈ 5 years and 9 ≈ 10 years.
   failure, and the resulting approximate polygons are labelled, not passed off as real.
 - **Widening the scope** — the greenfield rewrite is what PRD §12/§13.1 asks for, not a
   redesign prompted by the finding.
+
+---
+
+# Phase 2 — satellite, terrain, and the habitat forecast heatmap
+
+Second pass of the protocol, against the goal "add satellite view, 3D height map, free
+movement, and a terrain-based ginseng forecast heatmap accurate to ~3 m, rendered on the
+GPU with adaptive antialiasing and adaptive scope by zoom."
+
+## Step 1 — What the material actually is
+
+**The "4D engine" exists and does not render.** The phrase points at the deleted
+`mapping/layers/*` tree (`MicroTerrainRendererImpl`, `LODTransitionManager`,
+`CoordinateTransformer`, `NioGeoTiffParser`) plus `DESIGN_LOD_HYBRID.md`, which specifies a
+"Managed Overlay Injection" pattern: a high-resolution mesh synchronised to MapLibre's
+projection matrix. Recovered from git history and measured:
+
+| File | Lines | Contains GL? |
+|---|---|---|
+| `MicroTerrainRendererImpl.kt` | 182 | **no** |
+| `NioGeoTiffParser.kt` | 236 | no (a real TIFF/IFD parser) |
+| `LODTransitionManagerImpl.kt` | 49 | no |
+| `CoordinateTransformer.kt` | 32 | no |
+
+`MicroTerrainRendererImpl.onDraw()` builds a 128×128 vertex grid, runs a fade timer, and
+then ends at the comment *"In a real implementation, this would use OpenGL ES to draw the
+mesh."* There is no shader, no GL program, no `glDrawElements` — **zero GL calls in the
+entire tree.** So "rewire the 4D engine into a heatmap renderer" has no renderer to rewire.
+What is genuinely reusable is its *architecture* (overlay synchronised to the map's own
+projection, LOD by camera state) and that is the pattern the heatmap now follows.
+
+**Resolution, measured rather than assumed.** AWS Terrain Tiles (Terrarium, public domain,
+no key) serve to z15 and 404 at z16. At 36°N, z15 = **3.86 m/px** — the "3 metre or close to
+it" target. But grid spacing is not information content, so I checked whether it is real:
+along a z15 scanline over Boone NC, **98% of samples carry non-zero second differences with
+gap=1**, which is not what bilinear upsampling looks like (upsampling leaves long runs of
+near-zero second difference). The 3.86 m detail is real there. Coverage is not uniform —
+away from lidar-mapped ground the source is coarser and z15 is genuinely smoother.
+
+**Two constraints found by reading the artifacts, not the docs:**
+
+- *No 3D terrain, at any version.* Unpacked `android-sdk` 11.5.2, 11.8.1, 11.11.0, 11.12.1,
+  11.13.0 and 13.6.1 (534 classes). **No Terrain class, no `setTerrain`, nothing.**
+  `raster-dem` is wired only into hillshade. MapLibre GL JS has `setTerrain`; MapLibre
+  Android does not. 13.6.1 does add `ColorReliefLayer` — a GPU colour ramp over a DEM —
+  which is a real height-map overlay, just not a mesh.
+- *Esri imagery cannot ship.* Esri World Imagery requires an ArcGIS licence and restricts
+  commercial/mobile redistribution. USGS `USGSImageryOnly` is public domain, keyless,
+  unrestricted, and covers the whole contiguous US — every one of the 19 states. Verified
+  serving to z16.
+
+## Step 2 — Distribution
+
+| p | Candidate for "what makes this heatmap wrong rather than merely rough" |
+|---|---|
+| 0.30 | Resolution: 3 m is unobtainable, so the forecast is coarser than promised. |
+| 0.20 | The 4D engine can't be rewired because it never rendered. |
+| 0.15 | MapLibre Android can't do 3D terrain, so one requested feature is impossible as specified. |
+| 0.12 | Wrong DEM: mixing Mapbox-RGB and Terrarium encodings silently yields absurd elevations. |
+| 0.10 | Neighbourhood operators at tile edges produce a seam of wrong values all round the viewport. |
+| **0.08** | **The heatmap is monotonic in wetness and slope, so its brightest pixels land in creek bottoms — exactly where ginseng does not grow.** |
+| 0.05 | Fixing the TPI radius in *cells* silently redefines "position on slope" at every zoom. |
+
+Rows 1–3 are real and were handled, but they are constraints, not defects: they make the
+feature smaller, not wrong.
+
+## Step 3 — The tail
+
+Row 0.08 is the finding. Every intuitive ginseng heatmap ramps monotonically: lower on the
+slope is wetter is better. Built that way, the brightest ground on the map is the creek
+bottom, because wetness and slope position both maximise there.
+
+The literature says that is the one place not to send a digger. Virginia Cooperative
+Extension, *Growing American Ginseng in Forestlands*: ginseng **"will not grow in
+waterlogged soil, compacted areas (such as old roadbeds), leaf-filled depressions, rocky
+outcrops, water flows, or heavy clay soils"**, and **"flat sites with poor drainage or a
+history of flooding will not support ginseng growth."** Meanwhile the good ground is *"north
+or east facing, not too steep, and near the bottom of slopes"*, with hollows productive.
+
+Both ends are constrained. Wetness, slope angle and slope position are therefore **optimum
+bands, not ramps** — `TerrainMath.band()` — and the surface turns over at the wet end.
+Row 0.05 composes: the band for "position on slope" is meaningless unless its radius is
+fixed in metres, so `tpiRadiusMetresFor(zoom)` returns metres and converts to cells per
+mosaic.
+
+## Step 4 — Falsifying my own claim
+
+**First formulation:** *"Finer DEM resolution makes the forecast better, so push to 3 m."*
+
+**Falsified by the literature I was citing.** Besnard et al. (2013, *Diversity and
+Distributions* 19:955-963) found a **250 m DEM produced better-fitting species models than
+a 50 m DEM** for TWI-based prediction; Kopecký & Čížková (2010) likewise warn that TWI is
+resolution-sensitive in ways that do not reward fineness. Finer is not uniformly better —
+groundwater does not follow 3 m microtopography.
+
+**Corrected claim, which is what shipped:** resolution should differ *by purpose*. The
+**visual** layers (hillshade, height overlay) use the finest DEM available, because
+microtopography is exactly what a digger reads off a hillside. The **analytical**
+neighbourhood radius is specified in metres and *widens* as you zoom out, so each index is
+computed at the scale it is meaningful at rather than at whatever the pixel grid happens to
+be. Both versions are kept here because the correction is the finding.
+
+One methodological choice came directly from this reading: Kopecký & Čížková compared 11
+flow-routing algorithms against Ellenberg soil-moisture values over 521 forest plots and
+found correlation **doubled** with multiple-flow routing, with D8 among the worst. TWI here
+uses Freeman multiple-flow accumulation, not the far simpler D8.
+
+## Step 5 — Evaluators
+
+### Rung 1 — mutation: build the naive heatmap and watch the controls catch it
+
+The wetness, slope and slope-position bands were replaced with monotonic ramps — i.e. the
+obvious heatmap the literature says is wrong — and the suite re-run:
+
+```
+MONOTONIC MUTANT                          55 tests, 4 failed
+  [FAIL] negativeControl_wetnessIsNotMonotonic
+  [FAIL] negativeControl_slopeIsNotMonotonic
+  [FAIL] textbookSiteScoresWellAndBakedRidgeDoesNot
+  [FAIL] suitabilityDiscriminatesAcrossARealHillside   <- on REAL Boone NC terrain
+  [pass] positiveControl_theModelActuallyRespondsToItsInputs
+
+RESTORED                                  55 tests, 0 failures
+```
+
+The positive control passing under the mutant is what makes this an instrument: "the
+surface turned over" is a statement about the model, not about a dead harness.
+
+### Rung 2 — execution against real terrain
+
+`RealTerrainTest` runs the whole index stack over committed Terrarium tiles of Boone, North
+Carolina (real Appalachian ginseng country, elevations 941–1124 m). Synthetic ramps prove
+the formulas compute what they claim; they cannot catch a model that is internally
+consistent and still useless on a hillside. So the real-terrain tests assert the surface
+**discriminates** (spread > 0.25, mean neither saturated high nor low, top band actually
+reachable) and that **the wettest 5% of real cells do not outscore the best 5%**.
+
+### What the evaluator caught that I did not
+
+`TerrainMath.profileCurvature` **had the sign inverted.** Its KDoc said "NEGATIVE = concave
+= hollows" and it returned `-(d2x+d2y)/2`, while `GinsengSuitability` consumed it as
+"positive = concave = cove". Every hollow in the country would have scored as a ridge nose
+and every ridge as a hollow. Nothing would have revealed this in use: the heatmap would
+still have looked entirely plausible, just inverted. A synthetic V-valley test caught it in
+one line. The sign convention is now stated loudly in the function, and both signs plus the
+flat case are pinned.
+
+Second catch, in the reference data rather than the code: the Commons plate-classifier
+labelled `AMP-011-0071-Cimicifuca racemosa.png` a **photograph**. "AMP" is *American
+Medicinal Plants* (1892) — an engraving. The app would have printed "Photograph · Wikimedia
+Commons" under a 19th-century plate: a false provenance claim of exactly the kind this
+project exists to avoid. The classifier now treats any catalogue-code filename
+(`[A-Z]{2,4}-\d{2,4}`) as a scan, and the species was re-fetched as a real CC0 photograph.
+
+## What shipped
+
+| Requested | Delivered | Honest status |
+|---|---|---|
+| Satellite view | USGS `USGSImageryOnly`, public domain, to z16 | **done** |
+| Free movement | pan/zoom/**rotate**/**tilt**/quick-zoom all enabled | **done** |
+| Height map overlay | `ColorReliefLayer` over Terrarium `RasterDemSource`, GPU, opacity slider, Appalachian-tuned ramp | **done** |
+| Habitat heatmap toggle, lower-third-slope aware | terrain forecast from HLI + TPI + MFD-TWI + slope + curvature | **done** |
+| ~3 m detail | z15 Terrarium = **3.86 m/px**, verified as real detail not upsampling | **done** |
+| Adaptive scope by zoom | DEM zoom from camera zoom; TPI radius in **metres**, 120 m → 1500 m | **done** |
+| Adaptive antialiasing | supersample factor 1–4 chosen from the DEM-cell : output-pixel ratio, plus GPU linear resampling | **done** |
+| GPU rendering | compositing, draping, filtering, hillshade and colour relief all on MapLibre's GPU path; the neighbourhood analysis (MFD accumulation, multi-scale TPI) runs on the CPU per viewport | **partial, stated** |
+| **3D height map** | **not possible as specified** — MapLibre Android exposes no terrain API at any version. Shipped as "pitched relief": 55° camera tilt + exaggerated hillshade + colour relief | **substituted, labelled in-app** |
+
+## Open after Phase 2
+
+10. **True 3D terrain is blocked.** Options, in ascending cost: (a) keep pitched relief;
+    (b) render a mesh into a `GLSurfaceView` overlay synchronised to MapLibre's projection
+    matrix — the pattern `DESIGN_LOD_HYBRID.md` specified and the old tree never
+    implemented; (c) move the map to a renderer that has terrain. (b) is the faithful
+    answer to the original request, and I deliberately did **not** ship it blind: there is
+    no device or emulator here, so a hand-written GL renderer would go out having never
+    executed once — which is precisely how this repository arrived with 96 Kotlin files
+    that had never been compiled.
+11. **The heatmap's neighbourhood analysis is CPU, not shader.** Moving MFD accumulation
+    and multi-scale TPI into a fragment or compute shader is feasible and would remove the
+    recompute-on-idle pause; same verification problem as above.
+12. **The forecast is expert-weighted, not fitted.** No ginseng occurrence dataset was used
+    and it has never been validated against known patches. Closing this means occurrence
+    data, which is exactly the data diggers are right to refuse to share — a real tension,
+    not an oversight.
+13. **Soil calcium is invisible to it.** One of the strongest published predictors
+    (Burkhart: ~3,360 kg/ha) cannot be derived from elevation. Surfaced in the UI as a
+    field check with its indicator species rather than silently omitted.
+14. **Terrain tiles stream.** The heatmap and relief need network on first visit to new
+    ground, then cache. The habitat *model* remains fully offline on the bundled grid; the
+    two elevation sources are deliberately separate.

@@ -33,12 +33,33 @@ PLANTS = [
     ("spicebush", "Spicebush", "Lindera benzoin", "strong",
      "Shrub; crushed twigs and leaves smell sharply of citrus and spice. Marks the moist, "
      "fertile lower slopes ginseng grows on."),
-    ("christmas_fern", "Christmas Fern", "Polystichum acrostichoides", "strong",
+    ("christmas_fern", "Christmas Fern", "Polystichum acrostichoides", "moderate",
      "Evergreen fern; each leaflet has a small ear at its base, like a Christmas stocking. "
-     "A year-round indicator of suitable slope and drainage."),
+     "Marks suitable slope and drainage — but ferns are reported to exude compounds that "
+     "harm ginseng growing right beside them, so read it as the right hillside rather than "
+     "the right square foot."),
     ("carpet_moss", "Carpet Moss", "Thuidium delicatulum", "moderate",
      "Fern-like feathery moss forming loose mats. Signals consistently damp, shaded, "
      "undisturbed ground."),
+    # Calcium indicators. Soil calcium is among the strongest published predictors of
+    # ginseng site quality (Burkhart, Penn State: ~3,360 kg/ha marks promising ground) and
+    # is the one major factor the terrain heatmap cannot see. These species are how a
+    # digger reads it on foot, so they belong in the field checklist.
+    ("jack_in_the_pulpit", "Jack-in-the-Pulpit", "Arisaema triphyllum", "strong",
+     "Hooded green-and-purple flower over three-part leaves. A calcium-loving species and "
+     "one of the most-cited indicators of rich ginseng ground."),
+    ("maidenhair_fern", "Maidenhair Fern", "Adiantum pedatum", "strong",
+     "Delicate fan of leaflets on wiry black stalks. Strongly tied to calcium-rich, "
+     "well-drained slopes — the soil chemistry ginseng wants."),
+    ("blue_cohosh", "Blue Cohosh", "Caulophyllum thalictroides", "strong",
+     "Blue-green compound leaves, later deep blue seeds. Another calcium indicator of "
+     "rich cove-hardwood soils."),
+    ("mayapple", "Mayapple", "Podophyllum peltatum", "moderate",
+     "Umbrella-like leaves in colonies. Common in the same rich woods, though it tolerates "
+     "more light and disturbance than ginseng does."),
+    ("black_cohosh", "Black Cohosh", "Actaea racemosa", "strong",
+     "Tall white flower spikes over divided leaves. Named repeatedly in extension guidance "
+     "as an understory species marking ginseng-suitable habitat."),
 ]
 
 # Licences acceptable for redistribution inside the APK, with attribution retained.
@@ -52,18 +73,37 @@ BAD_NAME = re.compile(r"(ai[-_ ]generated|midjourney|stable[-_ ]diffusion|dall[-
 # something usable - with media_type recorded honestly either way.
 PLATE = re.compile(
     r"(flora of|medical botany|medicinal plants|\bpl\.|\bplate\b|\btable\b|BHL|"
-    r"engr|lithograph|illustration|drawing|\bBB-\d|herbarium|specimen|\b1[6-9]\d\d\b)", re.I)
+    r"engr|lithograph|illustration|drawing|herbarium|specimen|\b1[6-9]\d\d\b|"
+    # Scanned-plate collections are filed under a catalogue code, not a description:
+    # "BB-0034", "AMP-011-0071". Any uppercase sigil followed by a digit block is a
+    # scan ID, and a file named by catalogue number is never somebody's field photo.
+    r"\b[A-Z]{2,4}-\d{2,4}\b)", re.I)
 
 
 def is_plate(title):
     return bool(PLATE.search(title))
 
 
+def _get(url, timeout=60):
+    """Commons rate-limits hard. Back off rather than silently dropping a species."""
+    last = None
+    for attempt in range(6):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.read()
+        except Exception as e:
+            last = e
+            code = getattr(e, "code", None)
+            if code in (429, 503):
+                time.sleep(5 * (attempt + 1))
+            else:
+                time.sleep(2 * (attempt + 1))
+    raise last
+
+
 def api(params):
-    req = urllib.request.Request(API + urllib.parse.urlencode(params),
-                                 headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return json.loads(r.read().decode())
+    return json.loads(_get(API + urllib.parse.urlencode(params)).decode())
 
 
 def strip(v):
@@ -79,7 +119,22 @@ def search(sci):
 
 
 records = []
+existing = {}
+if os.path.exists(OUT_JSON):
+    try:
+        existing = {r["slug"]: r for r in json.load(open(OUT_JSON))}
+    except Exception:
+        existing = {}
+
 for slug, name, sci, strength, desc in PLANTS:
+    prior = existing.get(slug)
+    if prior and os.path.exists(os.path.join(OUT_IMG, f"{slug}.jpg")):
+        # Already have a licensed photo for this species; refresh only the text fields.
+        prior.update(name=name, scientific_name=sci, description=desc,
+                     indicator_strength=strength)
+        records.append(prior)
+        print(f"KEEP {slug}: {prior.get('photo_license')}", flush=True)
+        continue
     chosen = None
     try:
         pages = search(sci)
@@ -115,9 +170,7 @@ for slug, name, sci, strength, desc in PLANTS:
         print(f"SKIP {slug}: no candidate with a readable acceptable licence", flush=True)
         continue
     try:
-        req = urllib.request.Request(chosen["url"], headers={"User-Agent": UA})
-        with urllib.request.urlopen(req, timeout=90) as r:
-            blob = r.read()
+        blob = _get(chosen["url"], timeout=90)
     except Exception as e:
         print(f"SKIP {slug}: download error {e}", flush=True)
         continue
@@ -135,7 +188,7 @@ for slug, name, sci, strength, desc in PLANTS:
     })
     print(f"OK   {slug}: {len(blob)//1024} KB [{chosen['media_type']}] "
           f"[{chosen['license']}] {chosen['title']}", flush=True)
-    time.sleep(0.5)
+    time.sleep(1.5)
 
 with open(OUT_JSON, "w") as f:
     json.dump(records, f, indent=2)

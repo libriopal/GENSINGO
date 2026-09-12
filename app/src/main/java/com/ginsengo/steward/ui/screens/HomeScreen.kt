@@ -39,7 +39,10 @@ import com.ginsengo.steward.ui.components.PrimaryAction
 import com.ginsengo.steward.ui.components.ProvenanceTag
 import com.ginsengo.steward.ui.components.SecondaryAction
 import com.ginsengo.steward.ui.components.StatusPill
+import com.ginsengo.steward.terrain.SuitabilityRasterizer
 import com.ginsengo.steward.ui.map.FieldMap
+import com.ginsengo.steward.ui.map.LayerPanel
+import com.ginsengo.steward.ui.map.MapLayerState
 import com.ginsengo.steward.ui.theme.Gen
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,6 +59,9 @@ fun HomeScreen(
 
     var followMe by remember { mutableStateOf(true) }
     var mapFailed by remember { mutableStateOf(false) }
+    var layerState by remember { mutableStateOf(MapLayerState()) }
+    var showLayers by remember { mutableStateOf(false) }
+    var heatStatus by remember { mutableStateOf<SuitabilityRasterizer.Raster?>(null) }
 
     val scaffoldState = rememberBottomSheetScaffoldState(
         bottomSheetState = rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded)
@@ -81,8 +87,11 @@ fun HomeScreen(
                     patches = patches,
                     me = location,
                     followMe = followMe,
+                    layers = layerState,
+                    demStore = vm.container.demTiles,
                     modifier = Modifier.fillMaxSize(),
                     onStyleFailed = { mapFailed = true },
+                    onHeatmapStatus = { heatStatus = it },
                 )
             } else {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -176,17 +185,38 @@ fun HomeScreen(
                 )
             }
 
-            // ---- Recentre ----
-            Box(
+            // ---- Recentre + layers ----
+            Column(
                 Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 248.dp)
+                    .padding(end = 16.dp, bottom = 248.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                SecondaryAction(
+                    if (layerState.habitatHeatmap) "Forecast on" else "Layers",
+                    { showLayers = !showLayers },
+                    accent = if (layerState.habitatHeatmap) Gen.Primary else Gen.TextSecondary,
+                )
                 SecondaryAction(
                     if (followMe) "Following" else "Recentre",
                     { followMe = !followMe },
                     accent = if (followMe) Gen.Primary else Gen.TextSecondary,
                 )
+            }
+
+            if (showLayers) {
+                Box(
+                    Modifier
+                        .align(Alignment.Center)
+                        .padding(horizontal = 16.dp)
+                ) {
+                    LayerPanel(
+                        state = layerState,
+                        onChange = { layerState = it },
+                        heatStatus = heatStatus,
+                    )
+                }
             }
         }
     }

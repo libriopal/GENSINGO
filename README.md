@@ -26,6 +26,47 @@ map tiles, and it carries no patch data.
 | **My Patches** | Proximity-grouped, filterable, coordinates blurred until you tap them. |
 | **Stewardship Guide** | Per-state rules, land status, stewardship practices, companion gallery, plant aging, look-alikes. |
 
+## Map layers
+
+Free movement throughout — pan, zoom, rotate and tilt.
+
+| Layer | What it is |
+|---|---|
+| **Dark / Satellite / Topo** | OpenFreeMap vector dark, or USGS imagery and topo (public domain, to z16) |
+| **Height map** | GPU colour relief over AWS Terrarium elevation tiles, ramp tuned to the Appalachian band, opacity slider |
+| **Hillshade** | GPU relief shading from the same elevation source |
+| **Pitched relief** | 55° camera tilt with deepened shading. **Not a 3D mesh** — MapLibre Android exposes no terrain API; the app says so where you toggle it |
+| **Habitat heatmap** | The ginseng forecast, below |
+
+### The habitat forecast
+
+A terrain-derived suitability surface computed from elevation tiles at up to **3.86 m per
+cell** (zoom 15 — measured as real detail, not upsampling). It combines five published
+terrain indices:
+
+- **Heat load** — McCune & Keon (2002) Eq. 3, folded about the NE–SW axis so north-east
+  slopes read coolest. This is what encodes ginseng's preference for north and east faces.
+- **Topographic position** — Weiss (2001), radius specified in **metres** and widened as you
+  zoom out, so "position on the slope" means the same physical thing at every zoom.
+- **Wetness** — Beven & Kirkby (1979) TWI over **multiple-flow** accumulation (Freeman),
+  not D8: Kopecký & Čížková (2010) found multiple-flow routing roughly doubles TWI's
+  correlation with actual soil moisture.
+- **Slope angle** and **profile curvature** — for the "not too steep" band and for coves.
+
+**It deliberately is not monotonic.** The obvious version ramps "lower = wetter = better"
+and paints the creek bottoms as the best ground on the map. Extension guidance is explicit
+that ginseng "will not grow in waterlogged soil … leaf-filled depressions … water flows",
+and that flat, poorly drained sites will not support it. Wetness, slope and slope position
+are therefore optimum **bands**, and the surface turns over at the wet end. That behaviour
+is pinned by tests that fail if anyone makes it monotonic again.
+
+Antialiasing adapts to the DEM-cell to output-pixel ratio: supersample and integrate when
+one pixel covers many cells, interpolate when one cell covers many pixels.
+
+**What it cannot see:** soil calcium — among the strongest published predictors of ginseng
+ground (Burkhart: ~3,360 kg/ha marks promising sites) and not derivable from elevation. The
+app says so on the panel and names the indicator species that reveal it instead.
+
 ## Build
 
 Requires JDK 17+ and an Android SDK with platform 34 and build-tools 34.0.0.

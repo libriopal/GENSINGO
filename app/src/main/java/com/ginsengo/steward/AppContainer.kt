@@ -10,6 +10,7 @@ import com.ginsengo.steward.field.LocationProvider
 import com.ginsengo.steward.field.PhotoStore
 import com.ginsengo.steward.geo.DemGrid
 import com.ginsengo.steward.habitat.HabitatEngine
+import com.ginsengo.steward.terrain.DemTileStore
 
 /**
  * Manual dependency container.
@@ -30,6 +31,16 @@ class AppContainer(private val context: Context) {
     val settings: SettingsStore by lazy { SettingsStore(context) }
 
     val habitat: HabitatEngine? by lazy { HabitatEngine.load(context) }
+
+    /**
+     * Streaming elevation tiles for the map's relief, height overlay and habitat heatmap.
+     *
+     * Deliberately separate from [dem], the bundled offline grid. The bundled grid feeds
+     * the habitat MODEL and must keep working with no signal; this one feeds the map's
+     * VISUALISATION and streams like the basemap does, caching what it fetches so ground
+     * already walked stays available offline.
+     */
+    val demTiles: DemTileStore by lazy { DemTileStore(context) }
 
     /**
      * The coarse elevation grid is optional: if the asset is absent the app still works,
