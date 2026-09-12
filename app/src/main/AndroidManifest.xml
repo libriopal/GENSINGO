@@ -30,7 +30,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Gensingo"
         android:usesCleartextTraffic="false"
-        tools:targetApi="34">
+        tools:targetApi="35">
 
         <activity
             android:name=".MainActivity"
