@@ -2,6 +2,7 @@ package com.ginsengo.steward.terrain3d
 
 import com.ginsengo.steward.terrain.DemTileStore
 import com.ginsengo.steward.terrain.GinsengSuitability
+import com.ginsengo.steward.terrain.TerrainAnalysis
 import com.ginsengo.steward.terrain.TerrainMath
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -85,7 +86,10 @@ object TerrainMesh {
         val ih = g.h - 2 * halo
 
         val tpiRadiusCells = (tpiRadiusM / g.cellSizeM).roundToInt().coerceIn(1, 60)
-        val twi = if (withSuitability) TerrainMath.topographicWetnessIndex(g) else null
+        // Cached per mosaic: flow accumulation and the summed-area table are the expensive
+        // parts and neither depends on the camera, so a pan that stays on the same elevation
+        // tiles reuses them instead of paying ~224 ms again.
+        val analysis = TerrainAnalysis.of(mosaic, withWetness = withSuitability)
 
         // Geographic bounds of the displayed (halo-cropped) region.
         val north = mosaic.northLat + (mosaic.southLat - mosaic.northLat) * (halo.toDouble() / g.h)
@@ -123,14 +127,14 @@ object TerrainMesh {
                 if (e < minE) minE = e.toFloat()
                 if (e > maxE) maxE = e.toFloat()
 
-                suit[j * n + i] = if (twi == null) 0f else {
+                suit[j * n + i] = if (!withSuitability) 0f else {
                     val (slopeDeg, aspectDeg) = TerrainMath.slopeAspect(g, xi, yi)
                     GinsengSuitability.score(
                         heatLoadRaw = TerrainMath.heatLoadIndex(
                             mosaic.latAtRow(yi), slopeDeg, aspectDeg
                         ),
-                        tpiMeters = TerrainMath.tpi(g, xi, yi, tpiRadiusCells),
-                        twi = twi[yi * g.w + xi],
+                        tpiMeters = analysis.tpi(xi, yi, tpiRadiusCells),
+                        twi = analysis.twiAt(xi, yi),
                         slopeDeg = slopeDeg,
                         curvature = TerrainMath.profileCurvature(g, xi, yi),
                         elevationM = e,

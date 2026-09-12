@@ -674,3 +674,161 @@ the GL calls its `onDraw()` never had.
     of work.
 18. **The overlay draws above all map layers**, including patch pins. Depth-sorting the
     pins against terrain would need them rendered in the same GL pass.
+
+---
+
+# Phase 4 — fling lag and rebuilding during camera movement
+
+Open items 16 and 17 from Phase 3. They look like two small fixes and are not: the obvious
+version of each makes the other worse.
+
+## Step 1 — Measure before designing
+
+"Rebuild while the camera moves" is only safe if a rebuild is cheap. That was never
+measured, so it was measured, on the real Boone fixture:
+
+| Work | Cost (desktop JVM) |
+|---|---|
+| mesh build, gridN=192, no forecast tint | 27 ms |
+| mesh build, gridN=192, with forecast tint | 320 ms |
+| **mesh build, gridN=128, wide TPI radius** | **568 ms** |
+| TPI sweep, radius 5 cells | 8 ms |
+| TPI sweep, radius 15 cells | 69 ms |
+| TPI sweep, radius 40 cells | 520 ms |
+| **TPI sweep, radius 60 cells** | **1142 ms** |
+
+A JVM figure is a floor, not a prediction — a handset is several times slower. Rebuilding on
+camera move as the code stood would have frozen the map on every pan.
+
+**The hot spot is the topographic position index**, and it is quadratic: 142x from radius 5
+to radius 60. The radius is chosen from camera zoom, so the worst case is simply "zoom out".
+
+## Step 2 — Distribution
+
+| p | Candidate for "why the obvious fix makes this worse" |
+|---|---|
+| 0.28 | Rebuilding per move event queues builds faster than they finish; the mesh falls further behind the longer the gesture lasts. |
+| 0.20 | Continuous rendering fixes the swim and drains the battery of an app carried all day. |
+| 0.16 | Cancelling an in-flight build on every move means no build ever completes during a fling. |
+| **0.14** | **The per-frame path does far more than matrix maths — it runs the alignment check and publishes Compose state every frame, so "fling lag" is partly self-inflicted.** |
+| 0.12 | TPI is quadratic in a radius chosen from zoom, so a zoomed-out rebuild is seconds. |
+| 0.06 | Optimising TPI by changing the window shape silently changes the model. |
+| 0.04 | Caching mosaic analysis unboundedly trades a stutter for an OOM kill. |
+
+## Step 3 — The tail
+
+Row 0.14 is a defect I shipped in Phase 3 and had not noticed. `syncCamera` was wired to
+`OnCameraMoveListener`, which fires per frame, and it did three things: recompute the matrix
+(nanoseconds, correct), **run `AlignmentCheck`** (nine `project` calls plus nine
+`toScreenLocation` calls, ~18 projections), and **publish status into Compose state**
+(recomposition, every frame, during a fling). Two thirds of the per-frame work existed to
+verify and report, not to draw.
+
+So part of the reported "fling lag" was the verification machinery running at frame rate.
+The three jobs are now on three rates: matrix per frame, rebuild throttled, alignment and
+status on settle only.
+
+Row 0.06 became the interesting one during implementation — see Step 4.
+
+## Step 4 — Falsifying my own fix
+
+**First formulation:** *"Use a summed-area table so TPI is O(1) regardless of radius."*
+
+A summed-area table gives constant-time SQUARE windows. TPI's window is circular. I built the
+square version, and it was fast — TPI fell from 1142 ms to 0 ms, mesh build from 568 ms to
+14 ms. Then I checked what it did to the output rather than assuming a window is a window:
+
+```
+TPI square-vs-circular on real terrain:
+  r=3  sign(|tpi|>1m) 1.000  corr 0.9822  meanAbs 0.23 m  worstScoreDelta 0.0835
+  r=8  sign(|tpi|>1m) 0.997  corr 0.9879  meanAbs 0.53 m  worstScoreDelta 0.1254   <-
+```
+
+**0.125 of final ginseng score on some cells — more than half the width of a suitability
+band.** That is not an optimisation, it is a different model wearing the old model's name,
+and the user would never have known: the heatmap would have looked entirely plausible.
+
+**Corrected fix, which shipped:** one summed-area rectangle query per ROW of the disk, with
+the row half-width from the circle equation. **Exactly the circular mask**, in 2r+1 lookups
+instead of (2r+1)^2 cell reads — 121 versus 11,300 at r=60.
+
+```
+TPI exact-circular fast path vs reference:
+  r=3, 8, 20, 40   corr 1.0000   meanAbs 0.00 m   worstScoreDelta 0.0000
+```
+
+O(r) rather than O(1), and worth it. Both versions are recorded because the correction is
+the finding: the first measurement (it is fast) was true and the wrong question.
+
+A related detour worth naming: my first agreement test used a synthetic surface with a
+hard-edged 40 m bump — the worst possible case for a window-shape change, and evidence about
+nothing. Moved to the real fixture. And the first metric was sign agreement, which near
+TPI ~ 0 flips on a 0.2 m difference and measures noise; it is now measured only where the
+sign is a real claim, alongside the metric that actually matters, the **downstream
+suitability delta**.
+
+## Step 5 — Evaluators
+
+### Rung 2 — measurement, before and after
+
+| | before | after |
+|---|---|---|
+| TPI sweep, r=60 | 1142 ms | **42 ms** |
+| TPI cost spread, r=5 to r=60 | 142x | **10x** |
+| mesh build, wide radius | 568 ms | **40 ms** |
+| mesh build, forecast tint | 320 ms | **66 ms** |
+| mesh build, plain | 27 ms | **18 ms** |
+
+Flow accumulation and the summed-area table are now cached per mosaic
+(`TerrainAnalysis`), because a pan usually lands on the same elevation tiles and redoing
+~224 ms of flow routing for the same data was the rest of the gap. Cache is capped at three
+entries: these arrays are megabytes, and trading a stutter for an out-of-memory kill on a
+cheap handset is not a trade.
+
+### Rung 1 — mutation, against both failure modes
+
+The rebuild policy is pure and lives in `MeshCoverage`, so both ways of getting it wrong are
+testable:
+
+```
+MUTANT A — lagging (REBUILD_AT 0.6 -> 10.0, i.e. only rebuild once the screen has left)
+  [FAIL] rebuildsBeforeTheViewportReachesTheEdge
+  [FAIL] aBuildAlreadyCoveringTheScreenIsNotRestarted
+
+MUTANT B — thrashing (MIN_REBUILD_INTERVAL_MS 250 -> 0)
+  [FAIL] rebuildIsThrottledDuringAFling
+  [FAIL] aFullSecondOfFlingProducesOnlyAFewBuilds
+
+RESTORED: 11/11 pass, full suite 106 tests / 0 failures
+```
+
+Each mutant is caught by exactly the tests written for it and by no others, which is what
+separates a suite that measures from a suite that merely passes.
+
+## What shipped
+
+- **Mesh decoupled from the viewport.** Built over 1.8x the visible region, rebuilt when the
+  viewport has used 60% of that margin — while live terrain still covers the screen, not
+  after a hole appears. Panning inside the margin costs nothing.
+- **Rebuild throttled** to 250 ms, and an in-flight build whose mesh still covers the screen
+  is left to finish rather than cancelled and restarted. A simulated one-second 60 fps fling
+  produces at most 5 builds, not 60.
+- **Render mode follows the camera**: continuous while moving, back to on-demand the moment
+  it settles. The swim is a frame-latency problem, and this removes the frame; leaving it
+  continuous would have been a battery cost on an app carried all day for nothing.
+- **Per-frame path stripped to matrix arithmetic.** Alignment check and Compose status
+  publishing moved to camera-settle. Status is also diffed before publishing, so an
+  unchanged status recomposes nothing.
+- **Exact-circular constant-lookup TPI** and a per-mosaic analysis cache.
+
+## Open after Phase 4
+
+19. **Still no device.** Every number above is a desktop JVM figure and a policy simulated in
+    a unit test. Whether the mesh visually keeps up on real hardware is unmeasured — the
+    frame-latency fix in particular is reasoned, not observed.
+20. **Rebuild granularity is still whole-mesh.** Crossing a region boundary rebuilds
+    everything rather than streaming the newly exposed strip. Tile-level LOD streaming would
+    remove the remaining hitch and is a substantially larger piece of work.
+21. **`MeshCoverage.MARGIN` and the throttle are tuned by reasoning, not profiling.** 1.8x
+    and 250 ms are defensible from the measured build costs, but the right values depend on
+    real fling velocities on real hardware.

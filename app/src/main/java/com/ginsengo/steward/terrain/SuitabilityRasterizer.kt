@@ -55,8 +55,10 @@ object SuitabilityRasterizer {
 
         val tpiRadiusCells = (tpiRadiusM / g.cellSizeM).roundToInt().coerceIn(1, 60)
 
-        // Wetness is a whole-mosaic operator: one pass, reused per pixel.
-        val twi = TerrainMath.topographicWetnessIndex(g)
+        // Wetness and the summed-area table are whole-mosaic operators and neither depends
+        // on the camera, so they are cached against the mosaic rather than recomputed for
+        // every viewport the user pans through.
+        val analysis = TerrainAnalysis.of(mosaic, withWetness = true)
 
         // ---- ADAPTIVE ANTIALIASING -------------------------------------------------
         // The ratio between one output pixel and one DEM cell decides which artefact is
@@ -92,7 +94,7 @@ object SuitabilityRasterizer {
                         val fy = (oy + (sy + 0.5) / superSample) / outSize
                         val gx = ix0 + fx * iw
                         val gy = iy0 + fy * ih
-                        acc += scoreAt(g, twi, gx, gy, mosaic, tpiRadiusCells, superSample == 1)
+                        acc += scoreAt(g, analysis, gx, gy, mosaic, tpiRadiusCells, superSample == 1)
                         n++
                     }
                 }
@@ -121,7 +123,7 @@ object SuitabilityRasterizer {
 
     private fun scoreAt(
         g: TerrainMath.Grid,
-        twi: DoubleArray,
+        analysis: TerrainAnalysis,
         gx: Double, gy: Double,
         mosaic: DemTileStore.Mosaic,
         tpiRadiusCells: Int,
@@ -133,10 +135,10 @@ object SuitabilityRasterizer {
         val (slopeDeg, aspectDeg) = TerrainMath.slopeAspect(g, xi, yi)
         val lat = mosaic.latAtRow(yi)
         val hl = TerrainMath.heatLoadIndex(lat, slopeDeg, aspectDeg)
-        val tpi = TerrainMath.tpi(g, xi, yi, tpiRadiusCells)
+        val tpi = analysis.tpi(xi, yi, tpiRadiusCells)
         val curv = TerrainMath.profileCurvature(g, xi, yi)
 
-        val wet = if (interpolate) bilinear(twi, g.w, g.h, gx, gy) else twi[yi * g.w + xi]
+        val wet = analysis.twiAt(xi, yi)
         val elev = if (interpolate) {
             bilinearF(g.z, g.w, g.h, gx, gy)
         } else {

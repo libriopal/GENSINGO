@@ -1,9 +1,11 @@
 package com.ginsengo.steward.terrain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
+import kotlin.math.sqrt
 
 /** Synthetic grid helper. Row 0 is NORTH, so +y runs south. */
 private fun grid(w: Int, h: Int, cell: Double, f: (x: Int, y: Int) -> Double) =
@@ -112,11 +114,130 @@ class TpiAndCurvatureTest {
     }
 
     /**
-     * Pins BOTH signs. Curvature feeding [GinsengSuitability] with the wrong sign would
-     * score every ridge nose as a cove and every cove as a ridge, and the heatmap would
-     * still look entirely plausible — just inverted. Testing only the hollow would leave
-     * that half-checked, so the convex case is asserted alongside it.
+     * The constant-time TPI must actually track the circular reference it replaces.
+     *
+     * It is a different window (square, not circular), so exact equality is not the claim —
+     * the claim is that swapping it in does not change which ground reads as valley and
+     * which reads as ridge. Checked by correlation of sign and by bounded disagreement,
+     * because a fast index that ranks terrain differently is not an optimisation, it is a
+     * different model with the old model's name.
      */
+    @Test
+    fun fastTpiAgreesWithTheCircularReferenceOnRealTerrain() {
+        // Measured on the real Boone NC fixture, not a synthetic ramp. A synthetic surface
+        // with a hard-edged bump is the worst possible case for a window-shape change and
+        // says nothing useful about how the two indices rank an actual hillside.
+        val stream = javaClass.getResourceAsStream("/terrain_boone_z14.bin")
+        assertNotNull("missing terrain fixture", stream)
+        val g = java.io.DataInputStream(stream!!.buffered()).use { d ->
+            d.readFully(ByteArray(8))
+            val w = d.readInt(); val h = d.readInt()
+            TerrainMath.Grid(w, h, FloatArray(w * h) { d.readShort().toFloat() }, 7.71)
+        }
+        val sat = TerrainMath.SummedArea(g)
+
+        for (r in listOf(3, 8, 20, 40)) {
+            var agree = 0
+            var agreeMeaningful = 0
+            var meaningful = 0
+            var total = 0
+            var sumAbs = 0.0
+            var worst = 0.0
+            var worstScoreDelta = 0.0
+            val refs = ArrayList<Double>()
+            val fasts = ArrayList<Double>()
+            for (y in r + 1 until g.h - r - 1 step 5) for (x in r + 1 until g.w - r - 1 step 5) {
+                val ref = TerrainMath.tpi(g, x, y, r)
+                val fast = TerrainMath.tpiFast(g, sat, x, y, r)
+                total++
+                if ((ref >= 0) == (fast >= 0)) agree++
+                if (abs(ref) > 1.0) {
+                    meaningful++
+                    if ((ref >= 0) == (fast >= 0)) agreeMeaningful++
+                }
+                sumAbs += abs(ref - fast)
+                worst = maxOf(worst, abs(ref - fast))
+                refs += ref; fasts += fast
+
+                // The claim that actually matters downstream: does swapping the index
+                // change the ginseng score this cell gets? Everything else is diagnostics.
+                val (slopeDeg, aspectDeg) = TerrainMath.slopeAspect(g, x, y)
+                val hl = TerrainMath.heatLoadIndex(36.2, slopeDeg, aspectDeg)
+                val curv = TerrainMath.profileCurvature(g, x, y)
+                val e = g[x, y].toDouble()
+                val sRef = GinsengSuitability.score(hl, ref, 8.0, slopeDeg, curv, e).score
+                val sFast = GinsengSuitability.score(hl, fast, 8.0, slopeDeg, curv, e).score
+                worstScoreDelta = maxOf(worstScoreDelta, abs(sRef - sFast))
+            }
+            // Sign agreement is only measured where the sign is a real claim. Within a
+            // metre of zero the cell is neither valley nor ridge, and a 0.2 m difference
+            // flips it for no meaningful reason — counting those would measure noise.
+            val rate = if (meaningful == 0) 1.0 else agreeMeaningful.toDouble() / meaningful
+            val meanAbs = sumAbs / total
+
+            // Pearson correlation: does the fast index RANK terrain the same way?
+            val mr = refs.average(); val mf = fasts.average()
+            var num = 0.0; var dr = 0.0; var df = 0.0
+            for (i in refs.indices) {
+                val a = refs[i] - mr; val b = fasts[i] - mf
+                num += a * b; dr += a * a; df += b * b
+            }
+            val corr = num / sqrt(dr * df)
+
+            println("TPI fast-vs-reference r=$r: sign(|tpi|>1m) ${"%.3f".format(rate)} " +
+                    "corr ${"%.4f".format(corr)} meanAbs ${"%.2f".format(meanAbs)} m " +
+                    "worst ${"%.1f".format(worst)} m " +
+                    "worstScoreDelta ${"%.4f".format(worstScoreDelta)}")
+
+            assertTrue(
+                "radius $r: sign agreement ${"%.3f".format(rate)} — the fast index disagrees " +
+                        "about valley vs ridge too often",
+                rate > 0.95,
+            )
+            assertTrue(
+                "radius $r: correlation ${"%.4f".format(corr)} — the fast index ranks terrain " +
+                        "differently, which makes it a different model rather than a faster one",
+                corr > 0.9999,
+            )
+            assertTrue(
+                "radius $r: mean disagreement ${"%.4f".format(meanAbs)} m — the fast path " +
+                        "should reproduce the circular mask exactly, not approximate it",
+                meanAbs < 0.01,
+            )
+            // The end-to-end claim. A change in the index only matters if it changes the
+            // score a digger is shown.
+            assertTrue(
+                "radius $r: swapping the index moves a suitability score by " +
+                        "${"%.4f".format(worstScoreDelta)} — too much to call it the same model",
+                worstScoreDelta < 0.001,
+            )
+        }
+    }
+
+    /** The summed-area mean must equal a brute-force CIRCULAR mean exactly. */
+    @Test
+    fun summedAreaMeanMatchesBruteForce() {
+        val g = grid(37, 29, 10.0) { x, y -> (x * 7 + y * 13) % 97 * 1.0 }
+        val sat = TerrainMath.SummedArea(g)
+        for (r in listOf(1, 4, 9)) {
+            for (y in listOf(0, 5, 14, 28)) for (x in listOf(0, 3, 18, 36)) {
+                var sum = 0.0; var n = 0
+                for (dy in -r..r) for (dx in -r..r) {
+                    val xx = x + dx; val yy = y + dy
+                    if (xx !in 0 until g.w || yy !in 0 until g.h) continue
+                    if (dx == 0 && dy == 0) continue
+                    if (dx * dx + dy * dy > r * r) continue
+                    sum += g[xx, yy]; n++
+                }
+                val expected = if (n == 0) g[x, y].toDouble() else sum / n
+                assertEquals(
+                    "circular mean at $x,$y r=$r",
+                    expected, sat.neighbourhoodMean(x, y, r), 1e-9,
+                )
+            }
+        }
+    }
+
     @Test
     fun curvatureIsPositiveInAHollowAndNegativeOnARidge() {
         val hollow = grid(21, 21, 10.0) { x, _ -> abs(x - 10) * 12.0 }
