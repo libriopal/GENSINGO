@@ -6,6 +6,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -175,8 +176,14 @@ fun PrimaryAction(
             disabledContainerColor = Gen.Hairline,
             disabledContentColor = Gen.TextSecondary,
         ),
+        contentPadding = FieldActionPadding,
     ) {
-        Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        Text(
+            text,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
     }
 }
 
@@ -195,10 +202,18 @@ fun SecondaryAction(
         shape = Gen.PillShape,
         border = BorderStroke(1.dp, accent.copy(alpha = 0.6f)),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = accent),
+        // Material's default 24.dp horizontal padding is too generous for three actions
+        // sharing a phone's width. On a 411.dp-wide Pixel 6 it left "Log Patch" about 85.dp
+        // of text room and the label wrapped onto two lines, which was visible on the first
+        // frame this app ever rendered and in no unit test.
+        contentPadding = FieldActionPadding,
     ) {
-        Text(text, style = MaterialTheme.typography.labelLarge)
+        Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1)
     }
 }
+
+/** Shared by the two field-bar actions so they stay the same shape as each other. */
+private val FieldActionPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
 
 /** A yes/no or multiple-choice chip used throughout the field checklists. */
 @Composable

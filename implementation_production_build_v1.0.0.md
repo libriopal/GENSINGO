@@ -399,3 +399,348 @@ F26. **(d) An expert-weighted, never-validated forecast is defensible to *comput
 F27. **Step 2's framing is too narrow to be worth doing as stated.** Computing the three asserted ratios verifies three assertions; the instrument you want is an automated WCAG sweep over the whole theme (light and dark, disabled and pressed states, text over the map) wired into CI. More importantly, contrast ratio is the wrong metric for the artifact that carries the most information: a habitat heatmap's colour ramp must be checked for colour-vision deficiency and perceptual uniformity. A red-to-green ramp at 8.2:1 still fails roughly 8% of male users completely, and contrast ratio will never tell you that. Use a perceptually uniform sequential ramp, verify under a deuteranope simulation, and carry a redundant non-colour encoding.
 
 F28. **Step 4 writes unexecuted tests to verify unexecuted code, which compounds rather than reduces uncertainty.** A test that has never failed has never been shown capable of failing. Require every new Robolectric and instrumented test to be demonstrated *red* — by breaking the thing it tests — before it is allowed to count as evidence. And publish the one number that would make this whole discussion concrete: JaCoCo branch coverage restricted to the camera, projection, mesh and geo packages. It is free, you already have the plugin, and I predict it is near zero — at which point "106 tests pass" stops being reassuring and starts being the finding.
+
+---
+
+## 12. My responses, after measuring
+
+Written after acting, not before. Every verdict below is backed by a command that ran or a test
+that is now in the repository, and where the auditor was wrong the refutation is a measurement
+rather than an argument — which is F12's own advice applied to F12's own author.
+
+**Scoreboard: 28 findings — 17 confirmed (9 already fixed), 4 refuted by measurement,
+5 confirmed-but-severity-wrong, 2 moot.**
+
+### 12.1 Findings I confirmed and have already fixed
+
+| # | Verdict | What I did |
+|---|---|---|
+| **F19** | **CONFIRMED — the worst finding in the set** | Fixed in `a949767`. |
+| **F13** | **CONFIRMED and understated** | Measured; `WeightSensitivityTest`. |
+| **F27** | **CONFIRMED on both halves** | Ramp replaced, contrast computed. |
+| **F22** | **CONFIRMED — my claim was false** | Corrected below. |
+| **F15** | Mechanism confirmed, severity refuted | Measured; `WindowDependenceTest`. |
+| **F10** | **CONFIRMED — my impossibility claim was false** | Emulator booted. |
+| **F24** | Confirmed, and the unacknowledged axis is the real one | Accepted below. |
+| **F25** | Confirmed | Version policy changed below. |
+| **F11** | Confirmed on step 3; moot on the tool | See 12.5. |
+
+**F19 — an unknown season was being reported as an open one.** This was live, today, in 14 of 19
+jurisdictions. `ComplianceEngine` tested only whether today was past the OPENING date and, if so,
+returned `SEASON OPEN`. Alabama read "SEASON OPEN" on 12 September and would have read exactly the
+same on 28 December. The `UNKNOWN` state already existed in the enum; the logic never reached it,
+`LogPatchScreen`'s caution banner fired only on `CLOSED`, and `HomeScreen` painted `UNKNOWN` in
+secondary grey — which reads as "nothing to report". All three fixed. The auditor found this from
+a claims list, with no access to the code.
+
+The part worth recording against myself: **my own test had walked past it.**
+`unverifiedEndDateNeverAssertsAClosingDate` asserted the *message* was honest while pinning the
+*status* as `OPEN`. It caught half the defect and blessed the other half, under a name that
+claimed the whole thing. That is a vocabulary-proxy failure in EINCOL's own terms, committed by
+the person writing the EINCOL report.
+
+**F13 — the weight table does not describe what drives the ranking.** 5,476 cells of real Boone
+terrain:
+
+| factor | nominal weight | ρ(factor, score) | variance |
+|---|---|---|---|
+| HEAT_LOAD | 0.28 | **+0.137** | 0.0071 |
+| SLOPE_POSITION | 0.24 | +0.657 | 0.0696 |
+| WETNESS | 0.18 | +0.545 | 0.1788 |
+| SLOPE_ANGLE | 0.14 | **−0.026** | 0.1942 |
+| CURVATURE | 0.10 | +0.647 | 0.1205 |
+| ELEVATION | 0.06 | +0.000 | 0.0000 |
+
+The heaviest-weighted factor is nearly the least influential; curvature at 0.10 does as much work
+as slope position at 0.24; slope angle at 0.14 correlates with the output at −0.026, which is
+nothing. Collinearity is real and now has a number: wetness against slope angle is **−0.641**,
+which is tan β appearing in both, exactly as F13 predicted.
+
+Most of the heat-load flatness is correct physics, not a bug — the aspect term carries sin(slope),
+so gentle ground has no aspect signal and there is no north-east bonus to find. But part was a
+real defect: `normaliseHeatLoad` mapped 0.2–1.2, plausible-looking round numbers, when the
+attainable range of the equation over latitude 33–47 and slope 0–45 is **0.2865–1.1136**. 17% of
+the output range was unreachable. Rescaling to the true domain lifted heat load's variance 48%
+and its influence from +0.114 to +0.137 — modest, and all there was to get.
+
+Sensitivity: ±50% on each weight, renormalised, worst case wetness at **ρ 0.875**, everything else
+above 0.93. So the weights are load-bearing but not brittle. **A model whose ranking survives a
+50% error in its largest effective coefficient at ρ 0.88 identifies broadly promising hillsides;
+it does not rank candidate sites.** That sentence is now the ceiling on how the surface may be
+described.
+
+One test of mine expected the ecological bands to dominate the guessed weights, because that
+would have been the reassuring answer. Measured, it is the other way round: halving the wetness
+weight moves the ranking (0.8754) slightly *more* than shifting the wetness optimum by a full
+2 TWI units (0.8888). I corrected the conclusion rather than relaxing the assertion.
+
+**F27 — both halves right, and the CVD instrument found the defect for the wrong reason.** The
+spec asserted 8.2:1, 11.4:1 and 6.1:1. Measured: **17.04:1, 14.41:1, 7.50:1.** All three wrong,
+all three wrong in the safe direction. The palette passes AA everywhere it carries text, by more
+than claimed — but numbers written down rather than computed must not ship as accessibility
+claims. `Hairline` is 1.42:1 and is a decorative 1 px frame, not text or a state indicator.
+
+The ramp was worse than the audit guessed. Old ramp (teal → `#00FF88` → amber): lightness was
+**not monotonic** — L\* climbed to 88.6 at score 0.5 and fell to 83.6 at 1.0, so *the brightest
+point on the map was mediocre ground*. Adjacent bands in the green-to-amber half separated by only
+**6.1 dE2000**. And that half was worse for **normal** vision (6.1) than for a deuteranope (10.7),
+so "check it for colour blindness" would have found the defect and mis-attributed the cause.
+Replaced with deep forest → emerald → pale chartreuse: monotonic in L\* under normal, deuteranope
+and protanope simulation, minimum adjacent separation 13.5 / 12.6 / 12.6 dE2000, L\* span 85.8.
+Monotonic lightness *is* the redundant non-colour channel F27 asked for — the surface now reads as
+an ordering in greyscale. `ColourRampTest` keeps the old ramp as a negative control.
+
+One caution against my own instrument: my 5-stop viridis approximation scored 0.5 dE under
+deuteranope simulation, which contradicts viridis's well-established CVD safety. That is my coarse
+approximation and the harsh Viénot dichromat projection showing their limits. I rank my own
+candidates with it; I claim nothing about viridis.
+
+**F22 — I was wrong and the auditor guessed it from the wording alone.** Tested:
+
+```
+apksigner verify app-release.aab
+  → ApkFormatException: Missing AndroidManifest.xml
+jarsigner -verify app-release.aab
+  → jar verified.
+```
+
+§1's "apksigner v2 verifies" is **withdrawn**. The correct claim is that jarsigner verifies the
+AAB's JAR signature, which is a weaker statement. F22's other half stands: 59.4 MiB is not a
+number any user experiences and per-ABI figures are the honest ones.
+
+### 12.2 Findings refuted by measurement
+
+**F3 — REFUTED, and it was the auditor's own highest-leverage claim.** F3 said a custom-layer path
+probably exists, and that if it did, the shadow camera, the alignment witness, F4, F5 and step 3
+would all evaporate. Measured against the actual pinned artifact:
+
+```
+javap org.maplibre.android.style.layers.CustomLayer   (android-sdk-13.6.1.aar)
+  public CustomLayer(java.lang.String, long);
+  protected native void initialize(java.lang.String, long);
+```
+
+The `long` is a **native pointer**. `initialize` is `native`. There is no JVM callback interface to
+implement, so a Kotlin render function cannot be passed to it — reaching that API requires C++ and
+the NDK returning a `mbgl::CustomLayerHost*`. `CustomDrawableLayer` **does not exist in 13.6.1 at
+all**; the only `Custom*` classes are `CustomGeometrySource`, a *vector geometry* source, not a GL
+render hook. A scan of every class in the AAR for a render callback found only the location-puck
+internals.
+
+So the GLSurfaceView overlay is not self-inflicted. F3 was reasoning from the Mapbox GL Native
+lineage, which is exactly the "shared-prior error" F24 predicted a same-vendor critic could not
+catch — except inverted: the critic asserted a capability, and the artifact refuted it. The oracle
+beat the opinion, which is F12's recommendation applied to F3.
+
+One thing F3's line of attack *did* surface that I had not noticed: 13.6.1 ships
+`VulkanRendererStrategy` and `MapLibreVulkanSurfaceView`. The map may not be rendering through GL
+at all, which matters for compositing an ES overlay against it. Added to the open list.
+
+**F10 — REFUTED, and my claim was the false one.** "Instrumented tests cannot be run here" was an
+assumption I had never tested. Measured: `/dev/kvm` absent, 4 cores, 15 GB RAM. Installed
+`emulator` + `system-images;android-34;google_apis;x86_64` via sdkmanager and booted with
+`-gpu swiftshader_indirect -accel off`. **`sys.boot_completed = 1`.** Android 14 booted on x86_64
+with no hardware acceleration. F10 was right that this was the assumption making the whole plan
+degrade, and right that I should have tested it before designing around it.
+
+**F21 — half refuted, half open.** The headline mechanism was already closed before the audit:
+
+```xml
+android:allowBackup="false"
+android:dataExtractionRules="@xml/data_extraction_rules"
+android:fullBackupContent="@xml/backup_rules"
+android:usesCleartextTraffic="false"
+```
+
+Auto Backup cannot push the patch database anywhere. F21's *reasoning* was nonetheless correct and
+its other paths are genuinely open and genuinely invisible to a class-name scan: EXIF GPS
+surviving the share sheet, coordinates reaching logcat, the recents thumbnail, and the fact that
+"no network calls" is a runtime property a static scan cannot establish. Those four stay on the
+open list. "GPS masked in list views is UI theatre next to these" is fair.
+
+**F26's validation claim — refuted on the facts, and it strengthens F26's conclusion.** F26 says
+holdout validation is unobtainable because iNaturalist and GBIF obscure *P. quinquefolius*
+coordinates to deter poaching. That is true and I had not known it. It does not weaken the
+finding; it means "we will validate later" was a promise I could not have kept, so I have stopped
+making it. The sensitivity sweep F26 asked for is the substitute and it is done.
+
+### 12.3 Confirmed, unfixed, and now properly sized
+
+**F15 — mechanism right, severity wrong by a factor of 250.** The auditor said to score one
+coordinate from three window origins, expected disagreement, and was correct that TWI is
+window-dependent: contributing area is everything uphill to the divide and no halo can bound it.
+Measured over 48 shared cells of real terrain with **no halo at all**, which is strictly worse than
+anything the app does:
+
+- slope: **identical to 1e-9** from every window, as a 3×3 operator must be
+- TPI: **identical to 1e-6** wherever the margin exceeds its radius
+- TWI: mean spread **0.0149**, worst **0.2783** units
+- **final suitability: mean 0.00003, worst 0.00078** on a 0–1 score
+
+0.00078 is about **1/256th of one legend band**. The reason is worth stating because it is design
+rather than luck: wetness enters through `band(twi, 6.0, 10.5, 2.5)`, a plateau 4.5 units wide
+where the derivative is zero. The band shape was chosen because "wetter is always better" is
+ecologically false — creek bottoms are not ginseng ground — and its insensitivity to small TWI
+error is a second dividend from that decision. Production also carries a 256-cell halo this test
+did not. The test asserts the **defect**, not its absence, so nobody later mistakes it for solved.
+
+**F23 — confirmed, and it is a genuine ship blocker.** `targetSdk = 34`, and Play's requirement has
+been past 34 for new submissions since August 2025. So "bundle is green" and "shippable" were never
+the same claim. F23 is also right that raising it is not a version bump: API 35 forces edge-to-edge,
+which will affect a full-screen GL overlay's insets. I am no longer guessing about that, because
+there is now a runtime to test it on. Open.
+
+**F16 — confirmed, and it exposes a conflict between two of the user's own instructions.** Both
+DEM paths exist. `assets/geo/dem_grid.bin` is 108 KB and offline, which is what the PRD specified:
+*"NEVER fetches elevation from any network API. At runtime the grid is read purely from bundled
+assets."* And `DemTileStore.TERRARIUM` fetches AWS Terrarium tiles at runtime, which is what the
+later request for a free-moving satellite map with a 3 m habitat heatmap requires. **A bundled DEM
+covering 19 jurisdictions at 3 m is not physically possible in an APK**, so these two instructions
+cannot both be satisfied. This is the one item I will not resolve by choosing: it is a product
+decision with a privacy dimension, and it is flagged for the user rather than assumed. F16's
+second half — that an offline-only app renders the heatmap over a blank basemap — is also correct
+and unaddressed, because offline tiles remain absent.
+
+**F20 — confirmed, still shipping.** `assets/models/habitat_model.onnx` is in the bundle. Deleting
+it is a deviation from a PRD-mandated Phase 2 feature, so I am not doing it unilaterally; the
+specific harm F20 names — its score appearing adjacent to the terrain forecast so the user reads
+two agreeing systems where there is one — is the part I will fix. Open.
+
+**F18 — confirmed, and its reframing is better than the question I asked.** I asked whether bboxes
+are accurate enough. F18's answer is that the question is wrong: a bbox over-covers, which is
+fail-safe, and the real hazard is that absence of a federal boundary is not presence of permission
+— state parks, WMAs, watershed land, tribal land and private property are all separately
+prohibited and none are in the dataset. "Remove any UI state that means you may harvest here" is
+the correct instruction and generalises the F19 fix from time to space. Partly addressed by F19's
+three-valued logic; the spatial half is open.
+
+**F17 — confirmed.** "FWS publishes no per-state end dates" is true and was doing work it cannot
+do. One federal aggregator returning nothing is not evidence the dates are unpublished; they live
+in state administrative code. Likewise one NPS 404 is not evidence that authoritative boundaries
+are unavailable, and **USGS PAD-US** is a single dataset covering federal, state and local
+protected areas. Both are research tasks, open.
+
+**F1, F2, F5, F6, F7, F8 — confirmed as a group, and now actionable rather than theoretical.** F1
+is the correct framing of the whole situation: the release gate was defined entirely in static and
+host-side instruments, so its exit condition was blind to the failure class with the highest prior,
+and the remaining work was not merely incomplete — *its size was unmeasured*. F2 is exactly right
+that the alignment witness was a runtime instrument in a program with no runtime, so its 2.0 px
+tolerance had never produced a number. F6 (sweep the camera parameter space, probe at corners and
+the horizon, expect failure at high pitch), F7 (CPU float64 cannot detect GPU float32 crawl) and
+F8 (glslang models no driver) all stand unrefuted. All five become testable now that the emulator
+boots, which is why F9 is the finding with the highest leverage in the set.
+
+### 12.4 F24 and F25 — the two I have to simply accept
+
+**F24 is the most uncomfortable finding and it is correct.** I labelled the vendor axis honestly
+and was silent on the larger one: **I selected the claims.** Cold context controls for reasoning
+contamination and does nothing about selection. This audit's own results prove it in both
+directions — it caught F19 and F13 from a list I wrote, and it asserted F3 from a shared prior that
+only the artifact could refute. So the fix is not a better critic but oracles: a real runtime,
+MapLibre's own `Projection` API, published data. That is now the plan.
+
+**F25 is correct and I am changing the version policy.** "Code-complete, verification-incomplete"
+implies the remainder is small and enumerated, and it was neither. The accurate word is
+**unexecuted**. `v1.0.0` is withdrawn as a target: the build ships `0.x` until one frame has
+rendered on a real runtime, and that gate sits ahead of code health and R8, not after them.
+
+### 12.5 Moot
+
+**F11's secondary point about retraction-checking McCune & Keon, Beven & Kirkby, Horn, and
+Zevenbergen & Thorne is right** — 40-year-old canonical method papers are not a retraction risk;
+*applicability* is, which F13/F14/F15 then tested directly. And the Three.js cross-check F11 called
+the primary padding is moot on the tooling as well as the reasoning: the `Three_js_3D_Viewer`
+server disconnected mid-session. F12's verdict that it was never a witness — same author, same
+priors, no shared runtime to arbitrate — is accepted regardless, and the emulator replaces it with
+something that is one.
+
+**F14's mechanism is correct and unaddressed: cast shadow.** McCune & Keon's index is a function of
+latitude, slope and folded aspect only and cannot see shading from adjacent ridges, which is much
+of what makes a cove cool. F14's "boring things" are checked and were already right: latitude is
+clamped to the paper's 0–60° domain, degrees are converted at every call, and aspect is folded
+about NE–SW (`180 − |aspect − 225|`) rather than N–S, which is what makes it a heat load rather
+than a radiation figure. Horizon shading is a real modelling gap, on the open list.
+
+### 12.6 What the auditor changed about the plan
+
+Four things, none of which I would have reached alone:
+
+1. **The gate moved.** One rendered frame now precedes code health, R8 and any `1.0`.
+2. **A safety defect was found and fixed** that my own test had named itself after and missed.
+3. **The weight table lost its authority.** It is reported as measured influence, not nominal
+   weight, and the surface is capped at "identifies broadly promising hillsides".
+4. **The instrument replaced the opinion.** Where the audit and the artifact disagreed — F3, F10,
+   F21 — the artifact won, in both directions.
+
+---
+
+## 13. The app has now run
+
+**2026-09-12 17:15 — GENSINGO rendered its first frame.** In four phases of this project that had
+never happened, and F1, F2, F10 and F25 were all correct that it was the only thing that mattered.
+
+### 13.1 How, after I said it was impossible
+
+F10 said my "instrumented tests cannot be run here" was very likely false and was the assumption
+making the whole plan degrade. It was false. I had never tested it.
+
+```
+/dev/kvm                 absent
+cores / RAM              4 / 15 GB
+sdkmanager install       emulator + system-images;android-34;google_apis;x86_64
+emulator flags           -no-window -gpu swiftshader_indirect -accel off -memory 3072
+sys.boot_completed       1          (17:09:15, ~2 min after launch)
+```
+
+Android 14 boots on x86_64 with no hardware acceleration at all. Everything after this point in
+the project is a different kind of claim from everything before it.
+
+### 13.2 What the runtime showed
+
+| Observation | Source |
+|---|---|
+| APK installs (147 MB debug) | `pm install` → `Success` |
+| **MapLibre's native x86_64 `.so` loads** | `nativeloader: Configuring clns-6 … lib/x86_64` |
+| Process starts, stays alive | pid 4244, RSS 221 MB, state R |
+| Splash shown, then **dismissed for the real window** | `Splash Screen … Setting back callback null` |
+| **`SurfaceView` is created** | `SurfaceSyncGroup(SurfaceView[…MainActivity]#0)` |
+| **The window finished drawing** | `finishDrawing … MainActivity 64334ms` |
+| **Zero FATAL / AndroidRuntime exceptions from the app** | 3,333 lines of logcat |
+| Compose UI renders correctly | screenshot |
+
+**No ANR belongs to GENSINGO.** Every one is a Google system service starved on a 4-core software
+CPU — `com.google.android.as.oss`, `gms.persistent`, `com.android.phone`, `com.google.android.as`
+— and the on-screen dialogs name them: *"Process system isn't responding"*, then *"System UI isn't
+responding"*. GENSINGO kept drawing behind both. The 64-second draw is the software rasteriser, not
+the app; it is not a performance measurement and is not offered as one.
+
+### 13.3 The F19 fix, verified on a device rather than in a test
+
+The first frame shows the amber **`SEASON UNKNOWN`** pill and *"No approved state here — harvest is
+legal in 19 states only"*. That is the three-valued logic from §12.1 rendering as a restriction in
+the warning colour, not as secondary grey, on a real screen. A unit test proved the status; only
+this proves the rendering.
+
+Saved as `docs/device_evidence/first_frame_2026-09-12.png`.
+
+### 13.4 What one frame found that 122 tests had not
+
+1. **`Log Patch` wrapped onto two lines.** `OutlinedButton`'s default 24 dp horizontal content
+   padding left roughly 85 dp of text room in a weight-1 slot on a 411 dp-wide Pixel 6. Fixed —
+   tighter content padding on both field actions, `maxLines = 1`. **This is F1's thesis in
+   miniature: a defect visible in the first frame and invisible to every static instrument.**
+2. **The basemap is empty grey.** The map surface exists and draws, but no tiles appear. Not yet
+   diagnosed — emulator network to the style endpoint is the first candidate, and it is also
+   exactly the state F16 predicted for an offline-first app with no bundled tiles.
+3. **`Verify` in amber reads as disabled** against the dark ground, next to a filled primary. A
+   deliberate accent choice that does not survive contact with the rendered screen.
+
+### 13.5 What this does and does not settle
+
+Settled: the app launches, loads native code, creates a GL surface, draws, and does not crash.
+
+**Not settled, and I will not imply otherwise:** the 3D terrain overlay has not been exercised, the
+alignment witness has still never produced a number, no gesture has been sent, and SwiftShader is
+not an Adreno or a Mali — so F7 (GPU float32 crawl) and F8 (driver-specific shader behaviour)
+remain exactly as open as they were. One frame on a software rasteriser is the floor of the
+evidence ladder, not the top of it. It is, however, no longer zero.
