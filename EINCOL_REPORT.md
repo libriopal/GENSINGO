@@ -832,3 +832,73 @@ separates a suite that measures from a suite that merely passes.
 21. **`MeshCoverage.MARGIN` and the throttle are tuned by reasoning, not profiling.** 1.8x
     and 250 ms are defensible from the measured build costs, but the right values depend on
     real fling velocities on real hardware.
+
+---
+
+# Phase 5 — independent audit, and the first execution
+
+The build plan was written, handed to a cold-context auditor shown the claims and not the
+reasoning, and attacked before any code changed. 28 findings came back. They are recorded
+verbatim in `implementation_production_build_v1.0.0.md` §11, including the ones I disagree
+with, with my measured responses in §12 and the device results in §13.
+
+## Fixed in Phase 5
+
+22. **An unknown harvest season was reported as an open one.** Live, today, in 14 of 19
+    jurisdictions. `ComplianceEngine` tested only whether today was past the OPENING date and
+    returned `SEASON OPEN` if so, so Alabama read "SEASON OPEN" on 12 September and would
+    have read the same on 28 December. `UNKNOWN` existed in the enum and the logic never
+    reached it; the caution banner fired only on `CLOSED`; and `UNKNOWN` painted in secondary
+    grey, which reads as "nothing to report". All three fixed, and verified on a device.
+    **My own test had walked past this** — it asserted the message was honest while pinning
+    the status as OPEN, under a name that claimed the whole property.
+23. **The heatmap ramp's lightness peaked in the middle.** L* reached 88.6 at score 0.5 and
+    fell to 83.6 at 1.0, so the brightest ground on the map was mediocre ground, and adjacent
+    bands in the upper half were 6.1 dE2000 apart — worse for NORMAL vision than for a
+    deuteranope. Replaced with a ramp monotonic in L* under all three vision models.
+24. **`normaliseHeatLoad` wasted 17% of its output range** on round numbers rather than the
+    equation's attainable domain. Rescaled to 0.2865–1.1136.
+25. **The three published contrast ratios were all wrong** (8.2/11.4/6.1 claimed;
+    17.04/14.41/7.50 measured). Wrong in the safe direction, and now computed rather than
+    asserted.
+26. **`Log Patch` wrapped onto two lines** — found in the first frame the app ever rendered,
+    by a defect class no static instrument in this project could observe.
+
+## Open after Phase 5
+
+27. **`targetSdk = 34` cannot reach Play.** The rolling requirement passed 34 in August 2025
+    and has moved again since. Raising it is not a version bump: API 35 enforces edge-to-edge,
+    which affects a full-screen GL overlay's insets. Platforms 35 and 36 are now installed, so
+    this is testable rather than theoretical. **The single biggest remaining ship blocker.**
+28. **The app fetches elevation at runtime, and the PRD said it must not.** Both DEM paths
+    exist: `assets/geo/dem_grid.bin` (108 KB, offline, as specified) and
+    `DemTileStore.TERRARIUM` (AWS, at runtime). A bundled DEM covering 19 jurisdictions at 3 m
+    is not physically possible in an APK, so the original constraint and the later request for
+    a free-moving 3 m heatmap cannot both be satisfied. **This is a product decision with a
+    privacy dimension and is escalated rather than assumed.**
+29. **The basemap renders empty grey on the device.** The surface draws; no tiles appear. Not
+    yet diagnosed.
+30. **The ONNX tautology model still ships.** Its two dominant inputs derive from the user's
+    own answers and it weights slope and aspect at 0.0. Deleting it deviates from a
+    PRD-mandated feature, so the part to fix is its adjacency to the terrain forecast, where
+    it reads as a second, agreeing opinion.
+31. **Absence of a federal boundary is still being treated as permission.** State parks, WMAs,
+    watershed land, tribal land and private property are all separately prohibited and none
+    are in the dataset. Any UI state meaning "you may harvest here" should be removed — the
+    spatial counterpart of the fix made in #22. USGS PAD-US is the dataset to replace the
+    approximate boxes.
+32. **Four privacy paths a class-name scan cannot see.** `allowBackup="false"` was already set,
+    so the largest one was closed, but EXIF GPS surviving the share sheet, coordinates reaching
+    logcat, the recents thumbnail, and "no network calls" as a runtime property all remain
+    unverified.
+33. **The alignment witness has still never produced a number**, no gesture has been sent, and
+    the 3D overlay has not been exercised. SwiftShader is not an Adreno or a Mali, so GPU
+    float32 crawl and driver-specific shader behaviour are exactly as open as before.
+34. **TWI is window-dependent and always will be.** Contributing area is everything uphill to
+    the divide; no halo bounds it. Measured worst case with no halo: 0.2783 TWI units, 0.00078
+    of final score, about a 256th of one legend band. Bounded, not solved.
+35. **MapLibre 13.6.1 ships `VulkanRendererStrategy`.** The map may not be rendering through GL
+    at all, which matters for compositing an ES overlay against it. Unexamined.
+36. **The weight table does not describe what drives the forecast.** Heat load carries 0.28 and
+    correlates with the output at +0.137; curvature carries 0.10 and reaches +0.647. The
+    surface identifies broadly promising hillsides and must not be described as ranking sites.
