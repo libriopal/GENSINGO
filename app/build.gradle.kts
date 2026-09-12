@@ -74,6 +74,23 @@ android {
         buildConfig = true
     }
 
+    // A universal release APK is 140 MB because it carries MapLibre's and ONNX Runtime's
+    // native libraries for all four ABIs. A phone needs exactly one of them. Splitting is the
+    // difference between an APK that can be sideloaded over a tethered phone at a trailhead
+    // and one that cannot.
+    //
+    // `isUniversalApk = true` keeps the fat APK as well, because it is the one that installs
+    // on anything without having to know what chip is in the handset. Prefer the arm64-v8a
+    // file on any phone made since about 2017.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = true
+        }
+    }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
