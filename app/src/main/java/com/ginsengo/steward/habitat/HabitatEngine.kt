@@ -1,36 +1,33 @@
 package com.ginsengo.steward.habitat
 
-import ai.onnxruntime.OnnxTensor
-import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.util.Log
-import java.nio.FloatBuffer
 
 /**
  * Loads and runs the bundled habitat graph (PRD §8.1).
  *
- * Two engines run on every analysis:
- *   1. onnxruntime-android over assets/models/habitat_model.onnx
- *   2. a pure-Kotlin Gemm+Sigmoid over the weights parsed out of that same file
+ * A pure-Kotlin Gemm+Sigmoid over the weights parsed out of the bundled graph file.
  *
- * The second is PRD §8.1's stated fallback, but running it alongside rather than only on
- * failure buys something the PRD did not ask for and the EINCOL §3 classifier does: a
- * WITNESS. A score computed one way and checked against a second independent computation
- * is pinned; a score only ever computed once is a number nobody has checked. The agreement
- * delta is surfaced in Settings, and a disagreement is visible rather than silent.
+ * onnxruntime used to run alongside this as a claimed "witness", with the agreement delta
+ * shown in Settings. It has been removed, for two reasons that arrived together.
  *
- * The Kotlin path is also what the unit tests exercise, since it needs no device.
+ * The first is that it was never a witness. The graph weights slope and aspect at exactly
+ * 0.0, and its two dominant inputs are derivations of the user's own checklist answers, so
+ * the two engines were not two opinions about habitat - they were two arithmetic paths over
+ * the same restatement of what the digger had already typed in. Showing their agreement next
+ * to the terrain forecast invited the reader to see corroboration where there was one source.
+ *
+ * The second is mechanical: libonnxruntime.so and libonnxruntime4j_jni.so are 4 KB-aligned,
+ * and Google Play requires 16 KB-aligned ELF load segments for 64-bit native libraries. They
+ * were two of the three libraries in this app that failed that check.
+ *
+ * Weight PARSING stays - OnnxGraphWeights is a small pure-Kotlin protobuf reader, needs no
+ * native code, and reads the same bytes it always did. Only the native runtime is gone.
  */
 class HabitatEngine private constructor(
     private val kotlinModel: LinearHabitatModel,
-    private val ortSession: OrtSession?,
-    private val ortEnv: OrtEnvironment?,
-    private val ortInputName: String?,
     val loadNote: String,
 ) {
-
-    val onnxRuntimeAvailable: Boolean get() = ortSession != null
 
     fun weightOf(f: HabitatFeature) = kotlinModel.weightOf(f)
 
@@ -40,51 +37,13 @@ class HabitatEngine private constructor(
 
     data class Run(
         val analysis: HabitatAnalysis,
-        /** Score from onnxruntime, when it loaded. */
-        val onnxScore: Double?,
-        /** |onnx - kotlin|, when both ran. */
-        val agreementDelta: Double?,
+        // onnxScore and agreementDelta used to live here. See the class comment: they were
+        // not a second opinion, and presenting them as one was the defect.
     )
 
-    fun analyse(inputs: List<FeatureInput>): Run {
-        val analysis = kotlinModel.analyse(inputs)
-        val onnx = runOnnx(inputs)
-        return Run(
-            analysis = analysis,
-            onnxScore = onnx,
-            agreementDelta = onnx?.let { kotlin.math.abs(it - analysis.score) },
-        )
-    }
+    fun analyse(inputs: List<FeatureInput>): Run = Run(analysis = kotlinModel.analyse(inputs))
 
-    private fun runOnnx(inputs: List<FeatureInput>): Double? {
-        val session = ortSession ?: return null
-        val env = ortEnv ?: return null
-        val name = ortInputName ?: return null
-        return runCatching {
-            val byFeature = inputs.associateBy { it.feature }
-            val vec = FloatArray(HabitatFeature.entries.size) { i ->
-                (byFeature[HabitatFeature.entries[i]]?.value ?: 0.0).toFloat()
-            }
-            OnnxTensor.createTensor(
-                env, FloatBuffer.wrap(vec), longArrayOf(1, vec.size.toLong())
-            ).use { tensor ->
-                session.run(mapOf(name to tensor)).use { results ->
-                    when (val v = results[0].value) {
-                        is Array<*> -> (v.firstOrNull() as? FloatArray)?.firstOrNull()?.toDouble()
-                        is FloatArray -> v.firstOrNull()?.toDouble()
-                        else -> null
-                    }
-                }
-            }
-        }.getOrElse {
-            Log.w(TAG, "onnxruntime inference failed; using Kotlin path", it)
-            null
-        }
-    }
-
-    fun close() {
-        runCatching { ortSession?.close() }
-    }
+    fun close() = Unit
 
     companion object {
         private const val TAG = "HabitatEngine"
@@ -112,21 +71,7 @@ class HabitatEngine private constructor(
                 return null
             }
 
-            var env: OrtEnvironment? = null
-            var session: OrtSession? = null
-            var inputName: String? = null
-            var note = "Kotlin linear path only."
-            runCatching {
-                env = OrtEnvironment.getEnvironment()
-                session = env!!.createSession(bytes, OrtSession.SessionOptions())
-                inputName = session!!.inputNames.firstOrNull()
-                note = "onnxruntime + Kotlin cross-check."
-            }.onFailure {
-                Log.w(TAG, "onnxruntime unavailable; Kotlin fallback active (PRD §8.1)", it)
-                session = null
-            }
-
-            return HabitatEngine(kotlinModel, session, env, inputName, note)
+            return HabitatEngine(kotlinModel, "Kotlin linear path over the bundled graph weights.")
         }
     }
 }

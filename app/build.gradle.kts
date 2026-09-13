@@ -23,12 +23,12 @@ val hasReleaseSigning = releaseStorePath != null && rootProject.file(releaseStor
 
 android {
     namespace = "com.ginsengo.steward"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.ginsengo.steward"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -139,7 +139,6 @@ dependencies {
 
     implementation(libs.coil.compose)
     implementation(libs.maplibre.android.sdk)
-    implementation(libs.onnxruntime.android)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

@@ -431,15 +431,10 @@ private fun ModelBreakdown(run: HabitatEngine.Run, engine: HabitatEngine) {
         )
     }
 
-    run.agreementDelta?.let { d ->
-        Spacer(Modifier.height(8.dp))
-        Text(
-            if (d < 1e-4) "Cross-checked: onnxruntime and the Kotlin path agree."
-            else "Engines disagree by %.4f - treat this score with suspicion.".format(d),
-            style = MaterialTheme.typography.bodySmall,
-            color = if (d < 1e-4) Gen.Primary else Gen.Alert,
-        )
-    }
+    // A "cross-checked: both engines agree" line used to sit here. It was removed rather
+    // than repaired. The second engine ran the same graph over the same inputs, and that
+    // graph restates the digger's own checklist answers - so the agreement was arithmetic,
+    // not corroboration, and showing it invited exactly the confidence it did not earn.
 }
 
 @Composable
