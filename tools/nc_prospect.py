@@ -69,6 +69,84 @@ DRAINAGE = {
     "somewhat excessively drained": 0.45, "excessively drained": 0.20,
     "somewhat poorly drained": 0.20, "poorly drained": 0.05, "very poorly drained": 0.00,
 }
+# ---------------------------------------------------------------- parent material
+#
+# The calcium layer, and it was already inside the data - no separate geology map needed.
+# SSURGO records what the soil formed IN (copm.pmkind) and what rock it came FROM
+# (copm.pmorigin), joined to the same polygon.
+#
+# Measured across Haywood and its neighbours:
+#   pmkind    Residuum 663 | Colluvium 167 | Alluvium 107
+#   pmorigin  Biotite gneiss 150 | Muscovite-biotite gneiss 126 | Granite and gneiss 108
+#             Phyllite 107 | Sandstone 92 | AMPHIBOLITE 72 | HORNBLENDE GNEISS 61 ...
+#
+# And it discriminates exactly the way it should:
+#   Cullasaja, Spivey, Tusquitee (coves)   -> Colluvium
+#   Saunook (drainageways), Toecane (fans) -> Colluvium
+#   Ashe, Porters (ridges)                 -> Residuum
+# So pmkind corroborates the landform field from an independent column.
+#
+# Amphibolite and hornblende gneiss are the base-rich rocks of the Blue Ridge - hornblende is
+# a calcium-bearing amphibole - and they weather to the calcium-rich soil that carries the rich
+# cove flora. Quartzite, granite and sandstone weather acid and poor.
+#
+# THE HONEST LIMIT: many cove units carry only "Igneous and metamorphic rock", which is generic
+# and says nothing about calcium. That is scored NEUTRAL, not good. Absence of evidence is not
+# evidence of base-rich rock.
+
+PM_KIND = {
+    "colluvium": (0.20, "colluvium - soil accumulated from upslope, deep"),
+    "alluvium": (-0.05, "alluvium - stream-deposited, floods"),
+    "residuum": (0.00, "residuum - weathered in place"),
+    "organic material": (-0.10, "organic - too wet"),
+    "mine spoil or earthy fill": (-0.30, "mine spoil or fill - disturbed ground"),
+}
+PM_ORIGIN = {
+    # base-rich: the calcium signal
+    "amphibolite": (0.20, "AMPHIBOLITE - base-rich rock, the calcium signal"),
+    "hornblende gneiss": (0.18, "hornblende gneiss - calcium-bearing amphibole, base-rich"),
+    "ultramafic rock": (0.05, "ultramafic - magnesium-rich, can be too extreme"),
+    "granodioritic gneiss": (0.05, "granodioritic gneiss - intermediate"),
+    "metasedimentary rock": (0.02, "metasedimentary"),
+    "graywacke": (0.02, "graywacke"),
+    # Arkose turned up under the Whiteoak coves in Haywood and was not in the first table.
+    # It is a feldspar-rich sandstone: the feldspar does release calcium and potassium as it
+    # weathers, which is a point in its favour, but the fabric is sandy and droughty, which is
+    # a point against. Scored neutral, deliberately, rather than guessed either way.
+    "arkose": (0.00, "arkose - feldspar-rich sandstone; releases bases but drains sandy"),
+    "conglomerate": (-0.05, "conglomerate - coarse, droughty"),
+    "marble": (0.22, "MARBLE - carbonate, the strongest calcium signal there is"),
+    "dolomite": (0.22, "DOLOMITE - carbonate, base-rich"),
+    "limestone": (0.22, "LIMESTONE - carbonate, base-rich"),
+    "calc-silicate rock": (0.20, "calc-silicate - base-rich"),
+    "gabbro": (0.15, "gabbro - mafic, base-rich"),
+    "diorite": (0.12, "diorite - intermediate to mafic"),
+    "greenstone": (0.12, "greenstone - metabasalt, base-bearing"),
+    # acid and poor
+    "metaquartzite": (-0.15, "metaquartzite - acid, nutrient-poor"),
+    "quartzite": (-0.15, "quartzite - acid, nutrient-poor"),
+    "sandstone": (-0.10, "sandstone - acid, droughty"),
+    "granite and gneiss": (-0.08, "granite and gneiss - acid"),
+    "slate": (-0.05, "slate"),
+    "phyllite": (-0.02, "phyllite"),
+    "mica schist": (-0.02, "mica schist"),
+    "biotite gneiss": (-0.02, "biotite gneiss"),
+    "muscovite-biotite gneiss": (-0.04, "muscovite-biotite gneiss - acid"),
+    # generic terms carry NO calcium information and must not be read as good
+    "igneous and metamorphic rock": (0.00, "rock type recorded only generically"),
+    "metamorphic rock": (0.00, "rock type recorded only generically"),
+    "gneiss": (0.00, "gneiss, unspecified"),
+}
+
+
+def parent_material_bonus(pmkind, pmorigin):
+    """Additive adjustment in roughly -0.4..+0.4, applied after the weighted base score."""
+    k, knote = PM_KIND.get((pmkind or "").strip().lower(), (0.0, None))
+    o, onote = PM_ORIGIN.get((pmorigin or "").strip().lower(), (0.0, None))
+    notes = [n for n in (knote, onote) if n]
+    return k + o, notes
+
+
 W_LANDFORM, W_DRAINAGE, W_PH, W_OM = 0.45, 0.30, 0.10, 0.15
 
 
@@ -99,10 +177,14 @@ def om_score(om):
 def score_unit(u):
     lf, _ = LANDFORM.get((u.get("landform") or "").strip().lower(), (0.40, "unknown"))
     dr = DRAINAGE.get((u.get("drainage") or "").strip().lower(), 0.40)
-    return round(
-        W_LANDFORM * lf + W_DRAINAGE * dr + W_PH * ph_score(u.get("ph")) + W_OM * om_score(u.get("om")),
-        3,
-    )
+    base = (W_LANDFORM * lf + W_DRAINAGE * dr
+            + W_PH * ph_score(u.get("ph")) + W_OM * om_score(u.get("om")))
+    pm, _notes = parent_material_bonus(u.get("pmkind"), u.get("pmorigin"))
+    # Base is rescaled to leave headroom for parent material, rather than clamped on top of it.
+    # Clamping was the first attempt and it was worthless: every cove already scored 1.00, the
+    # bonus pushed past the ceiling, and a layer that only ever saturates discriminates nothing.
+    # A new layer has to be able to CHANGE the ranking or it is decoration.
+    return round(min(max(0.78 * base + pm, 0.0), 1.0), 3)
 
 
 # ---------------------------------------------------------------- data access
@@ -164,11 +246,13 @@ def fetch_attributes(mukeys, timeout=240):
         batch = ",".join(f"'{k}'" for k in keys[i:i + 180])
         rows = sda(f"""
             SELECT c.mukey, c.compname, c.comppct_r, c.drainagecl, g.geomfname,
-                   h.ph1to1h2o_r, h.om_r, m.muname
+                   h.ph1to1h2o_r, h.om_r, m.muname, pm.pmkind, pm.pmorigin
             FROM component c
             JOIN mapunit m ON m.mukey = c.mukey
             LEFT JOIN cogeomordesc g ON g.cokey = c.cokey AND g.geomftname = 'Landform'
             LEFT JOIN chorizon h ON h.cokey = c.cokey AND h.hzdept_r <= 15
+            LEFT JOIN copmgrp pg ON pg.cokey = c.cokey
+            LEFT JOIN copm pm ON pm.copmgrpkey = pg.copmgrpkey
             WHERE c.mukey IN ({batch}) AND c.majcompflag = 'Yes'
             ORDER BY c.mukey, c.comppct_r DESC
         """, timeout=timeout)
@@ -186,6 +270,8 @@ def fetch_attributes(mukeys, timeout=240):
             attrs[mk] = {
                 "series": r[1], "comppct": num(r[2]), "drainage": r[3], "landform": r[4],
                 "ph": num(r[5]), "om": num(r[6]), "muname": r[7],
+                "pmkind": r[8] if len(r) > 8 else None,
+                "pmorigin": r[9] if len(r) > 9 else None,
             }
     return attrs
 

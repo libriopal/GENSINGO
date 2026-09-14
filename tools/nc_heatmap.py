@@ -38,7 +38,8 @@ import zlib
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 from nc_prospect import (  # noqa: E402
-    DRAINAGE, LANDFORM, fetch_attributes, fetch_polygons, land_status, om_score, ph_score,
+    DRAINAGE, LANDFORM, fetch_attributes, fetch_polygons, land_status, om_score,
+    parent_material_bonus, ph_score,
 )
 
 TERRARIUM = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
@@ -284,13 +285,16 @@ def main():
             continue
         lf, label = LANDFORM.get((at.get("landform") or "").strip().lower(), (0.40, "unrecorded"))
         dr = DRAINAGE.get((at.get("drainage") or "").strip().lower(), 0.40)
-        s = 0.45*lf + 0.30*dr + 0.10*ph_score(at.get("ph")) + 0.15*om_score(at.get("om"))
+        base = 0.45*lf + 0.30*dr + 0.10*ph_score(at.get("ph")) + 0.15*om_score(at.get("om"))
+        pm, pm_notes = parent_material_bonus(at.get("pmkind"), at.get("pmorigin"))
+        s = min(max(0.78 * base + pm, 0.0), 1.0)
         if s < a.min_soil:
             continue
         for ring in rings:
             scored_polys.append({"soil": round(s, 3), "label": label, "series": at.get("series"),
                                  "drainage": at.get("drainage"), "ring": ring,
-                                 "bbox": ring_bbox(ring)})
+                                 "pmkind": at.get("pmkind"), "pmorigin": at.get("pmorigin"),
+                                 "pm_notes": pm_notes, "bbox": ring_bbox(ring)})
     print(f"soil polygons at or above {a.min_soil}: {len(scored_polys)}", file=sys.stderr)
     if not scored_polys:
         print("Nothing scored above the soil threshold here. Try --min-soil 0.4.")
@@ -332,6 +336,7 @@ def main():
                 "aspect": round(aspect, 1), "terrain": round(t, 3), "soil": hit["soil"],
                 "combined": round(0.5 * hit["soil"] + 0.5 * t, 3),
                 "series": hit["series"], "landform": hit["label"], "drainage": hit["drainage"],
+                "pmkind": hit.get("pmkind"), "pmorigin": hit.get("pmorigin"),
             })
 
     if not cells:
@@ -349,14 +354,15 @@ def main():
 
     print(f"\nscored {len(cells)} cells at {mpp:.1f} m inside qualifying soil\n")
     print(f"{'#':>2} {'tot':>5} {'soil':>5} {'terr':>5} {'lat,lon':<21} {'el':>5} "
-          f"{'slp':>4} {'asp':>4}  {'series':<11} landform")
-    print("-" * 110)
+          f"{'slp':>4} {'asp':>4}  {'series':<11} {'landform':<9} {'formed in':<11} rock")
+    print("-" * 132)
     for i, c in enumerate(picks, 1):
         comp = ("N","NE","E","SE","S","SW","W","NW")[int(((c["aspect"]+22.5)%360)//45)] \
             if c["aspect"] >= 0 else "flat"
         print(f"{i:>2} {c['combined']:>5.2f} {c['soil']:>5.2f} {c['terrain']:>5.2f} "
               f"{c['lat']:.5f},{c['lon']:.5f} {c['elev']:>5} {c['slope']:>4.0f} {comp:>4}  "
-              f"{str(c['series'])[:11]:<11} {c['landform']}")
+              f"{str(c['series'])[:11]:<11} {str(c['landform'])[:9]:<9} "
+              f"{str(c.get('pmkind'))[:11]:<11} {str(c.get('pmorigin'))[:26]}")
 
     print("\nchecking land for the top picks...", file=sys.stderr)
     for c in picks[:min(10, len(picks))]:
