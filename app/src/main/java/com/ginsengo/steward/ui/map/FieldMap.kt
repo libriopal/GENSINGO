@@ -112,6 +112,8 @@ fun FieldMap(
     val curPatches = rememberUpdatedState(patches)
     val curMe = rememberUpdatedState(me)
     val curFollow = rememberUpdatedState(followMe)
+    /** Has the camera ever been placed on a real fix? Survives recomposition. */
+    val centred = remember { booleanArrayOf(false) }
     val curLayers = rememberUpdatedState(layers)
 
     val mapView = remember {
@@ -237,10 +239,15 @@ fun FieldMap(
                 }
 
                 val start = curMe.value
+                // The no-fix fallback is western North Carolina, not southern West Virginia.
+                // The old fallback (37.8, -81.2 at zoom 6) is exactly what a user in Haywood
+                // County saw: Charleston and Beckley, four states wide, with every DEM layer
+                // silently doing nothing because none of them mean anything at zoom 6.
                 map.cameraPosition = CameraPosition.Builder()
-                    .target(LatLng(start?.lat ?: 37.8, start?.lng ?: -81.2))
-                    .zoom(if (start != null) 14.0 else 6.0)
+                    .target(LatLng(start?.lat ?: 35.55, start?.lng ?: -82.95))
+                    .zoom(if (start != null) 14.0 else 9.0)
                     .build()
+                if (start != null) centred[0] = true
 
                 map.addOnCameraIdleListener { refreshHeatmap(map, force = false) }
                 applyStyle(map, curLayers.value.basemap, styleRef, loadedBasemap, onStyleFailed) {
@@ -282,7 +289,23 @@ fun FieldMap(
             }
 
             val here = curMe.value
-            if (here != null && curFollow.value) {
+            if (here != null && !centred[0]) {
+                // FIRST FIX: jump, do not animate.
+                //
+                // The map is built before the GPS has anything, so it opens on the fallback.
+                // Relying on the follow branch below to rescue that was the bug: it animates
+                // from wherever the camera is, and an animation that is interrupted - by a
+                // style load, a tilt change, or the next position update - leaves the camera
+                // where it started. A user with a 7 m fix and Following switched on was looking
+                // at four states. moveCamera is instantaneous and cannot be interrupted, so the
+                // first fix always lands.
+                runCatching {
+                    map.moveCamera(
+                        CameraUpdateFactory.newLatLngZoom(LatLng(here.lat, here.lng), 14.0)
+                    )
+                    centred[0] = true
+                }
+            } else if (here != null && curFollow.value) {
                 runCatching {
                     map.animateCamera(
                         CameraUpdateFactory.newLatLngZoom(
