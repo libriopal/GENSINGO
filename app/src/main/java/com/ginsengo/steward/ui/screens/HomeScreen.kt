@@ -63,6 +63,7 @@ fun HomeScreen(
     var mapFailed by remember { mutableStateOf(false) }
     var layerState by remember { mutableStateOf(MapLayerState()) }
     var showLayers by remember { mutableStateOf(false) }
+    var landExpanded by remember { mutableStateOf(false) }
     var heatStatus by remember { mutableStateOf<SuitabilityRasterizer.Raster?>(null) }
     var terrainStatus by remember { mutableStateOf(Terrain3DStatus()) }
 
@@ -128,24 +129,41 @@ fun HomeScreen(
                     accuracyM = location?.accuracyM,
                     hasFix = location != null,
                 )
+                // Land status, collapsed by default.
+                //
+                // This used to render a full card per area: headline, full paragraph, and a
+                // provenance tag. Standing on a boundary between two national forests that is
+                // two paragraphs and two badges - half the screen gone, and the map, which is
+                // the actual tool, squeezed out. The rule still shows immediately; the
+                // explanation is one tap away.
                 val prohibited = compliance?.landStatuses.orEmpty()
                 if (prohibited.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
-                    GenCard {
+                    GenCard(onClick = { landExpanded = !landExpanded }) {
                         prohibited.forEach { land ->
                             Text(
-                                "${land.rule} - ${land.areaName}",
+                                "${land.rule} · ${land.areaName}",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = if (land.rule == "PROHIBITED") Gen.Alert else Gen.Warning,
+                                maxLines = if (landExpanded) 3 else 1,
                             )
-                            Text(
-                                land.message,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Gen.TextSecondary,
-                                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-                            )
-                            ProvenanceTag(land.provenance)
+                            if (landExpanded) {
+                                Text(
+                                    land.message,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Gen.TextSecondary,
+                                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                                )
+                                ProvenanceTag(land.provenance)
+                            }
                         }
+                        Text(
+                            if (landExpanded) "tap to collapse"
+                            else "tap for detail · boundaries are approximate",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Gen.TextSecondary,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
                     }
                 }
                 if (!granted) {
@@ -174,7 +192,11 @@ fun HomeScreen(
                 Modifier
                     .zIndex(10f)
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 188.dp, start = 12.dp, end = 12.dp)
+                    // Clears the bottom sheet. The sheet's peek is 172.dp but its CONTENT is
+                    // taller than that, so it sits lower on screen than the peek value suggests
+                    // - and at 188.dp this row was completely hidden behind it. Measured off a
+                    // real 1080x2400 screenshot rather than derived from the peek constant.
+                    .padding(bottom = 300.dp, start = 12.dp, end = 12.dp)
                     .fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -201,18 +223,18 @@ fun HomeScreen(
             Column(
                 Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 248.dp),
+                    .padding(end = 16.dp, bottom = 372.dp),
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 SecondaryAction(
                     when {
-                        layerState.terrainMesh -> "3D on"
                         layerState.habitatHeatmap -> "Forecast on"
+                        layerState.pitchedRelief -> "Relief on"
                         else -> "Layers"
                     },
                     { showLayers = !showLayers },
-                    accent = if (layerState.habitatHeatmap || layerState.terrainMesh)
+                    accent = if (layerState.habitatHeatmap || layerState.pitchedRelief)
                         Gen.Primary else Gen.TextSecondary,
                 )
                 SecondaryAction(
@@ -310,10 +332,14 @@ private fun HomeSheet(
             color = Gen.TextPrimary,
             fontWeight = FontWeight.Bold,
         )
+        // Two per row, not four. Four across a phone truncated every label - the screenshot
+        // read "Where am", "My", "Stewards" - which is worse than a second row.
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SecondaryAction("Nearby habitat", { onNavigate(Routes.PROSPECTS) }, Modifier.weight(1f))
             SecondaryAction("Where am I", { onNavigate(Routes.POSITION) }, Modifier.weight(1f))
-            SecondaryAction("My Patches ($patchCount)", { onNavigate(Routes.PATCHES) }, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SecondaryAction("Patches ($patchCount)", { onNavigate(Routes.PATCHES) }, Modifier.weight(1f))
             SecondaryAction("Stewardship", { onNavigate(Routes.GUIDE) }, Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

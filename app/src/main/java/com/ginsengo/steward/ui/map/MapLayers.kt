@@ -53,6 +53,11 @@ data class MapLayerState(
     val heightOverlay: Boolean = false,
     val habitatHeatmap: Boolean = false,
     val pitchedRelief: Boolean = false,
+    /**
+     * Permanently false. The GL mesh overlay blacked out the map once the map moved to a
+     * TextureView; see LayerPanel for why the two cannot coexist. Kept as a field rather than
+     * deleted so any saved state that still says `true` is ignored instead of crashing.
+     */
     val terrainMesh: Boolean = false,
     val heightOpacity: Float = 0.55f,
     val heatmapOpacity: Float = 0.75f,

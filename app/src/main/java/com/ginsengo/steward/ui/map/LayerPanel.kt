@@ -71,16 +71,23 @@ fun LayerPanel(
                 { onChange(state.copy(pitchedRelief = !state.pitchedRelief)) },
                 accent = Gen.Warning,
             )
-            ChoiceChip(
-                "3D terrain", state.terrainMesh,
-                { onChange(state.copy(terrainMesh = !state.terrainMesh)) },
-            )
+            // The "3D terrain" chip used to live here and has been removed, not hidden.
+            //
+            // It drew a GLSurfaceView over the map. A SurfaceView always punches a hole through
+            // its window to its own surface underneath - that is how SurfaceView works - and
+            // the map is now rendered into a TextureView, which lives INSIDE the window. So the
+            // overlay punched straight through the map and the whole screen went black. The two
+            // cannot coexist, and the TextureView is not negotiable: it is what made the map
+            // controls respond to a tap at all.
+            //
+            // Pitched relief plus hillshade gives real depth through MapLibre's own renderer,
+            // which is inside the window and composites correctly.
         }
-        if (state.pitchedRelief && !state.terrainMesh) {
+        if (state.pitchedRelief) {
             Spacer(Modifier.height(6.dp))
             Text(
-                "Pitched relief tilts the camera and deepens the shading — flat ground that " +
-                        "reads as depth. Turn on 3D terrain for real geometry.",
+                "Tilts the camera and deepens the shading. Turn Hillshade on with it — together " +
+                        "they read as relief, and they render inside the map rather than over it.",
                 style = MaterialTheme.typography.bodySmall,
                 color = Gen.TextSecondary,
             )
@@ -91,38 +98,6 @@ fun LayerPanel(
             }
         }
 
-        if (state.terrainMesh) {
-            OpacityRow("3D opacity", state.meshOpacity) {
-                onChange(state.copy(meshOpacity = it))
-            }
-            Spacer(Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "Exaggeration ${"%.1f".format(state.meshExaggeration)}×",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Gen.TextSecondary,
-                    modifier = Modifier.width(120.dp),
-                )
-                Slider(
-                    value = state.meshExaggeration,
-                    onValueChange = { onChange(state.copy(meshExaggeration = it)) },
-                    valueRange = 1f..4f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Gen.Primary,
-                        activeTrackColor = Gen.Primary,
-                        inactiveTrackColor = Gen.Hairline,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            Spacer(Modifier.height(4.dp))
-            ChoiceChip(
-                "Tint 3D by forecast", state.meshForecastTint,
-                { onChange(state.copy(meshForecastTint = !state.meshForecastTint)) },
-            )
-            Spacer(Modifier.height(8.dp))
-            TerrainStatusLine(terrainStatus)
-        }
 
         Spacer(Modifier.height(12.dp))
         Text(
