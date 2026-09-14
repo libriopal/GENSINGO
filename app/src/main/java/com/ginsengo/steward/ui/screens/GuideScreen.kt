@@ -180,8 +180,16 @@ fun GuideScreen(vm: FieldViewModel, onBack: () -> Unit) {
                                 )
                             }
                             StatusPill(
-                                p.indicatorStrength.uppercase(),
-                                if (p.indicatorStrength == "strong") Gen.Primary else Gen.Warning,
+                                if (p.indicatorStrength == "contra") "CONTRA-INDICATOR"
+                                else p.indicatorStrength.uppercase(),
+                                when (p.indicatorStrength) {
+                                    // Only a species actually tested against ginseng
+                                    // populations gets the confident colour.
+                                    "strong" -> Gen.Primary
+                                    "contra" -> Gen.Alert
+                                    "untested" -> Gen.TextSecondary
+                                    else -> Gen.Warning
+                                },
                             )
                         }
                         Text(

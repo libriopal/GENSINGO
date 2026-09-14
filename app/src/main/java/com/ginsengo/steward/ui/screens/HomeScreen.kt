@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -79,6 +80,7 @@ fun HomeScreen(
             HomeSheet(
                 patchCount = patches.size,
                 onNavigate = onNavigate,
+                onToggleLayers = { showLayers = !showLayers },
             )
         },
     ) {
@@ -107,8 +109,14 @@ fun HomeScreen(
             }
 
             // ---- Top floating compliance bar (PRD §5.5 mobile) ----
+            // zIndex on every floating control is deliberate. MapLibre's MapView is an
+            // embedded Android View, and an embedded view that is handling a gesture calls
+            // requestDisallowInterceptTouchEvent on its parents. Declaration order already
+            // draws these above the map; zIndex makes the hit-test order explicit too, so a
+            // control can never end up visible-but-dead.
             Column(
                 Modifier
+                    .zIndex(10f)
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -164,6 +172,7 @@ fun HomeScreen(
             // ---- Bottom floating field-action bar, thumb level (PRD §5.5) ----
             Row(
                 Modifier
+                    .zIndex(10f)
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 188.dp, start = 12.dp, end = 12.dp)
                     .fillMaxWidth(),
@@ -216,6 +225,7 @@ fun HomeScreen(
             if (showLayers) {
                 Box(
                     Modifier
+                        .zIndex(20f)
                         .align(Alignment.Center)
                         .padding(horizontal = 16.dp)
                 ) {
@@ -281,7 +291,11 @@ private fun ComplianceBar(
 }
 
 @Composable
-private fun HomeSheet(patchCount: Int, onNavigate: (String) -> Unit) {
+private fun HomeSheet(
+    patchCount: Int,
+    onNavigate: (String) -> Unit,
+    onToggleLayers: () -> Unit,
+) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -302,9 +316,16 @@ private fun HomeSheet(patchCount: Int, onNavigate: (String) -> Unit) {
             SecondaryAction("Stewardship", { onNavigate(Routes.GUIDE) }, Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // A second way into the layer panel, deliberately duplicated.
+            //
+            // The floating Layers button sits on top of the map, and an embedded MapView can
+            // capture a gesture stream and starve the controls drawn above it. The sheet is
+            // outside the map's bounds entirely, so this entry cannot be stolen the same way.
+            // If the floating button is ever dead on a real handset, this one still works, and
+            // a duplicated control is a far smaller cost than an unreachable one.
+            SecondaryAction("Map layers", onToggleLayers, Modifier.weight(1f))
             SecondaryAction("Settings", { onNavigate(Routes.SETTINGS) }, Modifier.weight(1f),
                 accent = Gen.TextSecondary)
-            Spacer(Modifier.weight(1f))
         }
         Spacer(Modifier.height(4.dp))
         ProvenanceTag(

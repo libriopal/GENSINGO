@@ -46,9 +46,18 @@ data class CompanionPlant(
     @SerialName("slug") val slug: String,
     @SerialName("name") val name: String,
     @SerialName("scientific_name") val scientificName: String,
-    @SerialName("photo_asset") val photoAsset: String,
+    @SerialName("photo_asset") val photoAsset: String = "",
     @SerialName("description") val description: String,
     @SerialName("indicator_strength") val indicatorStrength: String,
+    /**
+     * Where the indicator claim comes from, when anything actually tested it.
+     *
+     * Most companion-plant folklore has never been tested. Turner & McGraw (2015) tested 20
+     * of these species against 26 real ginseng populations and found only ONE that predicted
+     * better growth - so a species carrying an evidence line and a species carrying none are
+     * different kinds of claim, and the UI says which is which.
+     */
+    @SerialName("evidence") val evidence: String = "",
     @SerialName("photo_license") val photoLicense: String = "",
     @SerialName("photo_author") val photoAuthor: String = "",
     @SerialName("photo_source") val photoSource: String = "",

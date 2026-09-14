@@ -306,7 +306,18 @@ fun Terrain3DOverlay(
                 // through; without both, the overlay paints an opaque black rectangle.
                 setEGLConfigChooser(8, 8, 8, 8, 16, 0)
                 holder.setFormat(PixelFormat.TRANSLUCENT)
-                setZOrderMediaOverlay(true)
+                // setZOrderMediaOverlay(true) used to be here. It lifts this surface above
+                // the window's own surface in SurfaceFlinger, which puts it above every
+                // Compose control on the screen - the layer panel, the action bar, the
+                // recentre button. Terrain shading is not worth burying the controls under.
+                //
+                // The view must also never take input. A GLSurfaceView is not clickable by
+                // default, but saying so explicitly is cheap and documents the intent: this
+                // is a decoration over the map, and every gesture belongs to the map or to
+                // the controls above it.
+                isClickable = false
+                isFocusable = false
+                isFocusableInTouchMode = false
                 setRenderer(renderer)
                 renderMode = GLSurfaceView.RENDERMODE_WHEN_DIRTY
                 glView[0] = this
