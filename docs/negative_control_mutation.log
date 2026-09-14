@@ -1,0 +1,11 @@
+tests=7 failures=3
+  [pass] contributionsSumToTheLogit
+  [FAIL] mostOfTheScoreComesFromTheUsersOwnAnswers
+         java.lang.AssertionError: expected the checklist-derived share to dominate, got 0.051401870181490866
+  [FAIL] parsesTheShippedWeights
+         java.lang.AssertionError: expected:<0.0> but was:<1.0>
+  [pass] scoreStaysInRange
+  [pass] positiveControl_activeFeaturesDoMoveTheScore
+  [pass] rejectsAGraphWithNoUsableWeights
+  [FAIL] negativeControl_inertFeaturesCannotMoveTheScore
+         java.lang.AssertionError: slope=0 aspect=0 changed a score the graph weights at zero expected:<0.9999999984730599> but was:<0.5744425191566552>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Palette tokens from PRD §5.1. The app is dark-only by design: it is used at dusk
+         under canopy, where a light theme destroys night vision. -->
+    <style name="Theme.Gensingo" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/base_background</item>
+        <item name="android:navigationBarColor">@color/base_background</item>
+        <item name="android:windowBackground">@color/base_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
