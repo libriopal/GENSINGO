@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GENSINGO nc_prospect" xmlns="http://www.topografix.com/GPX/1/1">
+  <wpt lat="35.614395" lon="-83.031921">
+    <name>01 Whiteoak 0.90</name>
+    <desc>COVE; Well drained; 0.0 ha; 870m slope25</desc>
+  </wpt>
+  <wpt lat="35.613977" lon="-83.030119">
+    <name>02 Whiteoak 0.90</name>
+    <desc>COVE; Well drained; 0.0 ha; 856m slope25</desc>
+  </wpt>
+  <wpt lat="35.609999" lon="-83.030634">
+    <name>03 Whiteoak 0.90</name>
+    <desc>COVE; Well drained; 0.0 ha; 853m slope24</desc>
+  </wpt>
+  <wpt lat="35.614814" lon="-83.034496">
+    <name>04 Whiteoak 0.90</name>
+    <desc>COVE; Well drained; 0.0 ha; 900m slope25</desc>
+  </wpt>
+  <wpt lat="35.598066" lon="-83.070030">
+    <name>05 Whiteoak 0.90</name>
+    <desc>COVE; Well drained; 0.0 ha; 1251m slope24</desc>
+  </wpt>
+  <wpt lat="35.593669" lon="-83.067198">
+    <name>06 Cullasaja 0.90</name>
+    <desc>COVE; Well drained; 0.0 ha; 1207m slope25</desc>
+  </wpt>
+  <wpt lat="35.614395" lon="-83.036041">
+    <name>07 Whiteoak 0.90</name>
+    <desc>COVE; Well drained; 0.0 ha; 943m slope22</desc>
+  </wpt>
+  <wpt lat="35.609581" lon="-83.043251">
+    <name>08 Whiteoak 0.90</name>
+    <desc>COVE; Well drained; 0.0 ha; 901m slope22</desc>
+  </wpt>
+  <wpt lat="35.595344" lon="-83.065653">
+    <name>09 Cullasaja 0.90</name>
+    <desc>COVE; Well drained; 0.0 ha; 1163m slope23</desc>
+  </wpt>
+  <wpt lat="35.594088" lon="-83.064365">
+    <name>10 Cullasaja 0.89</name>
+    <desc>COVE; Well drained; 0.0 ha; 1195m slope22</desc>
+  </wpt>
+  <wpt lat="35.615651" lon="-83.036814">
+    <name>11 Whiteoak 0.89</name>
+    <desc>COVE; Well drained; 0.0 ha; 947m slope21</desc>
+  </wpt>
+  <wpt lat="35.592413" lon="-83.068228">
+    <name>12 Cullasaja 0.89</name>
+    <desc>COVE; Well drained; 0.0 ha; 1250m slope24</desc>
+  </wpt>
+  <wpt lat="35.610209" lon="-83.039389">
+    <name>13 Whiteoak 0.89</name>
+    <desc>COVE; Well drained; 0.0 ha; 879m slope25</desc>
+  </wpt>
+  <wpt lat="35.615861" lon="-83.045568">
+    <name>14 Whiteoak 0.89</name>
+    <desc>COVE; Well drained; 0.0 ha; 1064m slope23</desc>
+  </wpt>
+  <wpt lat="35.608534" lon="-83.040934">
+    <name>15 Whiteoak 0.89</name>
+    <desc>COVE; Well drained; 0.0 ha; 869m slope21</desc>
+  </wpt>
+  <wpt lat="35.591156" lon="-83.056641">
+    <name>16 Heintooga 0.88</name>
+    <desc>COVE; Well drained; 0.0 ha; 1283m slope25</desc>
+  </wpt>
+  <wpt lat="35.607906" lon="-83.038874">
+    <name>17 Whiteoak 0.88</name>
+    <desc>COVE; Well drained; 0.0 ha; 842m slope17</desc>
+  </wpt>
+  <wpt lat="35.611255" lon="-83.042736">
+    <name>18 Whiteoak 0.88</name>
+    <desc>COVE; Well drained; 0.0 ha; 905m slope21</desc>
+  </wpt>
+  <wpt lat="35.592622" lon="-83.065395">
+    <name>19 Cullasaja 0.88</name>
+    <desc>COVE; Well drained; 0.0 ha; 1252m slope23</desc>
+  </wpt>
+  <wpt lat="35.591366" lon="-83.069773">
+    <name>20 Heintooga 0.88</name>
+    <desc>COVE; Well drained; 0.0 ha; 1295m slope24</desc>
+  </wpt>
+</gpx>
