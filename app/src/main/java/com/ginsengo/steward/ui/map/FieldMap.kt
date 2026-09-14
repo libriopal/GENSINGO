@@ -32,6 +32,7 @@ import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngQuad
 import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
@@ -113,7 +114,31 @@ fun FieldMap(
     val curFollow = rememberUpdatedState(followMe)
     val curLayers = rememberUpdatedState(layers)
 
-    val mapView = remember { runCatching { MapView(context) }.getOrNull() }
+    val mapView = remember {
+        runCatching {
+            // TEXTURE MODE, not the default surface mode. This is the fix for controls that
+            // render over the map and then will not respond to a tap.
+            //
+            // By default MapLibre renders into a SurfaceView, which is composited by
+            // SurfaceFlinger outside the normal view hierarchy and which takes ownership of the
+            // gesture stream. Reported from real field use: the floating Layers button and the
+            // action bar were visible and dead, while the same control placed in the bottom
+            // sheet - outside the map's bounds - worked. That difference is the diagnosis:
+            // anything drawn OVER the map was being starved of touches, and a Compose zIndex
+            // does not help because the contest is happening below Compose, in the Android view
+            // hierarchy.
+            //
+            // textureMode(true) renders the map into a TextureView, an ordinary View that
+            // composites and hit-tests like any other, so controls above it behave normally.
+            // The cost is real and accepted: a TextureView is slower than a SurfaceView and
+            // uses more memory. A map whose controls work and renders a little slower beats a
+            // fast map you cannot operate.
+            MapView(
+                context,
+                MapLibreMapOptions.createFromAttributes(context).textureMode(true),
+            )
+        }.getOrNull()
+    }
     val mapRef = remember { arrayOfNulls<MapLibreMap>(1) }
     val styleRef = remember { arrayOfNulls<Style>(1) }
     val loadedBasemap = remember { arrayOfNulls<Basemap>(1) }
