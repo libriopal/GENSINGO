@@ -87,8 +87,9 @@ class PlantVerificationTest {
 
     @Test
     fun ageFromScars() {
-        assertEquals(5, PlantVerification.ageFromScars(4))
-        assertEquals(10, PlantVerification.ageFromScars(9))
+        // A floor, not an estimate: dormant seasons add no scar.
+        assertEquals(5, PlantVerification.minimumAgeFromScars(4))
+        assertEquals(10, PlantVerification.minimumAgeFromScars(9))
     }
 
     @Test

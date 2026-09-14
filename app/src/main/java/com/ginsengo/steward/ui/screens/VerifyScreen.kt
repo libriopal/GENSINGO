@@ -130,7 +130,7 @@ fun VerifyScreen(vm: FieldViewModel, onBack: () -> Unit) {
             )
             scarsText.toIntOrNull()?.let {
                 Text(
-                    "About ${PlantVerification.ageFromScars(it)} years old.",
+                    "At least ${PlantVerification.minimumAgeFromScars(it)} years old - a dormant season adds no scar, so this is a floor.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Gen.TextSecondary,
                     modifier = Modifier.padding(top = 8.dp),

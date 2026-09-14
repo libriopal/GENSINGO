@@ -52,8 +52,33 @@ data class VerificationResult(
 
 object PlantVerification {
 
-    /** Stem scars are age-1: 4 scars = 5 years. */
-    fun ageFromScars(scars: Int): Int = scars + 1
+    /**
+     * Age implied by stem scars, as a MINIMUM rather than an estimate.
+     *
+     * One scar is added each autumn as the stem dies back, so a 5-year-old plant carries 4 and
+     * a 10-year-old carries 9 - which is the arithmetic every state agency publishes. What the
+     * agencies do not spell out is that the count can only ever UNDERSTATE age: ginseng can go
+     * dormant for a season or more and add no scar at all, and old scars can be lost or
+     * obscured on a weathered neck.
+     *
+     * That error runs in the safe direction - a plant reads younger than it is, so the rule
+     * bites earlier - which is exactly why it must be reported as a floor. "Roughly 5 years
+     * old" invites a digger to round a 4-scar plant down to legal in a state that wants 10.
+     */
+    fun minimumAgeFromScars(scars: Int): Int = scars + 1
+
+    @Deprecated("Scars give a lower bound, not an estimate.", ReplaceWith("minimumAgeFromScars(scars)"))
+    fun ageFromScars(scars: Int): Int = minimumAgeFromScars(scars)
+
+    /**
+     * Can a prong count alone ever demonstrate this state's age minimum?
+     *
+     * Three prongs is generally not reached before year five, which is the whole basis of the
+     * 3-prong rule in eighteen jurisdictions. No prong count demonstrates TEN years, so in
+     * Illinois - which requires 10 years and 4 prongs - counting leaves is not sufficient
+     * evidence of legal age and the root neck has to be read.
+     */
+    fun prongsCanDemonstrateAge(stateMinAgeYears: Int): Boolean = stateMinAgeYears <= 5
 
     val STEWARDSHIP = listOf(
         "Plant the red berries within a few feet of the parent, about an inch deep, before you leave.",
@@ -105,10 +130,24 @@ object PlantVerification {
             )
         }
 
-        // Optional corroboration from stem scars.
+        // Stem scars: corroboration in most states, REQUIRED evidence where the age minimum
+        // is higher than a prong count can demonstrate.
+        if (input.stemScars == null && !prongsCanDemonstrateAge(input.stateMinAgeYears)) {
+            return VerificationResult(
+                verdict = Verdict.CHECK_STATE,
+                headline = "Count the scars before you decide",
+                reasons = reasons + listOf(
+                    "$state requires ${input.stateMinAgeYears} years, and no number of prongs " +
+                        "demonstrates that. Three prongs indicates about five years, not ten.",
+                    "Read the stem scars on the root neck before treating this plant as legal.",
+                ),
+                stewardshipReminders = STEWARDSHIP,
+            )
+        }
         input.stemScars?.let { scars ->
-            val age = ageFromScars(scars)
-            reasons += "$scars stem scars means roughly $age years old."
+            val age = minimumAgeFromScars(scars)
+            reasons += "$scars stem scars means AT LEAST $age years old - dormant seasons add " +
+                "no scar, so this is a floor, never an estimate."
             if (age < input.stateMinAgeYears) {
                 return VerificationResult(
                     verdict = Verdict.TOO_YOUNG,
