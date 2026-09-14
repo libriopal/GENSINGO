@@ -78,3 +78,36 @@ class CameraStartTest {
             }
     }
 }
+
+/**
+ * Defaults, pinned. These changed deliberately and the reason should not be re-litigated by
+ * accident: with the camera bug present, every DEM layer was computed for ground nobody was
+ * standing on and drew nothing, so defaulting them OFF hid a broken app behind a clean one.
+ */
+class MapLayerDefaultsTest {
+
+    @Test
+    fun everyDrawableLayerIsOnByDefault() {
+        val s = MapLayerState()
+        assertTrue("hillshade should default on", s.hillshade)
+        assertTrue("height overlay should default on", s.heightOverlay)
+        assertTrue("habitat heatmap should default on", s.habitatHeatmap)
+        assertTrue("pitched relief should default on", s.pitchedRelief)
+    }
+
+    /** The one exception, and it is not a preference: it blacked out the map. */
+    @Test
+    fun theGlMeshStaysOffBecauseItBlanksTheMap() {
+        assertFalse(
+            "terrainMesh must stay false - a SurfaceView punches through the TextureView map",
+            MapLayerState().terrainMesh,
+        )
+    }
+
+    @Test
+    fun defaultsActuallyRequireElevationAndTilt() {
+        val s = MapLayerState()
+        assertTrue("defaults must pull the DEM, or the layers are decorative", s.needsDem)
+        assertTrue("pitched relief must tilt the camera", s.wantsTilt)
+    }
+}

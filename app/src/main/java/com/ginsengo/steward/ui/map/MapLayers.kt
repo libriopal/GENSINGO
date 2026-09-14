@@ -47,12 +47,26 @@ enum class Basemap(val label: String, val attribution: String) {
  * elevation tiles, no GL context, or a camera reconstruction that disagrees with the map —
  * and when it does, the app should fall back to something honest rather than to nothing.
  */
+/**
+ * Which layers are drawn.
+ *
+ * Everything the map can show is ON by default. The reasoning changed once the camera bug was
+ * fixed: with the map opening on a fallback four states wide, every DEM layer was computed for
+ * ground nobody was standing on and silently did nothing, so defaulting them off hid a broken
+ * app behind a clean-looking one. Now that the camera lands on the fix, a layer that draws
+ * nothing is a real signal rather than an expected one.
+ *
+ * The cost is honest: hillshade, the height overlay and the habitat heatmap all pull elevation
+ * tiles and the heatmap runs flow accumulation over them, so first paint does real work and the
+ * radio is busy. That is the right trade for a tool you open once at the trailhead. Turn them
+ * off in Layers if the phone is struggling.
+ */
 data class MapLayerState(
     val basemap: Basemap = Basemap.DARK,
-    val hillshade: Boolean = false,
-    val heightOverlay: Boolean = false,
-    val habitatHeatmap: Boolean = false,
-    val pitchedRelief: Boolean = false,
+    val hillshade: Boolean = true,
+    val heightOverlay: Boolean = true,
+    val habitatHeatmap: Boolean = true,
+    val pitchedRelief: Boolean = true,
     /**
      * Permanently false. The GL mesh overlay blacked out the map once the map moved to a
      * TextureView; see LayerPanel for why the two cannot coexist. Kept as a field rather than
