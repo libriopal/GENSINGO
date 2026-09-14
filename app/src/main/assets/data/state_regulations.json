@@ -11,8 +11,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "Alabama Dept. of Conservation & Natural Resources",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Alabama Dept. of Conservation & Natural Resources before digging late in the year.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Alabama Dept. of Conservation & Natural Resources before digging late in the year. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with Alabama Dept. of Conservation & Natural Resources before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   },
   {
     "state_code": "AR",
@@ -26,8 +27,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "Arkansas Dept. of Agriculture",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Arkansas Dept. of Agriculture before digging late in the year.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Arkansas Dept. of Agriculture before digging late in the year. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with Arkansas Dept. of Agriculture before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   },
   {
     "state_code": "GA",
@@ -41,8 +43,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "Georgia Dept. of Natural Resources",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Georgia Dept. of Natural Resources before digging late in the year.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Georgia Dept. of Natural Resources before digging late in the year. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with Georgia Dept. of Natural Resources before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   },
   {
     "state_code": "IL",
@@ -56,8 +59,9 @@
     "minimum_prongs": 4,
     "permit_required": false,
     "agency": "Illinois Dept. of Natural Resources",
-    "harvest_notes": "Illinois requires plants to be at least 10 years old with 4 compound leaves - the strictest maturity rule of the 19 approved states. End of season not published by FWS - confirm the closing date with Illinois Dept. of Natural Resources before digging late in the year.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Illinois requires plants to be at least 10 years old with 4 compound leaves - the strictest maturity rule of the 19 approved states. End of season not published by FWS - confirm the closing date with Illinois Dept. of Natural Resources before digging late in the year. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with Illinois Dept. of Natural Resources before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   },
   {
     "state_code": "IN",
@@ -71,8 +75,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "Indiana DNR, Division of Nature Preserves",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Indiana DNR, Division of Nature Preserves before digging late in the year.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. Keep the neck ATTACHED to the root - it is how age is verified, and a root without one cannot be certified for export. INDIANA: planting the seeds of the harvested plant at the harvest site is required by rule 312 IAC 19-1-8. Season end not published federally - confirm the closing date with the Indiana DNR Division of Nature Preserves before digging late in the year. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "sourced_state_agency"
   },
   {
     "state_code": "IA",
@@ -86,8 +91,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "Iowa Dept. of Natural Resources",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Iowa Dept. of Natural Resources before digging late in the year.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Iowa Dept. of Natural Resources before digging late in the year. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with Iowa Dept. of Natural Resources before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   },
   {
     "state_code": "KY",
@@ -101,8 +107,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "Kentucky Dept. of Agriculture",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with Kentucky Dept. of Agriculture before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   },
   {
     "state_code": "MD",
@@ -116,8 +123,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "Maryland Dept. of Natural Resources",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Maryland Dept. of Natural Resources before digging late in the year.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Maryland Dept. of Natural Resources before digging late in the year. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with Maryland Dept. of Natural Resources before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   },
   {
     "state_code": "MN",
@@ -131,8 +139,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "Minnesota Dept. of Natural Resources",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Minnesota Dept. of Natural Resources before digging late in the year.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Minnesota Dept. of Natural Resources before digging late in the year. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with Minnesota Dept. of Natural Resources before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   },
   {
     "state_code": "MO",
@@ -146,8 +155,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "Missouri Dept. of Conservation",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Missouri Dept. of Conservation before digging late in the year.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Missouri Dept. of Conservation before digging late in the year. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with Missouri Dept. of Conservation before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   },
   {
     "state_code": "NY",
@@ -161,8 +171,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "New York State Dept. of Environmental Conservation",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with New York State Dept. of Environmental Conservation before digging late in the year.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with New York State Dept. of Environmental Conservation before digging late in the year. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with New York State Dept. of Environmental Conservation before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   },
   {
     "state_code": "NC",
@@ -176,8 +187,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "NC Dept. of Agriculture, Plant Conservation Program",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. Keep the neck ATTACHED to the root - it is how age is verified, and a root without one cannot be certified for export. NORTH CAROLINA: to dig on land that is not yours you must carry WRITTEN permission from the landowner, signed and dated, valid no more than 180 days, on your person while digging. This applies on public and private land alike. Digging without it, with intent to steal, is a FELONY. No collection in state parks, state forests, state game lands, the Blue Ridge Parkway or Great Smoky Mountains National Park. A dealer's permit is required to sell out of state. Source: NC Wildlife Resources Commission ginseng regulation page. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "sourced_state_agency"
   },
   {
     "state_code": "OH",
@@ -191,8 +203,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "Ohio Dept. of Natural Resources",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Ohio Dept. of Natural Resources before digging late in the year.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Ohio Dept. of Natural Resources before digging late in the year. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with Ohio Dept. of Natural Resources before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   },
   {
     "state_code": "PA",
@@ -206,8 +219,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "Pennsylvania DCNR",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Pennsylvania DCNR before digging late in the year.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Pennsylvania DCNR before digging late in the year. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with Pennsylvania DCNR before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   },
   {
     "state_code": "TN",
@@ -221,8 +235,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "Tennessee Dept. of Environment & Conservation",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with Tennessee Dept. of Environment & Conservation before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   },
   {
     "state_code": "VT",
@@ -236,8 +251,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "Vermont Agency of Natural Resources",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Vermont Agency of Natural Resources before digging late in the year.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Vermont Agency of Natural Resources before digging late in the year. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with Vermont Agency of Natural Resources before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   },
   {
     "state_code": "VA",
@@ -251,8 +267,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "Virginia Dept. of Agriculture & Consumer Services",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. Keep the neck ATTACHED to the root - it is how age is verified, and a root without one cannot be certified for export. VIRGINIA: anyone who harvests wild ginseng MUST plant the seeds of the harvested plant at the harvest site, at the time of harvest. This is a legal requirement, not advice. Source: Virginia Department of Agriculture and Consumer Services. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "sourced_state_agency"
   },
   {
     "state_code": "WV",
@@ -266,8 +283,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "West Virginia Division of Forestry",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. Keep the neck ATTACHED to the root - it is how age is verified, and a root without one cannot be certified for export. WEST VIRGINIA: dig only plants with three or more prongs and no fewer than 15 leaflets, and only when THE BERRIES ARE RED - ripeness is a condition of legal harvest here, not just good practice. Plant the seeds at the root spot. Digging on state forests, state parks and other state land is prohibited; private land needs prior written consent. Possession is prohibited 1 April to 31 August without a Division of Forestry weight receipt, and roots must be sold or weight-receipted by 31 March. Monongahela National Forest permits are available for a fee. Source: WV Division of Forestry Ginseng Program. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "sourced_state_agency"
   },
   {
     "state_code": "WI",
@@ -281,8 +299,9 @@
     "minimum_prongs": 3,
     "permit_required": false,
     "agency": "Wisconsin Dept. of Natural Resources",
-    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Wisconsin Dept. of Natural Resources before digging late in the year.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "Plants must be at least 5 years old with 3 compound leaves. Count stem scars on the root neck to confirm: a 5-year-old plant carries 4 scars. End of season not published by FWS - confirm the closing date with Wisconsin Dept. of Natural Resources before digging late in the year. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with Wisconsin Dept. of Natural Resources before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   },
   {
     "state_code": "MEN",
@@ -296,7 +315,8 @@
     "minimum_prongs": 3,
     "permit_required": true,
     "agency": "Menominee Tribal Enterprises",
-    "harvest_notes": "The Menominee Reservation is the one tribal jurisdiction approved by FWS for wild American ginseng harvest and trade. Harvest is governed by tribal law, not Wisconsin state law. Permission from the Tribe is required; non-members should assume harvest is not open to them.",
-    "source": "U.S. Fish & Wildlife Service, American Ginseng export program"
+    "harvest_notes": "The Menominee Reservation is the one tribal jurisdiction approved by FWS for wild American ginseng harvest and trade. Harvest is governed by tribal law, not Wisconsin state law. Permission from the Tribe is required; non-members should assume harvest is not open to them. This app has NOT sourced this state's specific rules beyond the age minimum. Written landowner permission, seed replanting, berry ripeness, leaflet counts and possession windows vary by state and several are legally binding. Confirm with Menominee Tribal Enterprises before digging. On federal land: harvest is prohibited in all National Park Service units and national wildlife refuges, and in most national forests. Where a national forest does allow it, a US Forest Service permit is required - ask that forest's district office.",
+    "source": "U.S. Fish & Wildlife Service, American Ginseng export program",
+    "notes_provenance": "generic_unsourced"
   }
 ]
