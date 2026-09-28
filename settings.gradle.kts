@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "GENSINGO"
+rootProject.name = "GinsengTerra Field Map"
 include(":app")

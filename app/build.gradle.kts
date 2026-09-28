@@ -33,9 +33,16 @@ android {
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+        buildConfigField("String", "GEMINI_API_KEY", "\"${System.getenv("GEMINI_API_KEY") ?: ""}\"")
     }
 
     signingConfigs {
+        create("debugConfig") {
+            storeFile = file("${rootDir}/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         if (hasReleaseSigning) {
             create("release") {
                 storeFile = rootProject.file(releaseStorePath!!)
@@ -60,6 +67,7 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debugConfig")
         }
     }
 
@@ -74,20 +82,10 @@ android {
         buildConfig = true
     }
 
-    // A universal release APK is 140 MB because it carries MapLibre's and ONNX Runtime's
-    // native libraries for all four ABIs. A phone needs exactly one of them. Splitting is the
-    // difference between an APK that can be sideloaded over a tethered phone at a trailhead
-    // and one that cannot.
-    //
-    // `isUniversalApk = true` keeps the fat APK as well, because it is the one that installs
-    // on anything without having to know what chip is in the handset. Prefer the arm64-v8a
-    // file on any phone made since about 2017.
+    // ABI splits disabled for single debug APK output (app/build/outputs/apk/debug/app-debug.apk)
     splits {
         abi {
-            isEnable = true
-            reset()
-            include("arm64-v8a", "armeabi-v7a", "x86_64")
-            isUniversalApk = true
+            isEnable = false
         }
     }
 

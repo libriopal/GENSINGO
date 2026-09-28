@@ -7,8 +7,16 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 @Database(
-    entities = [GinsengPatch::class, HabitatReadingRecord::class],
-    version = 1,
+    entities = [
+        GinsengPatch::class,
+        HabitatReadingRecord::class,
+        GinsengObservationEntity::class,
+        MonteCarloRecordEntity::class,
+        RadiusBufferEntity::class,
+        VerifiedHarvestPolygonEntity::class,
+        ProspectingTourEntity::class,
+    ],
+    version = 4,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -16,6 +24,11 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun patchDao(): PatchDao
     abstract fun habitatReadingDao(): HabitatReadingDao
+    abstract fun observationDao(): GinsengObservationDao
+    abstract fun monteCarloDao(): MonteCarloRecordDao
+    abstract fun radiusBufferDao(): RadiusBufferDao
+    abstract fun harvestPolygonDao(): HarvestPolygonDao
+    abstract fun tourDao(): ProspectingTourDao
 
     companion object {
         @Volatile
@@ -27,7 +40,10 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "gensingo.db",
-                ).build().also { instance = it }
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
+                    .also { instance = it }
             }
     }
 }

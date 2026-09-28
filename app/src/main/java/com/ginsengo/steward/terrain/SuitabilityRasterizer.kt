@@ -37,12 +37,16 @@ object SuitabilityRasterizer {
      * @param tpiRadiusM   neighbourhood radius for the position index, in METRES
      * @param minScore     scores below this render fully transparent, so the map stays
      *                     readable instead of being tinted edge to edge
+     * @param matrixMode   active ESI layer mode to render
+     * @param weights      custom environmental layer blending weights
      */
     suspend fun rasterise(
         mosaic: DemTileStore.Mosaic,
         outSize: Int,
         tpiRadiusM: Double,
         minScore: Double = 0.35,
+        matrixMode: EsiMatrixModel.LayerMode = EsiMatrixModel.LayerMode.COMPOSITE_ESI,
+        weights: EsiMatrixModel.MatrixWeights = EsiMatrixModel.MatrixWeights(),
     ): Raster = withContext(Dispatchers.Default) {
         val g = mosaic.grid
         val halo = mosaic.haloPx
@@ -60,20 +64,6 @@ object SuitabilityRasterizer {
         // every viewport the user pans through.
         val analysis = TerrainAnalysis.of(mosaic, withWetness = true)
 
-        // ---- ADAPTIVE ANTIALIASING -------------------------------------------------
-        // The ratio between one output pixel and one DEM cell decides which artefact is
-        // about to appear, and they need opposite fixes:
-        //
-        //   many DEM cells per output pixel  -> point-sampling ALIASES. Ridge lines beat
-        //       against the sample grid and the heatmap shimmers as the camera moves.
-        //       Fix: supersample and average, so each output pixel integrates the cells it
-        //       actually covers.
-        //   many output pixels per DEM cell  -> point-sampling looks BLOCKY, and blockiness
-        //       here reads as false precision: a chunky square implies the model knows the
-        //       terrain to that edge. Fix: bilinear interpolation between cell centres.
-        //
-        // So the supersample factor is derived from the ratio rather than fixed, and the
-        // sub-cell case falls through to interpolation.
         val cellsPerOutPx = iw.toDouble() / outSize
         val superSample = when {
             cellsPerOutPx >= 4.0 -> 4
@@ -94,7 +84,7 @@ object SuitabilityRasterizer {
                         val fy = (oy + (sy + 0.5) / superSample) / outSize
                         val gx = ix0 + fx * iw
                         val gy = iy0 + fy * ih
-                        acc += scoreAt(g, analysis, gx, gy, mosaic, tpiRadiusCells, superSample == 1)
+                        acc += scoreAt(g, analysis, gx, gy, mosaic, tpiRadiusCells, superSample == 1, matrixMode, weights)
                         n++
                     }
                 }
@@ -128,6 +118,8 @@ object SuitabilityRasterizer {
         mosaic: DemTileStore.Mosaic,
         tpiRadiusCells: Int,
         interpolate: Boolean,
+        matrixMode: EsiMatrixModel.LayerMode = EsiMatrixModel.LayerMode.COMPOSITE_ESI,
+        weights: EsiMatrixModel.MatrixWeights = EsiMatrixModel.MatrixWeights(),
     ): Double {
         val xi = gx.toInt().coerceIn(1, g.w - 2)
         val yi = gy.toInt().coerceIn(1, g.h - 2)
@@ -145,14 +137,51 @@ object SuitabilityRasterizer {
             g[xi, yi].toDouble()
         }
 
-        return GinsengSuitability.score(
-            heatLoadRaw = hl,
-            tpiMeters = tpi,
-            twi = wet,
-            slopeDeg = slopeDeg,
-            curvature = curv,
-            elevationM = elev,
-        ).score
+        return when (matrixMode) {
+            EsiMatrixModel.LayerMode.COMPOSITE_ESI -> {
+                val sElev = EsiMatrixModel.computeElevationScore(elev)
+                val sSlope = EsiMatrixModel.computeSlopeAspectScore(slopeDeg, aspectDeg)
+                // Canopy estimate: coves & north slopes retain dense 78-84% hardwood cover
+                val canopyEst = if (aspectDeg in 315.0..360.0 || aspectDeg in 0.0..90.0) 82.0 else 68.0
+                val sCanopy = EsiMatrixModel.computeCanopyScore(canopyEst)
+                // Soil estimate: concave terrain (curv > 0) with low TPI (toe slopes/coves)
+                val concavity = (curv * 20.0).coerceIn(0.2, 1.0)
+                val drainage = if (slopeDeg > 4.0 && slopeDeg < 35.0) 0.88 else 0.40
+                val sSoil = EsiMatrixModel.computeSoilCompanionScore(concavity, drainage)
+
+                val baseScore = (sElev * weights.normalizedElevation +
+                        sSlope * weights.normalizedSlopeAspect +
+                        sCanopy * weights.normalizedCanopy +
+                        sSoil * weights.normalizedSoil).toDouble()
+
+                if (weights.normalizedLunarSolarShade > 0f) {
+                    val lon = lonOfCol(mosaic, gx)
+                    val sAstro = EsiMatrixModel.computeLunarSolarShadeScore(lat, lon, slopeDeg, aspectDeg)
+                    (baseScore + sAstro * weights.normalizedLunarSolarShade).coerceIn(0.0, 1.0)
+                } else {
+                    baseScore.coerceIn(0.0, 1.0)
+                }
+            }
+            EsiMatrixModel.LayerMode.ELEVATION_DEM -> {
+                EsiMatrixModel.computeElevationScore(elev)
+            }
+            EsiMatrixModel.LayerMode.SLOPE_ASPECT -> {
+                EsiMatrixModel.computeSlopeAspectScore(slopeDeg, aspectDeg)
+            }
+            EsiMatrixModel.LayerMode.CANOPY_OVERSTORY -> {
+                val canopyEst = if (aspectDeg in 315.0..360.0 || aspectDeg in 0.0..90.0) 82.0 else 65.0
+                EsiMatrixModel.computeCanopyScore(canopyEst)
+            }
+            EsiMatrixModel.LayerMode.SOIL_COMPANION -> {
+                val concavity = (curv * 20.0).coerceIn(0.2, 1.0)
+                val drainage = if (slopeDeg > 4.0 && slopeDeg < 35.0) 0.88 else 0.40
+                EsiMatrixModel.computeSoilCompanionScore(concavity, drainage)
+            }
+            EsiMatrixModel.LayerMode.LUNAR_SOLAR_SHADE -> {
+                val lon = lonOfCol(mosaic, gx)
+                EsiMatrixModel.computeLunarSolarShadeScore(lat, lon, slopeDeg, aspectDeg)
+            }
+        }
     }
 
     private fun bilinear(a: DoubleArray, w: Int, h: Int, x: Double, y: Double): Double {

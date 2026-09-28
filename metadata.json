@@ -1,0 +1,8 @@
+{
+  "name": "GinsengTerra Field Map",
+  "description": "High-performance GIS visual field tool and AI micro-habitat prospector for wild American ginseng.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

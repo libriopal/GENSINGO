@@ -103,4 +103,42 @@ void main() {
     const val LOC_NORMAL = 1
     const val LOC_ELEVATION = 2
     const val LOC_SUITABILITY = 3
+
+    /**
+     * Custom Prospecting Shading Pipeline (Glassbox_Labs / GinsengTerra)
+     * Direct GPU analysis shader calculating micro-topography conditions (northern and eastern faces)
+     * and damp slope aspect alpha blended with high suitability marker.
+     */
+    const val PROSPECTING_CORE_FRAGMENT = """#version 300 es
+precision highp float;
+in vec3 v_normal;
+in float v_elevNorm;
+in float v_suitability;
+in float v_elevation;
+
+uniform float u_opacity;
+uniform vec3 u_solarVector; // Real-time solar position matching target regional coordinates
+
+out vec4 fragColor;
+
+void main() {
+    vec3 normal = normalize(v_normal);
+    vec3 solarDirection = normalize(u_solarVector);
+
+    // Compute base diffuse hillshading matrix
+    float LambertianComponent = max(dot(normal, solarDirection), 0.15);
+
+    // Filter for micro-topography conditions: Northern and Eastern faces (Ginseng micro-climates)
+    float dampSlopeAspectAlpha = smoothstep(0.20, 0.80, (normal.y * -1.0) + (normal.x * 0.35));
+
+    // Dynamic color composition matching premium visual direction
+    vec3 illuminatedTerrain = vec3(0.08, 0.35, 0.18) * (LambertianComponent + 0.25);
+
+    // Overlay clear structural indicator tracks onto potential target zones (#1FE057 / #00E5FF)
+    vec3 highSuitabilityMarker = vec3(0.12, 0.78, 0.34);
+    vec3 processedOutput = mix(illuminatedTerrain, highSuitabilityMarker, dampSlopeAspectAlpha * 0.40);
+
+    fragColor = vec4(processedOutput, u_opacity);
+}
+"""
 }

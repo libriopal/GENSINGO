@@ -1,5 +1,7 @@
 package com.ginsengo.steward.ui.map
 
+import com.ginsengo.steward.terrain.EsiMatrixModel
+
 /** Which basemap is underneath everything. */
 enum class Basemap(val label: String, val attribution: String) {
     /** OpenFreeMap dark vector — the default field look (PRD §4.1). */
@@ -47,19 +49,13 @@ enum class Basemap(val label: String, val attribution: String) {
  * elevation tiles, no GL context, or a camera reconstruction that disagrees with the map —
  * and when it does, the app should fall back to something honest rather than to nothing.
  */
+
 /**
  * Which layers are drawn.
  *
- * Everything the map can show is ON by default. The reasoning changed once the camera bug was
- * fixed: with the map opening on a fallback four states wide, every DEM layer was computed for
- * ground nobody was standing on and silently did nothing, so defaulting them off hid a broken
- * app behind a clean-looking one. Now that the camera lands on the fix, a layer that draws
- * nothing is a real signal rather than an expected one.
- *
- * The cost is honest: hillshade, the height overlay and the habitat heatmap all pull elevation
- * tiles and the heatmap runs flow accumulation over them, so first paint does real work and the
- * radio is busy. That is the right trade for a tool you open once at the trailhead. Turn them
- * off in Layers if the phone is struggling.
+ * Configures the GIS Visual Field Map Layer Matrix:
+ *  - ESI Composite and isolated environmental layers (Elevation DEM, Slope/Aspect, Hardwood Canopy, Soil/Flora).
+ *  - 10-mile radius geospatial buffer zone and candidate hotspot vectors.
  */
 data class MapLayerState(
     val basemap: Basemap = Basemap.DARK,
@@ -67,6 +63,13 @@ data class MapLayerState(
     val heightOverlay: Boolean = true,
     val habitatHeatmap: Boolean = true,
     val pitchedRelief: Boolean = true,
+    val matrixMode: EsiMatrixModel.LayerMode = EsiMatrixModel.LayerMode.COMPOSITE_ESI,
+    val weights: EsiMatrixModel.MatrixWeights = EsiMatrixModel.MatrixWeights(),
+    val show10MileBuffer: Boolean = true,
+    val showHotspots: Boolean = true,
+    val showCandidatePaths: Boolean = true,
+    val showVerifiedHarvestZones: Boolean = true,
+    val isCircleDrawMode: Boolean = false,
     /**
      * Permanently false. The GL mesh overlay blacked out the map once the map moved to a
      * TextureView; see LayerPanel for why the two cannot coexist. Kept as a field rather than

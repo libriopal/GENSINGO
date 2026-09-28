@@ -6,10 +6,13 @@ import com.ginsengo.steward.compliance.ComplianceEngine
 import com.ginsengo.steward.data.db.AppDatabase
 import com.ginsengo.steward.data.reference.ReferenceRepository
 import com.ginsengo.steward.field.CompassProvider
+import com.ginsengo.steward.field.FieldPowerManager
 import com.ginsengo.steward.field.LocationProvider
 import com.ginsengo.steward.field.PhotoStore
 import com.ginsengo.steward.geo.DemGrid
 import com.ginsengo.steward.habitat.HabitatEngine
+import com.ginsengo.steward.prospect.GinsengMemoryAndLearningEngine
+import com.ginsengo.steward.prospect.GinsengTerraCore
 import com.ginsengo.steward.terrain.DemTileStore
 
 /**
@@ -20,7 +23,7 @@ import com.ginsengo.steward.terrain.DemTileStore
  * exchange for wiring roughly a dozen singletons that have no scopes and no test doubles.
  * The annotation processor is the cost; the graph is not complex enough to be the benefit.
  */
-class AppContainer(private val context: Context) {
+class AppContainer(val context: Context) {
 
     val database: AppDatabase by lazy { AppDatabase.get(context) }
     val reference: ReferenceRepository by lazy { ReferenceRepository(context) }
@@ -29,6 +32,11 @@ class AppContainer(private val context: Context) {
     val compass: CompassProvider by lazy { CompassProvider(context) }
     val photos: PhotoStore by lazy { PhotoStore(context) }
     val settings: SettingsStore by lazy { SettingsStore(context) }
+
+    val powerManager: FieldPowerManager by lazy { FieldPowerManager(context) }
+    val learningEngine: GinsengMemoryAndLearningEngine by lazy { GinsengMemoryAndLearningEngine(context, database) }
+    val terraCore: GinsengTerraCore by lazy { GinsengTerraCore(context = context) }
+    val tours by lazy { database.tourDao() }
 
     val habitat: HabitatEngine? by lazy { HabitatEngine.load(context) }
 

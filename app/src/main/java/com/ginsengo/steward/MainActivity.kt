@@ -3,18 +3,16 @@ package com.ginsengo.steward
 import android.Manifest
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
-import androidx.compose.ui.Modifier
-import com.ginsengo.steward.ui.AppNav
 import com.ginsengo.steward.ui.FieldViewModel
-import com.ginsengo.steward.ui.theme.Gen
-import com.ginsengo.steward.ui.theme.GensingoTheme
 
+/**
+ * Headless entry activity for backend services, governance engines,
+ * location feeds, and telemetry persistence.
+ *
+ * Direct user-facing visual design front-end code removed per user specification.
+ */
 class MainActivity : ComponentActivity() {
 
     private val vm: FieldViewModel by viewModels()
@@ -30,23 +28,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-            GensingoTheme {
-                Surface(Modifier.fillMaxSize(), color = Gen.Base) {
-                    AppNav(
-                        vm = vm,
-                        onRequestLocationPermission = {
-                            locationPermission.launch(
-                                arrayOf(
-                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                                )
-                            )
-                        },
-                    )
-                }
-            }
-        }
+        locationPermission.launch(
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+            )
+        )
     }
 }
