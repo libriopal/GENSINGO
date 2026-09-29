@@ -1,43 +1,55 @@
 # GENSINGO
 
-A private, offline-capable field companion for wild American ginseng stewards.
+A minimal, offline-first field app for wild American ginseng stewards: one map, four
+buttons, a real 3D terrain view, and a research model that can only talk about places the
+phone itself computed.
 
-Native Android — Kotlin + Jetpack Compose (Material 3), package `com.ginsengo.steward`.
+Native Android — Kotlin + Jetpack Compose, package `com.ginsengo.steward`.
 
-It is built around the digger's actual workflow: read habitat, identify plants, verify legal
-maturity, harvest ethically, protect patches. It is **not** a navigation app, not a plant-ID
-(computer vision) app, not a marketplace, not a law-enforcement tool, and not a scientific
-instrument.
-
-**Your honey holes stay yours.** Patch locations, photos and readings live in this app's
-private storage on your phone. There is no account, no server, no analytics, and Android's
-cloud backup is switched off for this app. The only network request GENSINGO makes is for
-map tiles, and it carries no patch data.
+**Your honey holes stay yours.** Tracks, finds and suggestions live in app-private storage;
+cloud backup is off; there is no account or server. The research model is **off by
+default**; when you turn it on with your own API key, a request carries the ~11 km grid cell
+you are in, your state's rules and anonymised terrain numbers — never your GPS fix, your
+track, or where any find is (`docs/PLAY_DATA_SAFETY.md`).
 
 ---
 
-## Workflows
+## The one screen
 
-| | |
+| Button | What it does |
 |---|---|
-| **Read Habitat** | Compass slope aspect, position on slope, tree association, companion-plant photo grid, soil check → a field verdict. Optional model analysis on top. |
-| **Verify Maturity** | Prongs → berries → stem scars → verdict, against your state's actual minimum. Stewardship reminders either way. |
-| **Log Patch** | GPS (with manual override), in-app camera, plant count, notes, harvest record. Saved to Room. |
-| **My Patches** | Proximity-grouped, filterable, coordinates blurred until you tap them. |
-| **Stewardship Guide** | Per-state rules, land status, stewardship practices, companion gallery, plant aging, look-alikes. |
+| **Track** | Records where you walk, screen off, until you stop it (foreground service; no background-location permission). Battery policy: interval, batching and accuracy from measured battery, charging, screen and movement. |
+| **Find** | Hold still while fixes average, confirm three identification checks, save. A find is **verified** only if the averaged fix is ≤ 20 m, fresh, and all three checks hold; otherwise it is saved unverified and never learned from. |
+| **Suggest** | Places worth walking inside 10 miles. Always computed on the phone; annotated by Claude or Gemini (web-searched, sources kept only if retrieved in that call) when you allow it. Refreshes itself after you move 3 km. |
+| **Layers** | Heatmaps, basemap, the learner's verdict, "Save 10 miles around me" for offline use, and research-model settings. |
 
-## Map layers
+Plus a **3D** toggle (a real terrain mesh around you, coloured by the habitat surface) and
+recentre.
 
-Free movement throughout — pan, zoom, rotate and tilt.
+### Heatmaps, in real time
 
 | Layer | What it is |
 |---|---|
-| **Dark / Satellite / Topo** | OpenFreeMap vector dark, or USGS imagery and topo (public domain, to z16) |
-| **Height map** | GPU colour relief over AWS Terrarium elevation tiles, ramp tuned to the Appalachian band, opacity slider |
-| **Hillshade** | GPU relief shading from the same elevation source |
-| **Pitched relief** | 55° camera tilt with deepened shading — flat geometry that reads as depth, free |
-| **3D terrain** | A real triangle mesh in a transparent GL surface over the map: adaptive 96–192 grid, per-vertex normals, skirts, 1–4× exaggeration, optionally tinted by the ginseng forecast |
-| **Habitat heatmap** | The ginseng forecast, below |
+| **Habitat** (green) | The published six-factor terrain model below, computed per viewport on the phone. Switches to learned weights only after they beat the published ones on held-out finds. |
+| **Where I've been** (blue) | GPU heatmap of your recorded track. |
+| **My finds** (amber) | GPU heatmap of your finds; verified ones weigh most. |
+
+### Suggestions that cannot invent places
+
+1. **Compute** — the radius scan runs the habitat model over 10 miles of cached elevation
+   (~31 m cells) and picks separated high-scoring areas. Protected land is left out.
+2. **Annotate** — the model sees candidates by ID with their numbers; its submission schema
+   only admits those IDs. It can rank and explain; it cannot add or move a place.
+3. **Witness** — citations survive only if the model's own search retrieved them in this
+   call; coordinates and "legal to dig" sentences are stripped from its prose.
+4. **Earn** — your verified finds refit the model's weights, adopted only if they rank
+   held-out finds better than the published weights, holding out whole blocks at the
+   distance this terrain stops resembling itself (measured by the scan), with an exact
+   sign-flip test. It needs finds in 5 separate spots before it can learn anything.
+
+How this was built and tested — mutation testing, an independent critic, and runs on
+Android — is in [`EINCOL_REPORT.md`](EINCOL_REPORT.md) Phase 7; the 314 candidate ideas it
+started from are in [`docs/IDEA_CANDIDATES.md`](docs/IDEA_CANDIDATES.md).
 
 ### The habitat forecast
 
@@ -64,19 +76,13 @@ is pinned by tests that fail if anyone makes it monotonic again.
 Antialiasing adapts to the DEM-cell to output-pixel ratio: supersample and integrate when
 one pixel covers many cells, interpolate when one cell covers many pixels.
 
-### How the 3D terrain stays on the map
+### The 3D view
 
-MapLibre Android exposes no terrain API and no projection matrix, and its `CustomLayer`
-takes a native pointer, so the overlay **reconstructs** MapLibre's camera from the public
-`CameraPosition`. A reconstruction that is subtly wrong still renders convincing terrain —
-just not where the ground is — so every time the camera settles the app projects nine points
-through its own matrix and compares them against MapLibre's `toScreenLocation`. **If the mean
-residual exceeds 2 px the mesh is hidden** and the layer panel says why, rather than drawing
-a hillside out of register. The measured residual is shown live.
-
-Vertex positions are stored relative to a local origin: Web Mercator spans 16.7 million
-units at zoom 15, where float32 resolves only 1–2 units, so absolute coordinates would jitter
-by metres. The origin is folded back into the matrix in double precision.
+A triangle mesh built from the elevation tiles around you, drawn in its own GL surface and
+coloured by the habitat surface (or by elevation), with your position, finds and suggestions
+projected onto it. It is a separate screen rather than a layer over the map: a GL surface
+over the map's TextureView blacked out the screen (Phase 5). It renders only when a gesture
+moves the camera.
 
 **What it cannot see:** soil calcium — among the strongest published predictors of ginseng
 ground (Burkhart: ~3,360 kg/ha marks promising sites) and not derivable from elevation. The
@@ -84,14 +90,23 @@ app says so on the panel and names the indicator species that reveal it instead.
 
 ## Build
 
-Requires JDK 17+ and an Android SDK with platform 34 and build-tools 34.0.0.
+Requires JDK 17+ and an Android SDK with platform 36 and build-tools 35.0.0.
 
 ```bash
 echo "sdk.dir=/path/to/android-sdk" > local.properties
-./gradlew :app:assembleDebug        # debug APK
-./gradlew :app:testDebugUnitTest    # JVM unit tests
+./gradlew :app:assembleDebug        # debug APK, installable (debug-signed)
+./gradlew :app:testDebugUnitTest    # JVM unit tests (incl. Robolectric migration tests)
+./gradlew :app:connectedDebugAndroidTest   # on a device: SDK-on-ART and Keystore tests
+python3 tools/mutate.py             # mutation harness: every claimed property, broken on purpose
 ./gradlew :app:bundleRelease        # Play AAB (needs signing, below)
 ```
+
+The full-radius scan timing test is skipped unless you build its 4.7 MB fixture:
+`python3 tools/build_scan_fixture.py /tmp/scan.bin 35.55 -82.95 12 6` then
+`GENSINGO_SCAN_FIXTURE=/tmp/scan.bin ./gradlew :app:testDebugUnitTest --tests '*Timing*'`.
+
+The research model needs your own key, entered in Layers → Research model. Nothing is
+compiled into the APK.
 
 ### Release signing
 
@@ -130,12 +145,12 @@ says *"confirm with \<agency\>"*. It will not show you a closing date it cannot 
 
 ### About the habitat model
 
-The bundled graph is a 235-byte linear baseline — `sigmoid(W·x + b)` — not a trained or
-validated ecological model. **It weights slope angle and slope aspect at exactly zero**, so
-the analysis cannot respond to them at all. The app says so on screen, prints the full
-weight vector in Settings, and shows what share of each score came from your own checklist
-answers rather than from a measurement. On a hillside, the field reading is the one to
-trust. See [`EINCOL_REPORT.md`](EINCOL_REPORT.md).
+The only habitat score the app shows is the six-factor terrain model above: expert weights,
+not a fitted species distribution model, labelled as a research-grade estimate. Your
+verified finds can replace those weights, but only after held-out finds prove the learned
+ones rank better. The bundled 235-byte ONNX graph from the original PRD (which weights slope
+and aspect at exactly zero; see `EINCOL_REPORT.md` Phase 1) is still in the assets and is not
+used by any screen.
 
 ## Assets
 

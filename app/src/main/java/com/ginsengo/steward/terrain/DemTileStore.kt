@@ -47,6 +47,8 @@ class DemTileStore(context: Context) {
 
     private val cacheDir = File(context.cacheDir, "dem_tiles").apply { mkdirs() }
 
+    private val failedAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
     /** Decoded elevation tiles, keyed z/x/y. ~256 KB each as floats; cap at ~24 tiles. */
     private val memory = object : LruCache<String, FloatArray>(24) {
         override fun sizeOf(key: String, value: FloatArray) = 1
@@ -60,7 +62,13 @@ class DemTileStore(context: Context) {
         val bytes = if (f.exists() && f.length() > 0) {
             runCatching { f.readBytes() }.getOrNull()
         } else {
-            download(z, x, y)?.also { runCatching { f.writeBytes(it) } }
+            // Offline, every refresh used to retry every missing tile: up to 64 doomed HTTPS
+            // handshakes per camera move, all contending on the SSL socket factory (measured
+            // on the Phase 7 device run). A failed tile is not retried for RETRY_AFTER_MS.
+            val failed = failedAt[key]
+            if (failed != null && System.currentTimeMillis() - failed < RETRY_AFTER_MS) return@withContext null
+            download(z, x, y)?.also { runCatching { f.writeBytes(it) }; failedAt.remove(key) }
+                ?: run { failedAt[key] = System.currentTimeMillis(); null }
         } ?: return@withContext null
 
         val bmp = runCatching {
@@ -183,7 +191,8 @@ class DemTileStore(context: Context) {
         private const val TAG = "DemTileStore"
         const val TILE = 256
         const val MAX_DEM_ZOOM = 15
-        private const val MAX_TILES = 64
+        private const val RETRY_AFTER_MS = 5 * 60_000L
+        const val MAX_TILES = 64
         private const val EQUATOR_M = 40_075_016.686
         const val TERRARIUM = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium"
 
@@ -229,6 +238,28 @@ class DemTileStore(context: Context) {
             cameraZoom >= 13.0 -> 300.0
             cameraZoom >= 11.0 -> 700.0
             else -> 1500.0
+        }
+
+        /**
+         * The DEM zoom to use for [bounds] (N, W, S, E): [preferred], or lower until the tile
+         * count (halo included) fits [MAX_TILES].
+         *
+         * A tilted view reaches toward the horizon. On a portrait phone at MapLibre's maximum
+         * 60 degree tilt, or at the default 50 degrees rotated 45 degrees, the visible region
+         * needs ~78-81 DEM tiles at the camera's zoom, grid() returns null, and the heatmap
+         * simply vanishes. Coarser cells over the whole view beat no heatmap. (Suspected from
+         * the Phase 7 device run; the arithmetic in the first version of this note was wrong
+         * and is corrected in ZoomFittingTest.)
+         */
+        fun zoomFitting(north: Double, west: Double, south: Double, east: Double, preferred: Int, haloTiles: Int = 1): Int {
+            var z = preferred
+            while (z > 8) {
+                val nx = lonToTileX(east, z) - lonToTileX(west, z) + 1 + 2 * haloTiles
+                val ny = latToTileY(south, z) - latToTileY(north, z) + 1 + 2 * haloTiles
+                if (nx.toLong() * ny <= MAX_TILES) return z
+                z--
+            }
+            return z
         }
 
         /** Output raster size: enough to look sharp, small enough to compute on the fly. */

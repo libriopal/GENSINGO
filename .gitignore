@@ -15,3 +15,6 @@ local.properties
 keystore.properties
 *.jks
 *.keystore
+
+# Python bytecode caches from the tools/ scripts.
+__pycache__/

@@ -146,6 +146,27 @@ class MapCamera(
         return FloatArray(16) { m[it].toFloat() }
     }
 
+    /**
+     * MVP for a mesh built at [buildZoom] and viewed at this camera's zoom.
+     *
+     * World pixels double per zoom level, so a mesh built once can be viewed at any zoom by
+     * scaling its (origin-relative) vertices by 2^(zoom - buildZoom), including height,
+     * which was also stored in build-zoom pixels. That is what lets the standalone 3D view
+     * pinch-zoom without rebuilding the mesh on every frame. [originX]/[originY] are in
+     * BUILD-zoom world pixels, as [TerrainMesh.Mesh] stores them.
+     */
+    fun mvpForMeshBuiltAt(buildZoom: Double, originX: Double, originY: Double): FloatArray {
+        val k = Math.pow(2.0, zoom - buildZoom)
+        var m = perspective(FOV, viewportWidth.toDouble() / viewportHeight, nearZ, farZ)
+        m = m * scale(1.0, -1.0, 1.0)
+        m = m * translate(0.0, 0.0, -cameraToCenterDistance)
+        m = m * rotateX(pitch)
+        m = m * rotateZ(angle)
+        m = m * translate(originX * k - centerX, originY * k - centerY, 0.0)
+        m = m * scale(k, k, k)
+        return FloatArray(16) { m[it].toFloat() }
+    }
+
     /** World pixel coordinates for a geographic position. */
     fun worldX(lng: Double): Double = mercatorX(lng) * worldSize
     fun worldY(lat: Double): Double = mercatorY(lat) * worldSize

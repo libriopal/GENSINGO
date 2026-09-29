@@ -1,97 +1,75 @@
 # Google Play Data safety declaration — GENSINGO
 
-Source of truth for the Play Console **Data safety** form. Everything below is a statement
-about what the shipped code does, and each row names where to verify it.
+Source of truth for the Play Console **Data safety** form. Every row is a statement about
+what the shipped code does, and names where to verify it. Rewritten in Phase 7: the previous
+version declared no data sharing at all, listed a camera permission the app no longer has,
+and listed three permissions as "not requested" that track recording now needs.
 
 ## Summary
 
 | Question | Answer |
 |---|---|
-| Does the app collect or share any user data? | **No** |
-| Is data encrypted in transit? | N/A — no user data is transmitted |
-| Can users request data deletion? | Yes — delete a patch in-app, or uninstall |
-| Committed to the Play Families policy? | N/A |
+| Does the app collect or share any user data? | **Only if the user turns on the research model.** Off by default. See "Research model" |
+| Is data encrypted in transit? | Yes. All requests are HTTPS; cleartext traffic is disabled in the manifest |
+| Can users request data deletion? | Everything is on the device: delete a find in-app, or uninstall. The app has no server |
 | Independent security review? | No |
 
-GENSINGO has no account system, no backend, no analytics SDK, no advertising SDK, and no
-crash-reporting SDK. Patch records, photos and habitat readings are written to the app's
-private storage and are never transmitted anywhere.
+No account system, no backend, no analytics, advertising or crash-reporting SDK.
+
+## Research model (the one path that can send data, and only by opt-in)
+
+With **Layers → Research model → Send to …** switched on and the user's own API key saved,
+a research request is sent to the provider the user picked (Anthropic or Google), billed to
+their key. It contains, and only contains:
+
+| Sent | Resolution | Verify |
+|---|---|---|
+| The grid cell the user is in | 0.1° (~11 km), the cell centre, never the fix | `SuggestionAssembler.coarseRegion`, `PromptPrivacyTest` |
+| State name, season line, the state's rule text | From the bundled sourced data | `ResearchRepository.buildRequest` |
+| Each candidate's terrain numbers and a distance band | No coordinates; distance banded (e.g. "3-6 km") | `ResearchPrompt.user` |
+| Counts of past suggestion outcomes and average factor values of verified finds | Aggregates only | `MemorySummary.describe` |
+
+**Never sent:** the GPS fix, the recorded track, the location of any find or suggestion,
+notes, or photos. A canary test puts a distinctive fix through the real prompt builder and
+fails if any of its digits appear (`PromptPrivacyTest`); mutation P2 (send the exact fix)
+is killed by it.
+
+Play form: *Approximate location* — collected, **optional** (user-enabled), shared with the
+AI provider the user selects, for the app-functionality purpose of research suggestions.
 
 ## Permissions and why each is requested
 
 | Permission | Why | Verify |
 |---|---|---|
-| `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` | Centre the map, stamp a patch when the user logs one, and auto-detect which state's harvest rules apply. All processing is on-device against bundled GeoJSON. | `field/LocationProvider.kt`, `compliance/ComplianceEngine.kt` |
-| `CAMERA` | Capture a patch photo in-process, written straight into `filesDir`. | `ui/screens/CameraCapture.kt` |
-| `INTERNET` / `ACCESS_NETWORK_STATE` | Map tiles only (OpenFreeMap). No patch data is included in any request. | `ui/map/FieldMap.kt` |
+| `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` | Show where you are, record a track when you ask, stamp a find, detect the state's rules | `field/LocationProvider.kt`, `field/TrackService.kt` |
+| `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION` | Keep recording a track with the screen off, only after the user taps Track; stoppable from its notification | `field/TrackService.kt` |
+| `POST_NOTIFICATIONS` | Show that notification (API 33+) | `MainActivity.kt` |
+| `INTERNET` / `ACCESS_NETWORK_STATE` | Map and elevation tiles; the opt-in research request | `ui/map/FieldMap.kt`, `terrain/DemTileStore.kt`, `research/*Client.kt` |
 
-### Merged in by libraries, not declared by this app
+**Deliberately not requested:** `ACCESS_BACKGROUND_LOCATION` (a location service started
+from the foreground keeps the while-in-use grant), `CAMERA`, storage and media permissions.
 
-Verified against the merged release manifest, not against the source manifest — these two
-appear in the shipped APK and must be accounted for:
+## Tile requests reveal the area being viewed
 
-| Permission | Origin | Assessment |
-|---|---|---|
-| `ACCESS_WIFI_STATE` | MapLibre Android SDK | Connectivity detection before tile fetches. Not used for location: the app never calls the WiFi APIs itself. |
-| `com.ginsengo.steward.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | AndroidX Core | Auto-generated signature-level permission guarding runtime-registered broadcast receivers. Not a data permission. |
+Map tiles (OpenFreeMap) and elevation tiles (AWS Open Data) are requested by tile address,
+so those hosts can infer roughly which area is on screen, as with any map app. No user data
+is attached to those requests. After "Save 10 miles around me", the area works with no
+requests at all.
 
-**Components in the shipped manifest**, in full: `androidx.camera.core.impl.MetadataHolderService`,
-`androidx.room.MultiInstanceInvalidationService`, `androidx.profileinstaller.ProfileInstallReceiver`,
-`androidx.core.content.FileProvider`, `androidx.startup.InitializationProvider`. All AndroidX
-framework components. **No telemetry or analytics service is present** — grepping the release
-APK for `telemetry|analytics` returns zero matches. (MapLibre carries no Mapbox telemetry.)
+## Location data on the device
 
-### Deliberately NOT requested
-
-`ACCESS_BACKGROUND_LOCATION`, `FOREGROUND_SERVICE`, `POST_NOTIFICATIONS`,
-`READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`, `READ_MEDIA_IMAGES`.
-
-The app reads position only while the user is looking at the screen; it does not follow
-anyone around. Photos never touch MediaStore — a patch photo in the shared gallery is a
-patch location handed to every app on the phone with media permission, and to whatever backs
-that gallery up.
-
-## Location data handling — the sensitive case
-
-A wild-ginseng patch location is the most sensitive thing this app holds. Poaching from
-known patches is the primary threat to the species and to the user.
-
-- Stored in the Room database in app-private storage. Never transmitted.
-- Displayed **masked** in list view until the user explicitly taps to reveal
-  (`ui/screens/PatchesScreen.kt`). Masking replaces the string rather than visually blurring
-  it, because `Modifier.blur` is a no-op below API 31 and `minSdk` is 26.
-- Excluded from Android cloud backup and device-transfer: `android:allowBackup="false"` plus
-  explicit excludes in `res/xml/backup_rules.xml` and `res/xml/data_extraction_rules.xml`.
-- Export is user-initiated only, writes to app-private storage, and hands the file to one
-  app of the user's choosing via a one-time `FileProvider` grant.
-
-## Photos
-
-Captured via CameraX directly into `filesDir/patch_photos/`. Room stores a path **relative**
-to `filesDir`, never an absolute path and never a `content://` MediaStore URI. Sharing goes
-through `FileProvider` with a time-limited grant (`res/xml/file_paths.xml`).
+- Tracks, finds, suggestions and research runs are in the Room database in app-private
+  storage. `android:allowBackup="false"` plus `backup_rules.xml` / `data_extraction_rules.xml`
+  exclude them from cloud backup and device transfer.
+- The recording notification shows distance and mode, never coordinates.
+- API keys are encrypted with an AES-GCM key held in the Android Keystore (`research/KeyVault.kt`),
+  never compiled into the APK.
 
 ## Third-party SDKs
 
 | SDK | Purpose | Network |
 |---|---|---|
 | MapLibre Android SDK | Map rendering | Tile requests to `tiles.openfreemap.org` |
-| ONNX Runtime | On-device habitat model inference | **None** — runs locally |
-| Play Services Location | GPS fixes | None initiated by this app |
-| AndroidX (Compose, Room, CameraX, Navigation) | Framework | None |
-| Coil | Image loading from assets and local files | None |
-
-No analytics, attribution, advertising or crash-reporting SDK is present.
-
-## Pre-submission checklist
-
-- [x] `minSdk 26`, `targetSdk 34`
-- [x] Adaptive launcher icon with monochrome layer
-- [x] Release `signingConfig` reads from `keystore.properties` or environment; keystore
-      git-ignored
-- [x] `allowBackup=false` with backup rules
-- [x] `usesCleartextTraffic=false`
-- [x] No tracking SDKs
-- [ ] Build the AAB: `./gradlew :app:bundleRelease`
-- [ ] Verify on a physical device — **not yet done**, see `EINCOL_REPORT.md` open item 5
-- [ ] Store listing must not imply the habitat model is a validated ecological predictor
+| Anthropic Java SDK | Opt-in research model (Claude) | `api.anthropic.com`, only with consent and the user's key |
+| Play Services Location | GPS fixes (platform GPS is the fallback) | None initiated by this app |
+| Room, Jetpack Compose, kotlinx.serialization | Storage and UI | None |

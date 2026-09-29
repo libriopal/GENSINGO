@@ -70,14 +70,21 @@ vec3 elevationTint(float t) {
     return mix(c3, c4, (t - 0.75) / 0.25);
 }
 
-// Habitat forecast ramp, matching SuitabilityRasterizer.colourFor so the 3D mesh and the
-// flat heatmap read as the same surface.
+// Habitat forecast ramp: the SAME five stops as SuitabilityRasterizer.RAMP (monotonic in
+// L* under normal, deuteranope and protanope vision), so the 3D view and the flat heatmap
+// read as one surface. Pinned stop-for-stop by ShaderRampParityTest; the previous ramp here
+// (#0E4A5A -> #00FF88 -> #FFC857) was the one Phase 5 removed from the 2D map because its
+// lightness peaked mid-scale, and this shader had kept it under a comment saying it matched.
 vec3 suitabilityTint(float t) {
-    vec3 lo = vec3(0.055, 0.290, 0.353);  // #0E4A5A
-    vec3 mid = vec3(0.000, 1.000, 0.533); // #00FF88
-    vec3 hi = vec3(1.000, 0.784, 0.341);  // #FFC857
-    if (t < 0.5) return mix(lo, mid, t / 0.5);
-    return mix(mid, hi, (t - 0.5) / 0.5);
+    vec3 c0 = vec3(0.016, 0.118, 0.102);  // #041E1A
+    vec3 c1 = vec3(0.043, 0.302, 0.227);  // #0B4D3A
+    vec3 c2 = vec3(0.078, 0.561, 0.357);  // #148F5B
+    vec3 c3 = vec3(0.498, 0.808, 0.478);  // #7FCE7A
+    vec3 c4 = vec3(0.918, 0.965, 0.784);  // #EAF6C8
+    if (t < 0.25) return mix(c0, c1, t / 0.25);
+    if (t < 0.50) return mix(c1, c2, (t - 0.25) / 0.25);
+    if (t < 0.75) return mix(c2, c3, (t - 0.50) / 0.25);
+    return mix(c3, c4, (t - 0.75) / 0.25);
 }
 
 void main() {

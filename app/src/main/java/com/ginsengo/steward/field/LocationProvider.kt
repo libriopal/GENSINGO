@@ -5,6 +5,9 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
@@ -12,8 +15,11 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.launch
 
 data class FieldLocation(
     val lat: Double,
@@ -25,10 +31,11 @@ data class FieldLocation(
 )
 
 /**
- * GPS via FusedLocationProviderClient (PRD §7), throttled to a 1000 ms minimum interval.
+ * GPS for the live on-screen position, via FusedLocationProviderClient.
  *
- * The throttle is the whole point: this app is carried for hours on a hillside with no
- * charger, so it asks for the slowest update rate that still feels live.
+ * Only runs while the screen shows the map (the collector is tied to the UI lifecycle), with
+ * the request shape decided by [PowerPolicy]. Recording a track with the screen off is
+ * [TrackService]'s job, not this class's.
  */
 class LocationProvider(private val context: Context) {
 
@@ -40,15 +47,54 @@ class LocationProvider(private val context: Context) {
                 ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
                 PackageManager.PERMISSION_GRANTED
 
+    /**
+     * Live fixes: Google Play services' fused provider first, and the platform GPS provider
+     * if the fused provider has delivered nothing for [FALLBACK_AFTER_MS].
+     *
+     * Found on the Phase 7 emulator run: Play services' location service crashed and the
+     * app sat at "GPS..." indefinitely with the GNSS receiver idle. The same happens on any
+     * phone without Play services. GPS itself needs neither Play services nor a network, so
+     * an app that promises to work offline must not depend on either for its position.
+     */
+    fun updates(plan: PowerPolicy.Plan): Flow<FieldLocation> = channelFlow {
+        var lastFused = 0L
+        launch { fusedUpdates(plan).collect { lastFused = SystemClock.elapsedRealtime(); send(it) } }
+        launch {
+            delay(FALLBACK_AFTER_MS)
+            platformGps(plan).collect {
+                if (SystemClock.elapsedRealtime() - lastFused > FALLBACK_AFTER_MS) send(it)
+            }
+        }
+    }
+
     @SuppressLint("MissingPermission")
-    fun updates(): Flow<FieldLocation> = callbackFlow {
+    private fun platformGps(plan: PowerPolicy.Plan): Flow<FieldLocation> = callbackFlow {
+        val lm = context.getSystemService(LocationManager::class.java)
+        if (!hasPermission() || lm == null || !lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            close()
+            return@callbackFlow
+        }
+        val listener = LocationListener { trySend(it.toField()) }
+        lm.requestLocationUpdates(
+            LocationManager.GPS_PROVIDER, plan.intervalMs, plan.minDistanceM, listener, context.mainLooper,
+        )
+        awaitClose { lm.removeUpdates(listener) }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun fusedUpdates(plan: PowerPolicy.Plan): Flow<FieldLocation> = callbackFlow {
         if (!hasPermission()) {
             close()
             return@callbackFlow
         }
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2_000L)
-            .setMinUpdateIntervalMillis(1_000L)   // PRD §7 battery throttle
-            .setMinUpdateDistanceMeters(2f)
+        val priority = when (plan.accuracy) {
+            PowerPolicy.Accuracy.HIGH -> Priority.PRIORITY_HIGH_ACCURACY
+            PowerPolicy.Accuracy.BALANCED -> Priority.PRIORITY_BALANCED_POWER_ACCURACY
+        }
+        val request = LocationRequest.Builder(priority, plan.intervalMs)
+            .setMinUpdateIntervalMillis(plan.minIntervalMs)
+            .setMaxUpdateDelayMillis(plan.maxDelayMs)
+            .setMinUpdateDistanceMeters(plan.minDistanceM)
             .build()
 
         val callback = object : LocationCallback() {
@@ -66,6 +112,10 @@ class LocationProvider(private val context: Context) {
         client.lastLocation
             .addOnSuccessListener { onResult(it?.toField()) }
             .addOnFailureListener { onResult(null) }
+    }
+
+    private companion object {
+        const val FALLBACK_AFTER_MS = 20_000L
     }
 
     private fun Location.toField() = FieldLocation(

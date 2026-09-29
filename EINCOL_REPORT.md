@@ -1174,3 +1174,211 @@ are drafted below across seven specialized domains.
 108. **Target SDK 35 Edge-to-Edge Safe Inset Handling:** Raise `targetSdk` to 35 while properly handling
      `WindowInsetsCompat` and display cutouts around the OpenGL / MapLibre surface view.
 
+
+
+---
+
+# Phase 7 — the minimal 3D field app: live research model, heatmaps, memory, learning
+
+Seventh pass, against the goal:
+
+> An APK for a minimal 3D app with a live LLM that gives research-based suggestions for the
+> current GPS 10-mile radius, real-time constant heatmapping, persistent memory, a custom
+> heatmap of verified ginseng finds the app learns from, tracking of where you have been and
+> where you are, fully offline and battery-optimised, minimal but functional — with every
+> earlier recommendation entered as an idea candidate.
+
+Steps 1–4 (cue, measurements, the 7-row distribution, the tail, and three claims attacked
+with both versions kept) and the full idea pool are in [`docs/IDEA_CANDIDATES.md`](docs/IDEA_CANDIDATES.md).
+This section records what was built, what every evaluator found, and what is still open.
+
+## Baseline: what HEAD actually was
+
+Measured on a clean worktree of `7a3656d`, not on the working tree. (The first baseline
+attempt compiled the working tree I was already editing: a self-witness, caught and redone.)
+
+| Measured | Value |
+|---|---|
+| `./gradlew` on a fresh clone | not executable (mode `100644`) |
+| `assembleDebug` | **fails**: `validateSigningDebug` — `debug.keystore` is gitignored and absent |
+| Unit tests | 206 / 206 pass, including tests pinning the engines below |
+| UI | none reachable: `MainActivity` never calls `setContent` |
+| "Research" hotspots | 4 at fixed offsets from the caller, clamped into an NC box (~345 km for a caller at 40 N, 80 W), labelled live when any model text returned |
+| Heatmap | TPI and TWI computed and discarded; canopy "estimated" from aspect |
+| Database | `fallbackToDestructiveMigration()`; field-tested build was schema **1**, HEAD schema **4** with no migration: installing HEAD over the field build deletes every logged patch |
+| List converter | the U+001F separator had become a space: field-build readings unreadable, "Black cohosh" = two species |
+| EINCOL audit engine | negative control `val inertDelta = 0.0` — a literal that cannot fail |
+
+## Counting the pool
+
+`docs/IDEA_CANDIDATES.md` first carried a hand-typed tally: "124 new, 88 BUILD, 18 DEFER,
+14 REJECT". Counted from its own tables by script, it was **121 new: 93 BUILD, 17 DEFER,
+9 REJECT, 2 OPEN** — every typed number wrong. The earlier UPGRADES list was caught the same
+way in Phase 5. After the evaluators ran, seven more candidates they surfaced were added
+(section K): **128 new + 186 imported = 314; 98 BUILD, 19 DEFER, 9 REJECT, 2 OPEN**, counted.
+
+```
+python3 -c "import re,collections;t=open('docs/IDEA_CANDIDATES.md').read();r=re.findall(r'^\| (N\d{3}) \|.*\| ([0-9.]+) \| (\w+)',t,re.M);print(len(r),collections.Counter(d for *_,d in r))"
+```
+
+## What was built
+
+The architecture is the tail of the Step 2 distribution: **compute → annotate → witness → earn**.
+
+| Requirement | Built as | Files |
+|---|---|---|
+| Suggestions for the current 10-mile radius | On-device radius scan of the published six-factor model over z12 elevation (~31 m cells), smoothed maxima ≥ 800 m apart; protected land left out and counted | `research/RadiusScan.kt` |
+| Live, research-based model | Claude (official Java SDK: web search + strict submit tool whose `candidate_id` is an enum of the IDs sent, `pause_turn` loop, effort `medium`, server-side refusal fallback) or Gemini (REST, key in header, Google Search grounding). Bring-your-own-key, Keystore-encrypted, consent off by default | `research/ClaudeResearchClient.kt`, `GeminiResearchClient.kt`, `KeyVault.kt` |
+| "Research-based" that can be checked | Validator: unknown IDs dropped, citations kept only if this call's search retrieved them, coordinates and "legal to dig" sentences stripped | `research/ResearchValidator.kt` |
+| Privacy | The prompt carries the 0.1° cell, never the fix, a find or a candidate position | `ResearchRepository.buildRequest`, `SuggestionAssembler.coarseRegion` |
+| Suggestions follow you | Fresh fixes only; on-device refresh after 3 km or 12 h; model only when the auto policy allows | `research/ResearchTrigger.kt` |
+| Real-time heatmapping | Habitat raster (published model restored, learned weights once earned); GPU heatmaps for where you have been and for your finds; pushes keyed by what changed | `ui/map/FieldMap.kt`, `terrain/SuitabilityRasterizer.kt` |
+| Persistent memory | Room v5 with real migrations from 1 and 4 (field patches imported as LEGACY finds), tracks, finds, suggestion lifecycle driven by evidence (VISITED from the track, FOUND from a find), research runs with audit counts | `data/db/*`, `memory/FieldMemoryRepository.kt` |
+| Verified finds + learning | Verification computed from averaged fix accuracy, fix age and a 3-item ID checklist; learner refits the six weights and is adopted only if it beats the prior on held-out spatial blocks at the terrain's measured correlation range | `learn/FindVerifier.kt`, `learn/FindLearner.kt` |
+| Where you've been / are | Foreground service (type `location`, no background-location permission), filter with Doppler-speed and centroid rules, live dot | `field/TrackService.kt`, `field/TrackFilter.kt` |
+| Offline | Everything above runs from cached elevation; "Save 10 miles" prefetches ~175 elevation tiles and a basemap region; local fallback style when the basemap cannot load; platform-GPS fallback when Play services cannot deliver | `ui/OfflineArea.kt`, `ui/map/FieldMap.kt`, `field/LocationProvider.kt` |
+| Battery | Measured-input power policy (interval, batching with screen off, balanced when still, low/critical battery); map capped at 30 fps; 3D renders only when dirty; heavy scan once per 3 km | `field/PowerPolicy.kt` |
+| Minimal 3D UI | One screen, four buttons, three sheets; pitched 2.5D map; real 3D terrain as its own GL screen coloured by the habitat surface | `ui/MainScreen.kt`, `ui/Terrain3DView.kt` |
+
+Removed: the fabricating research, memory, Monte Carlo and "audit" engines, `GinsengTerraCore`
+(simulated LoRa telemetry), `FieldPowerManager` (invented battery hours), the `BuildConfig`
+key, the missing-keystore signing config, and unused CameraX, Coil and Navigation deps.
+
+### Rejected alternatives, recorded where they were rejected
+
+Let the model propose places and snap them to candidates (reintroduces unchecked coordinates);
+`BuildConfig` key (extractable from any APK); `androidx.security-crypto` (deprecated);
+`ACCESS_BACKGROUND_LOCATION` (a foreground-started location service does not need it); the 3D
+mesh over the map (blacks the screen, measured in Phase 5); ranking protected land last (last
+is still a recommendation); accuracy/2 as the track noise floor; sqrt(n) accuracy for averaged
+fixes (GNSS error is correlated); fixed 200 m held-out blocks; a space as the list separator;
+Play-services-only location; starting research from a stale last-known fix.
+
+## Step 5 — evaluators
+
+### Rung 1 — mutation (`tools/mutate.py`)
+
+38 mutations, each a literal edit that breaks one claimed property, run against the tests
+named for it; the harness refuses an edit that matches nothing (it did, twice, after a
+refactor moved the target: reported INVALID, not "killed").
+
+**First run: 30 / 34 killed.** Survivors, triaged by hand:
+
+| Mutant | Why it survived | Resolution |
+|---|---|---|
+| L1 adopt without the significance test | the random-finds control never reaches the +0.02 margin, so the p-value branch never ran | pure `decide()` + a one-lucky-cluster test → killed |
+| L2 judge the learner on its own training data | nothing checked that held-out finds were excluded from their own fit | fitter spy test → killed |
+| T2 no centroid window without speed | the walk-stop test tolerance (±25%) was a guess; the mutant measured **+23%** | tolerance tightened to ±10% (real: 903 m of 900) → killed |
+| L4 learning from one find | **equivalent**: `MIN_CLUSTERS = 5` already implies ≥ 5 finds; only the message differs | kept, stated |
+
+**Final: 37 / 38 killed**, L4 equivalent. (Table: `python3 tools/mutate.py`.)
+
+### Rung 3 — an independent model, shown the claim and not the reasoning
+
+Sent to Tavily's research model (a different vendor; the only non-Anthropic model reachable
+here) using this file's §7 auditor template. Its reply, in one sentence: *holding out finds
+that are 200 m apart does not break spatial dependence; the gain may be leakage; block at the
+terrain's autocorrelation range instead.*
+
+It disagreed with me, so it was tested rather than argued with (`LearnerLeakageTest`, real
+Boone terrain): finds placed at random with respect to habitat but clustered at 250–700 m.
+
+| | 200 m blocking | range blocking |
+|---|---|---|
+| Correlation range, measured on the scan | — | **900 m** |
+| Leaky finds adopted | **2 / 30** | **0 / 30** |
+| A real, spread-out signal adopted | — | **5 / 12** |
+
+The critic was right in direction; on this terrain the effect is modest, and it is closed:
+the learner now blocks at the range the radius scan measures from its own ground. The cost is
+power — about 4 in 10 for a moderate signal in 8 separate spots — stated below as open.
+
+### Rung 2 — execution against reality
+
+- **JVM, real data.** 290 unit tests pass (1 skipped: the full-scan timing test, which needs
+  a fixture built separately). They run on real Terrarium elevation (a committed 2×2-tile z12 Boone
+  mosaic), a real SQLite migration from schema-1 and schema-4 files (Robolectric), both
+  providers' wire formats through the real SDK against a mock server.
+- **Timing, the full 10-mile scan** (1536 × 1536 cells at 31 m, Haywood County, desktop JVM):
+  build 1.9 s → **1.05 s**, ranking 1.7 s → **1.3 s**, heap growth ~138 MB → **~104 MB**
+  after replacing two boxed sorts with one primitive sort proven order-identical
+  (`DescendingOrderTest`). Picks unchanged.
+- **Track filter, measured.** The first rule (accuracy/2) stored **456 of 600** fixes from a
+  standing phone. Without Doppler speed, the single-fix rule accrued **3,432 m** of phantom
+  track in ten minutes; the centroid rule: **0.0 m**. Walking with no speed: 988.9 m of 1,000.
+- **The APK on Android 14** (x86_64 emulator, no KVM, SwiftShader), fully offline because the
+  emulator cannot validate the host proxy's certificate — which made it a genuine offline test.
+  Seen on the screen, not inferred from logs:
+  - The one screen: GPS and offline chips, 3D and recentre buttons, the four-button bar; the
+    map centres on the first fix; the position dot is drawn.
+  - The offline research run on an image with **no Play services** (platform GPS only):
+    10 computed suggestions, "Research model is off", **1 place inside protected land left
+    out**; suggestion 1 at 35.5737, −82.982, the same point the desktop scan picks.
+  - The Suggest sheet: season line for North Carolina, provenance ("Computed on this phone ·
+    published weights"), the rationale with its strongest and weakest factor, the "Look for"
+    indicator species, and "Show on map", which moved the camera to suggestion 1 and drew its
+    marker.
+  - Found and fixed on the device in this pass: a layer-push race (a stationary phone gets one
+    position change; it arrived while the offline style was loading and nothing pushed the
+    layers again), elevation downloads retried on every frame while offline (now a 5-minute
+    negative cache), a tilted view whose footprint exceeded the tile cap drew no heatmap (now
+    drops resolution instead), and light system bars on a light-mode phone under the dark UI.
+  - **Not yet seen: the habitat heatmap.** Its computation starts on the device (logged: DEM
+    zoom 14, 20 of 24 tiles from cache), but after 13 minutes of interpreted CPU the raster
+    had not appeared. A completion log with its timing was added to tell "slow here" from
+    "drawn but invisible"; until it reports, this is open, not a success.
+
+### What the evaluators caught that I did not
+
+1. The offline map was **blank**: every layer was installed only when the remote style loaded
+   (device). Fixed with a local fallback style.
+2. With Play services' location down, the app **never got a fix** (device). Fixed with a
+   platform-GPS fallback; verified on an image with no Play services at all.
+3. Research ran from a **stale** last-known position ~3,500 km away, and **suggestions never
+   followed the user** when offline (device). Fixed by `ResearchTrigger`.
+4. Held-out blocks at 200 m **leak** (independent critic; measured 2/30 vs 0/30).
+5. Four tests that could not fail the thing they named (mutation survivors L1, L2, T2; L4 equivalent).
+6. The 3D mesh shader kept the ramp Phase 5 removed from the 2D map, under a comment saying
+   they matched (found while wiring the 3D view; now pinned stop-for-stop).
+7. My own tally of the idea pool (all four numbers wrong).
+
+### My errors along the way, recorded because the protocol says the first version is evidence
+
+- Baseline built from the working tree I was editing (self-witness); redone on a clean worktree.
+- `pkill -f <pattern>` matched its own shell, twice.
+- Predicted T2 would restore ~3 km of phantom track while standing; measured 0.0 m. I had
+  treated each check as an independent draw while the reference and the centroid are stable.
+  T2's real work is after each store, which the walk-stop test now covers.
+- Two test thresholds I guessed (±25%, "at least half") rather than derived; both replaced by
+  measured numbers.
+- Wrote an unused helper three times; removed each time.
+- Importing an old fixture script ran its download at import time; the new script is
+  self-contained.
+
+## Open — unfixed, and stated as open
+
+1. **No live model call has been made.** No API key was available here. Both providers' wire
+   formats are pinned against their documented shapes through the real SDK, and the SDK is
+   exercised on ART by an instrumented test (`app/src/androidTest`) — but the live services
+   accepting these exact requests is unverified until someone runs it with a key.
+2. **No real handset.** Battery drain, GNSS behaviour under canopy, GPU drivers for the 3D
+   view and thermal behaviour are all unmeasured. The emulator is x86_64 with a software GPU.
+3. **APK size 81 MB** (universal debug: four ABIs, R8 off). An arm64-only release with R8 would
+   be far smaller; R8 needs keep rules for Room, kotlinx-serialization and the SDK's Jackson
+   models, and a shrink mistake fails at runtime, so it is not done blind.
+4. **~104 MB heap** for the full scan on a desktop JVM. A low-end phone may run out; the scan
+   could be tiled.
+5. **Learning power ~42%** for a moderate signal in 8 separate spots under range blocking.
+   The gate prefers refusing to learning something false; users will wait longer to see it adopt.
+6. **The emulator has no hardware acceleration** (no KVM: every instruction is interpreted),
+   so its timings say nothing about a phone; the on-device research run took 933 s there
+   against ~2.4 s for the same scan on a desktop JVM.
+7. **Gemini citations are checked at domain level**, weaker than Claude's exact-URL witness,
+   because grounding returns redirect links; labelled in code.
+8. **Protected areas are still approximate boxes** (PAD-US: registry #107).
+9. The 3D terrain view has compiled and its matrices are unit-tested, but it has not been
+   seen rendering on a device in this phase.
+10. `FindLearner.MIN_FINDS` is redundant with `MIN_CLUSTERS` (mutant L4); kept for its message.
+11. The habitat heatmap has not yet been seen drawing on a device (Rung 2 above). Its
+    per-pixel computation is pinned on the JVM (`DrawnSurfaceTest`); the upload to the map
+    on Android is what is unverified.

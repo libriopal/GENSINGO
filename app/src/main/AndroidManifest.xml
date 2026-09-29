@@ -2,20 +2,22 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- PRD §9. Only what the stewardship workflows actually use.
-         Deliberately NOT requested (and absent from the previous prototype's superset):
-         ACCESS_BACKGROUND_LOCATION, FOREGROUND_SERVICE, POST_NOTIFICATIONS - GENSINGO
-         reads position while the digger is looking at the screen; it does not follow
-         anyone around. READ/WRITE_EXTERNAL_STORAGE - patch photos never leave app-private
-         storage. -->
+    <!-- Only what the app uses.
+         Track recording is a foreground service of type "location", started only by a tap
+         while the app is open, so the while-in-use grant covers it and
+         ACCESS_BACKGROUND_LOCATION is deliberately NOT requested. POST_NOTIFICATIONS lets the
+         recording notification (with its Stop button) show on API 33+.
+         READ/WRITE_EXTERNAL_STORAGE: not requested; everything stays in app-private storage. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.CAMERA" />
-    <!-- Map tiles only. Patch data is never transmitted (PRD §8.3 local-first default). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Map and elevation tiles; and, only after the user opts in with their own key, the
+         research model (coarse region + anonymised terrain numbers; never a fix or a find). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <uses-feature android:name="android.hardware.sensor.compass" android:required="false" />
 
@@ -43,6 +45,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".field.TrackService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -5,33 +5,34 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ginsengo.steward.AppContainer
 import com.ginsengo.steward.GensingoApp
-import com.ginsengo.steward.compliance.ComplianceStatus
-import com.ginsengo.steward.compliance.SeasonStatus
-import com.ginsengo.steward.data.db.GinsengPatch
-import com.ginsengo.steward.data.db.HabitatReadingRecord
+import com.ginsengo.steward.data.db.Find
+import com.ginsengo.steward.data.db.ResearchRun
+import com.ginsengo.steward.data.db.Suggestion
+import com.ginsengo.steward.data.db.TrackPoint
 import com.ginsengo.steward.field.FieldLocation
-import com.ginsengo.steward.field.FieldPowerManager
-import com.ginsengo.steward.geo.SlopeAspect
-import com.ginsengo.steward.prospect.GinsengLlmResearchEngine
-import com.ginsengo.steward.prospect.GinsengMonteCarloEngine
-import com.ginsengo.steward.prospect.ProspectSite
-import com.ginsengo.steward.prospect.Prospects
-import com.ginsengo.steward.prospect.GroundTruthVerdict
-import com.ginsengo.steward.prospect.ModelCalibrationFeedback
+import com.ginsengo.steward.field.FixAverager
+import com.ginsengo.steward.field.PowerPolicy
+import com.ginsengo.steward.field.TrackService
+import com.ginsengo.steward.learn.FindLearner
+import com.ginsengo.steward.research.Provider
+import com.ginsengo.steward.research.ResearchTrigger
+import com.ginsengo.steward.ui.map.MapLayerState
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlin.math.abs
-import kotlin.math.max
 
-/**
- * Shared field state: where we are, active prospecting tour, 3D terrain controls,
- * power profiles, and empirical post-tour survey retraining feedback loop.
- */
+/** The one screen's state: where you are, where you've been, what you found, what to try next. */
+@OptIn(ExperimentalCoroutinesApi::class)
 class FieldViewModel(app: Application) : AndroidViewModel(app) {
 
     val container: AppContainer = (app as GensingoApp).container
@@ -39,329 +40,219 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
     private val _location = MutableStateFlow<FieldLocation?>(null)
     val location: StateFlow<FieldLocation?> = _location.asStateFlow()
 
-    private val _compliance = MutableStateFlow<ComplianceStatus?>(null)
-    val compliance: StateFlow<ComplianceStatus?> = _compliance.asStateFlow()
+    private val _permission = MutableStateFlow(container.location.hasPermission())
+    val permission: StateFlow<Boolean> = _permission.asStateFlow()
 
-    private val _bearing = MutableStateFlow<Float?>(null)
-    val bearing: StateFlow<Float?> = _bearing.asStateFlow()
+    val tracking: StateFlow<TrackService.State> = TrackService.state
 
-    private val _permissionGranted = MutableStateFlow(container.location.hasPermission())
-    val permissionGranted: StateFlow<Boolean> = _permissionGranted.asStateFlow()
-
-    val patches: StateFlow<List<GinsengPatch>> =
-        container.database.patchDao().observeAll()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    val readings: StateFlow<List<HabitatReadingRecord>> =
-        container.database.habitatReadingDao().observeAll()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    // ------------------------------------------------------------- 3D Model State
-    private val _is3DModelOpen = MutableStateFlow(false)
-    val is3DModelOpen: StateFlow<Boolean> = _is3DModelOpen.asStateFlow()
-
-    fun toggle3DModel() {
-        _is3DModelOpen.value = !_is3DModelOpen.value
-    }
-
-    fun set3DModelOpen(open: Boolean) {
-        _is3DModelOpen.value = open
-    }
-
-    // ------------------------------------------------------------- Power Manager State
-    val powerStatus: StateFlow<FieldPowerManager.PowerStatus> =
-        container.powerManager.status
-
-    fun setPowerMode(mode: FieldPowerManager.PowerMode) {
-        container.powerManager.setPowerMode(mode)
-    }
-
-    // ------------------------------------------------------------- Active Tour & Footstep Tracking
-    private val _isTourActive = MutableStateFlow(false)
-    val isTourActive: StateFlow<Boolean> = _isTourActive.asStateFlow()
-
-    private val _tourTarget = MutableStateFlow<ProspectSite?>(null)
-    val tourTarget: StateFlow<ProspectSite?> = _tourTarget.asStateFlow()
-
-    private val _tourStartTime = MutableStateFlow(0L)
-    val tourStartTime: StateFlow<Long> = _tourStartTime.asStateFlow()
-
-    private val _tourElapsedSeconds = MutableStateFlow(0L)
-    val tourElapsedSeconds: StateFlow<Long> = _tourElapsedSeconds.asStateFlow()
-
-    private val _tourBreadcrumbs = MutableStateFlow<List<FieldLocation>>(emptyList())
-    val tourBreadcrumbs: StateFlow<List<FieldLocation>> = _tourBreadcrumbs.asStateFlow()
-
-    private val _tourDistanceMeters = MutableStateFlow(0.0)
-    val tourDistanceMeters: StateFlow<Double> = _tourDistanceMeters.asStateFlow()
-
-    private val _tourStepCount = MutableStateFlow(0)
-    val tourStepCount: StateFlow<Int> = _tourStepCount.asStateFlow()
-
-    private val _tourElevationGainM = MutableStateFlow(0.0)
-    val tourElevationGainM: StateFlow<Double> = _tourElevationGainM.asStateFlow()
-
-    // ------------------------------------------------------------- Post-Tour Survey & Feedback Dialogs
-    private val _isSurveyDialogOpen = MutableStateFlow(false)
-    val isSurveyDialogOpen: StateFlow<Boolean> = _isSurveyDialogOpen.asStateFlow()
-
-    private val _lastCalibrationFeedback = MutableStateFlow<ModelCalibrationFeedback?>(null)
-    val lastCalibrationFeedback: StateFlow<ModelCalibrationFeedback?> = _lastCalibrationFeedback.asStateFlow()
-
-    fun openSurveyDialog() {
-        _isSurveyDialogOpen.value = true
-    }
-
-    fun closeSurveyDialog() {
-        _isSurveyDialogOpen.value = false
-    }
-
-    fun clearCalibrationFeedback() {
-        _lastCalibrationFeedback.value = null
-    }
-
-    fun startTour(target: ProspectSite?) {
-        _tourTarget.value = target
-        _isTourActive.value = true
-        _tourStartTime.value = System.currentTimeMillis()
-        _tourElapsedSeconds.value = 0L
-        _tourBreadcrumbs.value = _location.value?.let { listOf(it) } ?: emptyList()
-        _tourDistanceMeters.value = 0.0
-        _tourStepCount.value = 0
-        _tourElevationGainM.value = 0.0
-
-        // Start timer loop
-        viewModelScope.launch {
-            while (_isTourActive.value) {
-                kotlinx.coroutines.delay(1000L)
-                if (_isTourActive.value) {
-                    _tourElapsedSeconds.value = (System.currentTimeMillis() - _tourStartTime.value) / 1000L
-                }
-            }
-        }
-    }
-
-    fun pauseTour() {
-        _isTourActive.value = false
-    }
-
-    fun stopTour() {
-        _isTourActive.value = false
-        _tourStartTime.value = 0L
-        _tourElapsedSeconds.value = 0L
-    }
-
-    fun completeTourAndOpenSurvey() {
-        _isTourActive.value = false
-        _isSurveyDialogOpen.value = true
-    }
-
-    fun setTargetHotspot(target: ProspectSite?) {
-        _tourTarget.value = target
-    }
-
+    // ------------------------------------------------------------ where you've been
     /**
-     * Submits a post-tour field survey, persists the ground returns to Room DB,
-     * updates the Bayesian posterior parameters, runs Monte Carlo convergence,
-     * and presents the calibration feedback card.
+     * History is read once; points recorded after launch stream in from the live query. A
+     * single all-time query re-run on every insert would re-read the whole history each batch,
+     * which is exactly the battery cost the track batching exists to avoid.
      */
-    fun submitTourSurvey(
-        verdict: GroundTruthVerdict,
-        plantCount: Int,
-        prongs3Count: Int,
-        prongs4Count: Int,
-        rootsDug: Int,
-        observedCanopyPct: Double,
-        soilType: String,
-        slopeAspectAgreement: Boolean,
-        companionsObserved: List<String>,
-        notes: String
-    ) {
-        val curLoc = _location.value
-        val lat = curLoc?.lat ?: _tourTarget.value?.lat ?: 35.50
-        val lng = curLoc?.lng ?: _tourTarget.value?.lon ?: -82.95
-        val elev = curLoc?.altitudeM ?: _tourTarget.value?.elev?.toDouble() ?: 920.0
-        val slope = _tourTarget.value?.slope ?: 22.0
-        val aspect = _tourTarget.value?.aspect ?: 45.0
-        val county = "Haywood"
+    private val sessionStart = System.currentTimeMillis()
+    private val history = MutableStateFlow<List<TrackPoint>>(emptyList())
+    val track: StateFlow<List<TrackPoint>> =
+        combine(history, container.memory.trackSince(sessionStart)) { old, new -> old + new }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-        viewModelScope.launch {
-            // 1. Record Observation Entity
-            val obsType = when (verdict) {
-                GroundTruthVerdict.CONFIRMED_FINDS -> "CONFIRMED_PATCH"
-                GroundTruthVerdict.ABSENCE_SURVEY -> "ABSENCE_SURVEY"
-                GroundTruthVerdict.SIGNS_OF_HARVEST -> "SIGNS_OF_HARVEST"
-                GroundTruthVerdict.FALSE_POSITIVE_HABITAT -> "FALSE_POSITIVE"
-            }
+    val finds: StateFlow<List<Find>> = container.memory.finds()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-            container.learningEngine.recordObservation(
-                county = county,
-                lat = lat,
-                lng = lng,
-                observationType = obsType,
-                elevationMeters = elev,
-                slopePercent = slope,
-                aspectDegrees = aspect,
-                canopyCoverage = observedCanopyPct / 100.0,
-                soilMoistureScore = if (soilType.contains("Loam", true)) 0.90 else 0.45,
-                companionSpecies = companionsObserved,
-                observedEsi = if (verdict == GroundTruthVerdict.CONFIRMED_FINDS) 0.92 else 0.40,
-                notes = notes
-            )
+    // ------------------------------------------------------------ research
+    val latestRun: StateFlow<ResearchRun?> = container.database.researchRunDao().observeLatest()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-            // 2. If roots harvested, record verified harvest polygon
-            if (rootsDug > 0) {
-                container.learningEngine.recordHarvestPolygon(
-                    name = "Harvest Zone: ${verdict.label}",
-                    county = county,
-                    geoJsonCoordinates = "[[${lng - 0.0003}, ${lat - 0.0003}], [${lng + 0.0003}, ${lat + 0.0003}]]",
-                    rootsDug = rootsDug,
-                    dominantSlopeDeg = slope,
-                    dominantAspectDeg = aspect,
-                    meanElevationMeters = elev,
-                    soilRating = 0.90,
-                    companionNotes = companionsObserved.joinToString()
-                )
-            }
+    val suggestions: StateFlow<List<Suggestion>> = latestRun
+        .flatMapLatest { run -> run?.let { container.database.suggestionDao().observeRun(it.id) } ?: flowOf(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-            // 3. Persist Prospecting Tour Entity
-            val tourEntity = com.ginsengo.steward.data.db.ProspectingTourEntity(
-                county = county,
-                targetHotspotName = _tourTarget.value?.landform ?: "Surveyed Hotspot",
-                targetLat = lat,
-                targetLng = lng,
-                startTimeMs = _tourStartTime.value,
-                endTimeMs = System.currentTimeMillis(),
-                totalDistanceMeters = _tourDistanceMeters.value,
-                totalSteps = _tourStepCount.value,
-                elevationGainMeters = _tourElevationGainM.value,
-                breadcrumbJson = "[]",
-                surveyCompleted = true,
-                notes = notes
-            )
-            container.tours.insert(tourEntity)
+    val verdict: StateFlow<FindLearner.Verdict?> = container.research.verdict
+    val busy: StateFlow<String?> = container.research.busy
 
-            // 4. Compute Learned Bayesian Priors & Variance Reduction
-            val updatedPriors = container.learningEngine.getLearnedPriors(county)
-            val variancePct = ((1.0 - updatedPriors.varianceReductionFactor) * 100).toInt().coerceAtLeast(12)
+    // ------------------------------------------------------------ view state
+    private val _layers = MutableStateFlow(MapLayerState())
+    val layers: StateFlow<MapLayerState> = _layers.asStateFlow()
+    fun setLayers(s: MapLayerState) { _layers.value = s }
 
-            // 5. Run Monte Carlo stochastic forecast
-            val mc = GinsengMonteCarloEngine.runSimulation(
-                GinsengMonteCarloEngine.MonteCarloInput(
-                    centerLat = lat,
-                    centerLng = lng,
-                    countyName = county,
-                    baseElevationMeters = elev,
-                    baseSlopeDegrees = slope,
-                    baseAspectDegrees = aspect,
-                    iterations = 600
-                )
-            )
-            val newConf = (mc.pViableHabitat * 100).toInt().coerceIn(70, 98)
+    private val _view3d = MutableStateFlow(false)
+    val view3d: StateFlow<Boolean> = _view3d.asStateFlow()
+    fun setView3d(on: Boolean) { _view3d.value = on }
 
-            // 6. Generate LLM synthesis report
-            val synthesis = if (verdict == GroundTruthVerdict.CONFIRMED_FINDS) {
-                "Empirical ground-truth returns verified $plantCount wild ginseng plants ($prongs3Count 3-prong, $prongs4Count 4-prong) at ${elev.toInt()}m on a ${slope.toInt()}° slope. The Bayesian prior variance has tightened by $variancePct%, confirming base-rich cove conditions."
-            } else {
-                "Absence/False-positive ground return recorded. The model has downweighted high-solar slope exposures and recalibrated optimal moisture thresholds to avoid dry shale pockets."
-            }
+    private val _focus = MutableStateFlow<Suggestion?>(null)
+    /** The suggestion the camera should fly to. */
+    val focus: StateFlow<Suggestion?> = _focus.asStateFlow()
+    fun focusOn(s: Suggestion?) { _focus.value = s }
 
-            _lastCalibrationFeedback.value = ModelCalibrationFeedback(
-                countyName = county,
-                priorVarianceReductionPct = variancePct,
-                newConfidenceScore = newConf,
-                confidenceDeltaPct = if (verdict == GroundTruthVerdict.CONFIRMED_FINDS) 8 else -4,
-                priorElevationMeters = elev.toInt(),
-                priorSlopeDegrees = slope.toInt(),
-                totalConfirmedFinds = updatedPriors.confirmedFinds,
-                llmSynthesis = synthesis
-            )
-
-            _isSurveyDialogOpen.value = false
-            stopTour()
-        }
-    }
+    private val _toast = MutableStateFlow<String?>(null)
+    val toast: StateFlow<String?> = _toast.asStateFlow()
+    fun consumeToast() { _toast.value = null }
 
     init {
-        startCompass()
-        if (_permissionGranted.value) startLocation()
+        viewModelScope.launch {
+            history.value = container.database.trackDao().before(sessionStart)
+        }
+    }
+
+    // ------------------------------------------------------------ live location
+    private var liveJob: Job? = null
+    private var firstFixHandled = false
+
+    /** Called from onStart: the live position runs only while the map is on screen. */
+    fun onVisible() {
+        if (!container.location.hasPermission() || liveJob != null) return
+        val plan = PowerPolicy.plan(
+            tracking = false, screenOn = true, batteryPct = null, charging = false,
+            speedMps = null, stillForMs = 0L,
+        )
+        liveJob = viewModelScope.launch {
+            container.location.updates(plan)
+                .catch { /* permission revoked mid-session: keep the last fix */ }
+                .collect { onFix(it) }
+        }
+        container.location.lastKnown { it?.let(::onFix) }
+    }
+
+    /** Called from onStop. Tracking, if on, carries on in its own service. */
+    fun onHidden() {
+        liveJob?.cancel()
+        liveJob = null
     }
 
     fun onPermissionResult(granted: Boolean) {
-        _permissionGranted.value = granted
-        if (granted) {
-            startLocation()
-            container.location.lastKnown { it?.let(::applyLocation) }
-        }
+        _permission.value = granted
+        if (granted) onVisible()
     }
 
-    private var locationStarted = false
+    private var refreshJob: Job? = null
 
-    private fun startLocation() {
-        if (locationStarted) return
-        locationStarted = true
-        viewModelScope.launch {
-            container.location.updates()
-                .catch { /* permission revoked mid-session; keep the last fix on screen */ }
-                .collect { applyLocation(it) }
-        }
-        container.location.lastKnown { it?.let(::applyLocation) }
-    }
-
-    private fun startCompass() {
-        viewModelScope.launch {
-            container.compass.bearings().catch { }.collect { _bearing.value = it }
-        }
-    }
-
-    private fun applyLocation(loc: FieldLocation) {
-        val prev = _location.value
+    private fun onFix(loc: FieldLocation) {
         _location.value = loc
-        val manual = container.reference.stateByCode(container.settings.manualStateCode)
-        _compliance.value = container.compliance.statusAt(loc.lat, loc.lng, manualState = manual)
+        burst?.add(loc)
+        if (refreshJob?.isActive == true) return
+        refreshJob = viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val last = container.database.researchRunDao().latest()
+            val refresh = ResearchTrigger.shouldRefresh(
+                last?.centerLat, last?.centerLng, last?.time, loc.lat, loc.lng, loc.timestamp, now,
+            )
+            val modelOk = container.research.shouldAutoRun(loc.lat, loc.lng, powerAllowsAuto(), now)
+            when {
+                refresh || modelOk -> container.research.run(loc.lat, loc.lng, allowModel = modelOk)
+                !firstFixHandled && now - loc.timestamp <= ResearchTrigger.FRESH_MS &&
+                        container.database.findDao().all().any { it.verification == "VERIFIED" } ->
+                    // Same area as last time and there is something to learn from: reload the
+                    // scan so the learned layer is ready. With no verified finds this scan was
+                    // pure cost at every launch (seen on the Phase 7 device run), so it is skipped.
+                    container.research.scanAround(loc.lat, loc.lng)?.let { container.research.learn(it) }
+            }
+            if (now - loc.timestamp <= ResearchTrigger.FRESH_MS) firstFixHandled = true
+        }
+    }
 
-        // Live Footstep & Tour Tracking updates
-        if (_isTourActive.value) {
-            if (prev != null) {
-                val deltaDist = Prospects.distanceMetres(prev.lat, prev.lng, loc.lat, loc.lng)
-                if (deltaDist >= 1.5) { // Filter GPS micro-jitter
-                    _tourDistanceMeters.value += deltaDist
-                    _tourStepCount.value += max(1, (deltaDist / 0.76).toInt())
+    private fun powerAllowsAuto(): Boolean {
+        val bm = getApplication<Application>().getSystemService(android.os.BatteryManager::class.java)
+        val pct = bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)?.takeIf { it in 0..100 }
+        return PowerPolicy.plan(false, true, pct, bm?.isCharging == true, null, 0L).allowAutoResearch
+    }
 
-                    if (prev.altitudeM != null && loc.altitudeM != null && loc.altitudeM > prev.altitudeM) {
-                        _tourElevationGainM.value += (loc.altitudeM - prev.altitudeM)
-                    }
+    // ------------------------------------------------------------ actions
+    fun toggleTracking() {
+        val ctx = getApplication<Application>()
+        if (tracking.value.recording) TrackService.stop(ctx) else TrackService.start(ctx)
+    }
 
-                    _tourBreadcrumbs.value = _tourBreadcrumbs.value + loc
-                }
-            } else {
-                _tourBreadcrumbs.value = listOf(loc)
+    fun research() {
+        val here = _location.value ?: run { _toast.value = "Waiting for a GPS fix"; return }
+        viewModelScope.launch { container.research.run(here.lat, here.lng) }
+    }
+
+    fun markNotFound(s: Suggestion) {
+        viewModelScope.launch { container.memory.markNotFound(s.id, System.currentTimeMillis()) }
+    }
+
+    // ------------------------------------------------------------ marking a find
+    private var burst: MutableList<FieldLocation>? = null
+    private val _burstCount = MutableStateFlow(BURST_IDLE)
+    /** Fixes collected so far while "Hold still" runs; [BURST_IDLE] or [BURST_DONE] otherwise. */
+    val burstCount: StateFlow<Int> = _burstCount.asStateFlow()
+
+    /** Averages fixes for up to [FIND_AVERAGE_MS] (or until [stopBurst]). */
+    fun startBurst() {
+        burst = mutableListOf<FieldLocation>().also { l -> _location.value?.let { l += it } }
+        _burstCount.value = burst!!.size
+        viewModelScope.launch {
+            val until = System.currentTimeMillis() + FIND_AVERAGE_MS
+            while (burst != null && System.currentTimeMillis() < until) {
+                delay(500)
+                burst?.let { _burstCount.value = it.size }
+            }
+            if (burst != null) _burstCount.value = BURST_DONE
+        }
+    }
+
+    fun stopBurst(): FixAverager.Result? {
+        val fixes = burst.orEmpty()
+        burst = null
+        _burstCount.value = BURST_IDLE
+        return FixAverager.average(fixes.ifEmpty { listOfNotNull(_location.value) })
+    }
+
+    fun saveFind(fix: FixAverager.Result, plantCount: Int, maxProngs: Int?, note: String, checks: Int) {
+        viewModelScope.launch {
+            val f = container.memory.addFind(fix, System.currentTimeMillis(), plantCount, maxProngs, note, checks)
+            _toast.value = if (f.verification == "VERIFIED") "Verified find saved" else "Saved as unverified"
+            container.research.scanAround(f.lat, f.lng)?.let { container.research.learn(it) }
+        }
+    }
+
+    // ------------------------------------------------------------ settings
+    data class ResearchSettings(
+        val provider: Provider,
+        val model: String,
+        val hasKey: Boolean,
+        val consent: Boolean,
+        val auto: Boolean,
+    )
+
+    private fun readSettings() = container.settings.let { st ->
+        ResearchSettings(st.provider, st.model(st.provider), container.keys.has(st.provider), st.researchConsent, st.autoResearch)
+    }
+
+    private val _settings = MutableStateFlow(readSettings())
+    val settings: StateFlow<ResearchSettings> = _settings.asStateFlow()
+
+    fun setProvider(p: Provider) { container.settings.provider = p; _settings.value = readSettings() }
+    fun setKey(key: String) { container.keys.set(container.settings.provider, key); _settings.value = readSettings() }
+    fun setModel(model: String) { container.settings.setModel(container.settings.provider, model); _settings.value = readSettings() }
+    fun setConsent(on: Boolean) { container.settings.researchConsent = on; _settings.value = readSettings() }
+    fun setAuto(on: Boolean) { container.settings.autoResearch = on; _settings.value = readSettings() }
+
+    /** Season and state line from the sourced regulation data, for the Suggest sheet. */
+    fun complianceLine(): String? {
+        val loc = _location.value ?: return null
+        val s = container.compliance.statusAt(loc.lat, loc.lng)
+        val state = s.state ?: return "No state ginseng rules on file for this position."
+        return "${state.stateName} · ${s.season.label} · ${s.seasonDetail}"
+    }
+
+    fun saveOffline() {
+        val here = _location.value ?: run { _toast.value = "Waiting for a GPS fix"; return }
+        viewModelScope.launch {
+            val n = OfflineArea.prefetchDem(container.demTiles, here.lat, here.lng) { done, total ->
+                _toast.value = "Saving elevation $done/$total"
+            }
+            _toast.value = "Saved $n elevation tiles for 10 miles around you. Saving the map…"
+            OfflineArea.downloadBasemap(getApplication(), com.ginsengo.steward.ui.map.DARK_STYLE, here.lat, here.lng) {
+                _toast.value = it
             }
         }
     }
 
-    /** Re-evaluates compliance after the user picks a state by hand in Settings. */
-    fun refreshCompliance() {
-        _location.value?.let(::applyLocation)
+    companion object {
+        const val FIND_AVERAGE_MS = 20_000L
+        const val BURST_IDLE = -1
+        const val BURST_DONE = -2
     }
-
-    /**
-     * Elevation for the habitat model.
-     *
-     * GPS altitude is preferred over the bundled DEM, which inverts what the PRD assumed.
-     * The reason is that it is a real measurement at the digger's actual position, where
-     * the bundled grid is an ~11 km cell average - and elevation is the ONLY model input
-     * with a non-zero weight that is not derived from the checklist, so it is the one place
-     * a genuine measurement is worth having.
-     */
-    fun elevationFor(loc: FieldLocation): Pair<Double?, Boolean> {
-        loc.altitudeM?.let { return it to true }
-        val dem = container.dem?.elevation(loc.lat, loc.lng)
-        return dem to (dem != null)
-    }
-
-    fun slopeAspectFor(loc: FieldLocation): SlopeAspect? =
-        container.dem?.slopeAspect(loc.lat, loc.lng)
-
-    fun seasonAccent(): SeasonStatus = _compliance.value?.season ?: SeasonStatus.UNKNOWN
 }

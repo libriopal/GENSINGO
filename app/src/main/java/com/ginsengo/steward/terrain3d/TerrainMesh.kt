@@ -79,6 +79,7 @@ object TerrainMesh {
         tpiRadiusM: Double,
         exaggeration: Float = 1.0f,
         withSuitability: Boolean = true,
+        weights: DoubleArray = GinsengSuitability.PRIOR_WEIGHTS,
     ): Mesh {
         val g = mosaic.grid
         val halo = mosaic.haloPx
@@ -129,16 +130,19 @@ object TerrainMesh {
 
                 suit[j * n + i] = if (!withSuitability) 0f else {
                     val (slopeDeg, aspectDeg) = TerrainMath.slopeAspect(g, xi, yi)
-                    GinsengSuitability.score(
-                        heatLoadRaw = TerrainMath.heatLoadIndex(
-                            mosaic.latAtRow(yi), slopeDeg, aspectDeg
+                    GinsengSuitability.weighted(
+                        GinsengSuitability.factorValues(
+                            heatLoadRaw = TerrainMath.heatLoadIndex(
+                                mosaic.latAtRow(yi), slopeDeg, aspectDeg
+                            ),
+                            tpiMeters = analysis.tpi(xi, yi, tpiRadiusCells),
+                            twi = analysis.twiAt(xi, yi),
+                            slopeDeg = slopeDeg,
+                            curvature = TerrainMath.profileCurvature(g, xi, yi),
+                            elevationM = e,
                         ),
-                        tpiMeters = analysis.tpi(xi, yi, tpiRadiusCells),
-                        twi = analysis.twiAt(xi, yi),
-                        slopeDeg = slopeDeg,
-                        curvature = TerrainMath.profileCurvature(g, xi, yi),
-                        elevationM = e,
-                    ).score.toFloat()
+                        weights,
+                    ).toFloat()
                 }
             }
         }

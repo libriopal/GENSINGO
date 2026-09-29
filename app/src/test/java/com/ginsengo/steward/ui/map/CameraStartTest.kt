@@ -90,24 +90,22 @@ class MapLayerDefaultsTest {
     fun everyDrawableLayerIsOnByDefault() {
         val s = MapLayerState()
         assertTrue("hillshade should default on", s.hillshade)
-        assertTrue("height overlay should default on", s.heightOverlay)
-        assertTrue("habitat heatmap should default on", s.habitatHeatmap)
-        assertTrue("pitched relief should default on", s.pitchedRelief)
+        assertTrue("habitat heatmap should default on", s.habitat)
+        assertTrue("where-I've-been heatmap should default on", s.visited)
+        assertTrue("finds heatmap should default on", s.finds)
+        assertTrue("suggestions should default on", s.suggestions)
+        // The one deliberate exception: the visited heatmap already summarises the track.
+        assertFalse("track line defaults off", s.trackLine)
     }
 
-    /** The one exception, and it is not a preference: it blacked out the map. */
+    /**
+     * The GL mesh over the map blacked the screen (a SurfaceView punches through the
+     * TextureView map). It used to be a field pinned to false; now the option does not exist
+     * at all, and the real 3D terrain is its own screen. Pin the absence.
+     */
     @Test
-    fun theGlMeshStaysOffBecauseItBlanksTheMap() {
-        assertFalse(
-            "terrainMesh must stay false - a SurfaceView punches through the TextureView map",
-            MapLayerState().terrainMesh,
-        )
-    }
-
-    @Test
-    fun defaultsActuallyRequireElevationAndTilt() {
-        val s = MapLayerState()
-        assertTrue("defaults must pull the DEM, or the layers are decorative", s.needsDem)
-        assertTrue("pitched relief must tilt the camera", s.wantsTilt)
+    fun thereIsNoMeshOverTheMapOption() {
+        val fields = MapLayerState::class.java.declaredFields.map { it.name.lowercase() }
+        assertFalse("a mesh-over-map layer option reappeared: $fields", fields.any { "mesh" in it })
     }
 }

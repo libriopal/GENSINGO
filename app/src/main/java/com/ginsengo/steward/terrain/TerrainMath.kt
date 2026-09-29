@@ -282,7 +282,7 @@ object TerrainMath {
         val acc = DoubleArray(n) { 1.0 }   // each cell contributes its own area (in cells)
 
         // Process cells from highest to lowest so upslope is always resolved first.
-        val order = (0 until n).sortedByDescending { g.z[it] }
+        val order = descendingOrder(g.z)
 
         val dx = intArrayOf(1, 1, 0, -1, -1, -1, 0, 1)
         val dy = intArrayOf(0, 1, 1, 1, 0, -1, -1, -1)
@@ -322,6 +322,26 @@ object TerrainMath {
             twi[i] = ln(aPerWidth / tanB)
         }
         return twi
+    }
+
+    /**
+     * Indices of [v] from highest to lowest value, ties in ascending index order: exactly the
+     * order `(0 until n).sortedByDescending { v[it] }` gives, without boxing.
+     *
+     * The boxed form cost ~16 bytes per cell plus the list: measured at ~138 MB of heap growth
+     * for the full 10-mile scan (1536 x 1536 cells), which is past the whole heap of a low-end
+     * phone. Each key packs an order-preserving transform of the float's bits (inverted, for
+     * descending) above the index, so one primitive sort does the job. Float.compare's order
+     * is kept, including -0.0 < 0.0 and NaN highest; DescendingOrderTest pins the equivalence.
+     */
+    fun descendingOrder(v: FloatArray): IntArray {
+        val keys = LongArray(v.size) { i ->
+            val bits = java.lang.Float.floatToIntBits(v[i])
+            val ascending = if (bits < 0) bits xor 0x7fffffff else bits
+            (ascending.inv().toLong() shl 32) or (i.toLong() and 0xffffffffL)
+        }
+        keys.sort()
+        return IntArray(v.size) { (keys[it] and 0xffffffffL).toInt() }
     }
 
     // ---------------------------------------------------------------- shaping helpers

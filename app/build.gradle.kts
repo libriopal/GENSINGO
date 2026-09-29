@@ -33,16 +33,9 @@ android {
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
-        buildConfigField("String", "GEMINI_API_KEY", "\"${System.getenv("GEMINI_API_KEY") ?: ""}\"")
     }
 
     signingConfigs {
-        create("debugConfig") {
-            storeFile = file("${rootDir}/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
         if (hasReleaseSigning) {
             create("release") {
                 storeFile = rootProject.file(releaseStorePath!!)
@@ -67,7 +60,6 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debugConfig")
         }
     }
 
@@ -93,6 +85,10 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "/META-INF/DEPENDENCIES"
+            // Jackson and the JSON-schema generator (pulled in by the Anthropic SDK) each ship
+            // these; Android packages one copy of each or none.
+            excludes += "/META-INF/versions/9/module-info.class"
+            excludes += "/META-INF/{LICENSE,LICENSE.txt,NOTICE,NOTICE.txt,INDEX.LIST}"
         }
     }
 
@@ -101,7 +97,21 @@ android {
     // app copies it out to filesDir on first run rather than relying on no-compress.
     androidResources { noCompress += listOf("onnx", "bin") }
 
-    testOptions { unitTests { isReturnDefaultValues = true } }
+    // Room writes each schema version here; MigrationSqlTest reads it to prove the hand-written
+    // migration SQL is exactly what Room itself generates.
+    sourceSets["test"].assets.srcDir("$projectDir/schemas")
+
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+            // Robolectric (Room migration test) needs merged resources and assets.
+            isIncludeAndroidResources = true
+        }
+    }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -119,8 +129,6 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
-    implementation(libs.androidx.navigation.compose)
-
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
@@ -130,16 +138,16 @@ dependencies {
 
     implementation(libs.play.services.location)
 
-    implementation(libs.androidx.camera.core)
-    implementation(libs.androidx.camera.camera2)
-    implementation(libs.androidx.camera.lifecycle)
-    implementation(libs.androidx.camera.view)
-
-    implementation(libs.coil.compose)
     implementation(libs.maplibre.android.sdk)
+
+    implementation(libs.anthropic.java)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.okhttp.mockwebserver)
 }

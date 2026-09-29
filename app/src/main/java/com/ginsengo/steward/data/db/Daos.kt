@@ -53,104 +53,74 @@ interface HabitatReadingDao {
 }
 
 @Dao
-interface GinsengObservationDao {
+interface TrackDao {
 
-    @Query("SELECT * FROM ginseng_observations ORDER BY timestamp DESC")
-    fun observeAll(): Flow<List<GinsengObservationEntity>>
+    @Insert
+    suspend fun insertAll(points: List<TrackPoint>)
 
-    @Query("SELECT * FROM ginseng_observations WHERE county = :county ORDER BY timestamp DESC")
-    fun observeByCounty(county: String): Flow<List<GinsengObservationEntity>>
+    @Query("SELECT * FROM track_points WHERE time >= :since ORDER BY time")
+    fun observeSince(since: Long): Flow<List<TrackPoint>>
 
-    @Query("SELECT * FROM ginseng_observations WHERE county = :county ORDER BY timestamp DESC")
-    suspend fun getByCounty(county: String): List<GinsengObservationEntity>
+    @Query("SELECT * FROM track_points WHERE sessionId = :session ORDER BY time DESC LIMIT 1")
+    suspend fun lastOf(session: String): TrackPoint?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(observation: GinsengObservationEntity)
+    @Query("SELECT * FROM track_points WHERE time < :before ORDER BY time")
+    suspend fun before(before: Long): List<TrackPoint>
 
-    @Query("SELECT COUNT(*) FROM ginseng_observations")
-    suspend fun count(): Int
-
-    @Query("SELECT COUNT(*) FROM ginseng_observations WHERE observationType = 'CONFIRMED_PATCH'")
-    suspend fun confirmedCount(): Int
-
-    @Delete
-    suspend fun delete(observation: GinsengObservationEntity)
-}
-
-@Dao
-interface MonteCarloRecordDao {
-
-    @Query("SELECT * FROM monte_carlo_logs ORDER BY timestamp DESC")
-    fun observeAll(): Flow<List<MonteCarloRecordEntity>>
-
-    @Query("SELECT * FROM monte_carlo_logs WHERE bufferCounty = :county ORDER BY timestamp DESC LIMIT 1")
-    suspend fun getLatestForCounty(county: String): MonteCarloRecordEntity?
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(record: MonteCarloRecordEntity)
-
-    @Query("SELECT COUNT(*) FROM monte_carlo_logs")
+    @Query("SELECT COUNT(*) FROM track_points")
     suspend fun count(): Int
 }
 
 @Dao
-interface RadiusBufferDao {
+interface FindDao {
 
-    @Query("SELECT * FROM radius_buffers WHERE id = 'active_buffer'")
-    fun observeActive(): Flow<RadiusBufferEntity?>
+    @Query("SELECT * FROM finds ORDER BY time DESC")
+    fun observeAll(): Flow<List<Find>>
 
-    @Query("SELECT * FROM radius_buffers WHERE id = 'active_buffer'")
-    suspend fun getActive(): RadiusBufferEntity?
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun saveActive(buffer: RadiusBufferEntity)
-}
-
-@Dao
-interface HarvestPolygonDao {
-
-    @Query("SELECT * FROM verified_harvest_polygons ORDER BY timestamp DESC")
-    fun observeAll(): Flow<List<VerifiedHarvestPolygonEntity>>
-
-    @Query("SELECT * FROM verified_harvest_polygons WHERE county = :county ORDER BY timestamp DESC")
-    fun observeByCounty(county: String): Flow<List<VerifiedHarvestPolygonEntity>>
-
-    @Query("SELECT * FROM verified_harvest_polygons WHERE county = :county ORDER BY timestamp DESC")
-    suspend fun getByCounty(county: String): List<VerifiedHarvestPolygonEntity>
-
-    @Query("SELECT * FROM verified_harvest_polygons ORDER BY timestamp DESC")
-    suspend fun getAll(): List<VerifiedHarvestPolygonEntity>
+    @Query("SELECT * FROM finds ORDER BY time DESC")
+    suspend fun all(): List<Find>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(polygon: VerifiedHarvestPolygonEntity)
-
-    @Delete
-    suspend fun delete(polygon: VerifiedHarvestPolygonEntity)
-
-    @Query("SELECT COUNT(*) FROM verified_harvest_polygons")
-    suspend fun count(): Int
-
-    @Query("SELECT SUM(estimatedRootsHarvested) FROM verified_harvest_polygons WHERE county = :county")
-    suspend fun totalRootsDugInCounty(county: String): Int?
-}
-
-@Dao
-interface ProspectingTourDao {
-    @Query("SELECT * FROM prospecting_tours ORDER BY startTimeMs DESC")
-    fun observeAll(): Flow<List<ProspectingTourEntity>>
-
-    @Query("SELECT * FROM prospecting_tours WHERE county = :county ORDER BY startTimeMs DESC")
-    fun observeByCounty(county: String): Flow<List<ProspectingTourEntity>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(tour: ProspectingTourEntity)
+    suspend fun upsert(find: Find)
 
     @Update
-    suspend fun update(tour: ProspectingTourEntity)
+    suspend fun updateAll(finds: List<Find>)
 
-    @Query("SELECT * FROM prospecting_tours WHERE id = :id LIMIT 1")
-    suspend fun getById(id: String): ProspectingTourEntity?
+    @Delete
+    suspend fun delete(find: Find)
+}
 
-    @Query("SELECT COUNT(*) FROM prospecting_tours")
-    suspend fun count(): Int
+@Dao
+interface SuggestionDao {
+
+    @Query("SELECT * FROM suggestions WHERE runId = :runId ORDER BY rank")
+    fun observeRun(runId: String): Flow<List<Suggestion>>
+
+    @Query("SELECT * FROM suggestions ORDER BY createdAt DESC")
+    suspend fun all(): List<Suggestion>
+
+    @Query("SELECT * FROM suggestions WHERE status IN ('NEW', 'VISITED')")
+    suspend fun open(): List<Suggestion>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(items: List<Suggestion>)
+
+    @Query("UPDATE suggestions SET status = :status, statusTime = :time WHERE id = :id")
+    suspend fun setStatus(id: String, status: String, time: Long)
+}
+
+@Dao
+interface ResearchRunDao {
+
+    @Query("SELECT * FROM research_runs ORDER BY time DESC LIMIT 1")
+    fun observeLatest(): Flow<ResearchRun?>
+
+    @Query("SELECT * FROM research_runs ORDER BY time DESC LIMIT 1")
+    suspend fun latest(): ResearchRun?
+
+    @Query("SELECT * FROM research_runs WHERE provider IS NOT NULL AND status = 'OK' ORDER BY time DESC LIMIT 1")
+    suspend fun latestModelRun(): ResearchRun?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(run: ResearchRun)
 }

@@ -99,6 +99,39 @@ object GinsengSuitability {
         curvature: Double,
         elevationM: Double,
     ): Breakdown {
+        val f = factorValues(heatLoadRaw, tpiMeters, twi, slopeDeg, curvature, elevationM)
+        val factors = Factor.entries.associateWith { f[it.ordinal] }
+        return Breakdown(weighted(f, PRIOR_WEIGHTS), factors)
+    }
+
+    /**
+     * The published weights as an array in [Factor] order. This is the prior the learner
+     * starts from and the weights every surface uses until held-out finds justify others.
+     */
+    val PRIOR_WEIGHTS: DoubleArray
+        get() = Factor.entries.map { it.weight }.toDoubleArray()
+
+    /** Weighted sum of factor values, clamped to 0..1. */
+    fun weighted(f: DoubleArray, w: DoubleArray): Double {
+        var s = 0.0
+        for (i in f.indices) s += f[i] * w[i]
+        return s.coerceIn(0.0, 1.0)
+    }
+
+    /**
+     * The six factor values, each 0..1, in [Factor] order. Split out of [score] so the
+     * learner, the radius scan and the heatmap all read the SAME factors: a learner fitted
+     * on one definition of "position on slope" and drawn with another would be learning
+     * the difference between two functions, not anything about ginseng.
+     */
+    fun factorValues(
+        heatLoadRaw: Double,
+        tpiMeters: Double,
+        twi: Double,
+        slopeDeg: Double,
+        curvature: Double,
+        elevationM: Double,
+    ): DoubleArray {
 
         // 1. Heat load. NE coolest -> best. Cooler is monotonically better here; there is
         //    no "too cool" end in the eastern deciduous forest.
@@ -123,16 +156,8 @@ object GinsengSuitability {
         //    obviously-wrong ground rather than ranking good ground.
         val elev = TerrainMath.band(elevationM, 250.0, 1200.0, 250.0)
 
-        val factors = mapOf(
-            Factor.HEAT_LOAD to heat,
-            Factor.SLOPE_POSITION to position,
-            Factor.WETNESS to wetness,
-            Factor.SLOPE_ANGLE to steep,
-            Factor.CURVATURE to cove,
-            Factor.ELEVATION to elev,
-        )
-        val s = factors.entries.sumOf { it.value * it.key.weight }
-        return Breakdown(s.coerceIn(0.0, 1.0), factors)
+        // Order is Factor.entries order; pinned by GinsengSuitabilityTest.
+        return doubleArrayOf(heat, position, wetness, steep, cove, elev)
     }
 
     /** Field-facing label for a score. Deliberately hedged: this is a hint, not a find. */

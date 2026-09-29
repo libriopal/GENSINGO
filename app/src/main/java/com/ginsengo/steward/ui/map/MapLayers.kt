@@ -1,92 +1,45 @@
 package com.ginsengo.steward.ui.map
 
-import com.ginsengo.steward.terrain.EsiMatrixModel
-
 /** Which basemap is underneath everything. */
 enum class Basemap(val label: String, val attribution: String) {
-    /** OpenFreeMap dark vector — the default field look (PRD §4.1). */
+    /** OpenFreeMap dark vector: the default, and the one the offline download saves. */
     DARK("Dark", "© OpenFreeMap © OpenStreetMap contributors"),
 
     /**
-     * USGS imagery. Public domain, no key, no usage cap, and legal to ship.
-     * Esri World Imagery was the obvious alternative and was rejected: Esri's terms
-     * require an ArcGIS licence and restrict redistribution in a commercial mobile app,
-     * so it cannot go into a Play release. USGS covers the whole contiguous US, which
-     * includes all 19 approved ginseng states.
+     * USGS topographic: contours, which a digger reads terrain from directly. Public domain,
+     * no key, legal to ship. (Esri imagery was rejected earlier on licence grounds.)
      */
-    SATELLITE("Satellite", "USGS National Map — public domain"),
-
-    /** USGS topographic — contours, which a digger reads terrain from directly. */
     TOPO("Topo", "USGS National Map — public domain"),
     ;
 
     val tileUrl: String?
         get() = when (this) {
-            DARK -> null // vector style, not a raster template
-            SATELLITE -> "https://basemap.nationalmap.gov/arcgis/rest/services/" +
-                    "USGSImageryOnly/MapServer/tile/{z}/{y}/{x}"
+            DARK -> null
             TOPO -> "https://basemap.nationalmap.gov/arcgis/rest/services/" +
                     "USGSTopo/MapServer/tile/{z}/{y}/{x}"
         }
 
-    /** USGS serves no tiles past z16; asking for more yields 404s and blank ground. */
     val maxZoom: Int get() = if (this == DARK) 20 else 16
 }
 
 /**
- * Everything the user can toggle on the map.
+ * The layers the user can switch. Five surfaces, three of which are the "heatmaps":
  *
- * Two distinct things are on offer here and they are deliberately not merged:
+ *  - [habitat]: the terrain model under the published weights, or under learned weights once
+ *    held-out finds have justified them. Computed on the phone per viewport.
+ *  - [visited]: where you have been, a GPU heatmap of stored track points.
+ *  - [finds]: your finds, a GPU heatmap; verified finds weigh more than unverified ones.
  *
- *  - [pitchedRelief] tilts the camera and deepens hillshade so relief reads as depth. It is
- *    flat geometry that looks three-dimensional, and it costs nothing.
- *  - [terrainMesh] is an actual 3D triangle mesh, drawn in a separate GL surface layered
- *    over the map, because MapLibre Android exposes no terrain API at any published version
- *    (verified against the 13.6.1 artifact: no Terrain class, no setTerrain; raster-dem is
- *    wired only into hillshade).
- *
- * Keeping them separate matters because the mesh can fail in ways the relief cannot — no
- * elevation tiles, no GL context, or a camera reconstruction that disagrees with the map —
- * and when it does, the app should fall back to something honest rather than to nothing.
- */
-
-/**
- * Which layers are drawn.
- *
- * Configures the GIS Visual Field Map Layer Matrix:
- *  - ESI Composite and isolated environmental layers (Elevation DEM, Slope/Aspect, Hardwood Canopy, Soil/Flora).
- *  - 10-mile radius geospatial buffer zone and candidate hotspot vectors.
+ * plus the track line and the suggestion markers. Everything defaults on except the track
+ * line, which the visited heatmap already summarises.
  */
 data class MapLayerState(
     val basemap: Basemap = Basemap.DARK,
+    val habitat: Boolean = true,
+    val visited: Boolean = true,
+    val finds: Boolean = true,
+    val trackLine: Boolean = false,
+    val suggestions: Boolean = true,
     val hillshade: Boolean = true,
-    val heightOverlay: Boolean = true,
-    val habitatHeatmap: Boolean = true,
-    val pitchedRelief: Boolean = true,
-    val matrixMode: EsiMatrixModel.LayerMode = EsiMatrixModel.LayerMode.COMPOSITE_ESI,
-    val weights: EsiMatrixModel.MatrixWeights = EsiMatrixModel.MatrixWeights(),
-    val show10MileBuffer: Boolean = true,
-    val showHotspots: Boolean = true,
-    val showCandidatePaths: Boolean = true,
-    val showVerifiedHarvestZones: Boolean = true,
-    val isCircleDrawMode: Boolean = false,
-    /**
-     * Permanently false. The GL mesh overlay blacked out the map once the map moved to a
-     * TextureView; see LayerPanel for why the two cannot coexist. Kept as a field rather than
-     * deleted so any saved state that still says `true` is ignored instead of crashing.
-     */
-    val terrainMesh: Boolean = false,
-    val heightOpacity: Float = 0.55f,
-    val heatmapOpacity: Float = 0.75f,
-    val meshOpacity: Float = 0.85f,
-    /** Vertical multiplier for the mesh. 1.0 is true scale. */
-    val meshExaggeration: Float = 1.5f,
-    /** Colour the mesh by the ginseng forecast instead of by elevation. */
-    val meshForecastTint: Boolean = false,
-) {
-    /** True when anything needs the elevation tile source loaded. */
-    val needsDem: Boolean get() = hillshade || heightOverlay || pitchedRelief || terrainMesh
-
-    /** The mesh needs a tilted camera to read as 3D at all. */
-    val wantsTilt: Boolean get() = pitchedRelief || terrainMesh
-}
+    val heatmapOpacity: Float = 0.7f,
+)

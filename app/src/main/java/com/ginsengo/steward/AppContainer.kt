@@ -2,26 +2,24 @@ package com.ginsengo.steward
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import com.ginsengo.steward.compliance.ComplianceEngine
 import com.ginsengo.steward.data.db.AppDatabase
 import com.ginsengo.steward.data.reference.ReferenceRepository
-import com.ginsengo.steward.field.CompassProvider
-import com.ginsengo.steward.field.FieldPowerManager
 import com.ginsengo.steward.field.LocationProvider
-import com.ginsengo.steward.field.PhotoStore
-import com.ginsengo.steward.geo.DemGrid
-import com.ginsengo.steward.habitat.HabitatEngine
-import com.ginsengo.steward.prospect.GinsengMemoryAndLearningEngine
-import com.ginsengo.steward.prospect.GinsengTerraCore
+import com.ginsengo.steward.memory.FieldMemoryRepository
+import com.ginsengo.steward.research.KeyVault
+import com.ginsengo.steward.research.Provider
+import com.ginsengo.steward.research.ResearchRepository
 import com.ginsengo.steward.terrain.DemTileStore
 
 /**
  * Manual dependency container.
  *
- * Hilt was the obvious choice and was rejected: it adds a kapt/KSP processor and a plugin
- * to a build whose single hardest requirement is that it actually produces an APK, in
- * exchange for wiring roughly a dozen singletons that have no scopes and no test doubles.
- * The annotation processor is the cost; the graph is not complex enough to be the benefit.
+ * Hilt was the obvious choice and was rejected: it adds an annotation processor and a plugin
+ * to a build whose hardest requirement is that it actually produces an APK, to wire about a
+ * dozen singletons with no scopes and no test doubles.
  */
 class AppContainer(val context: Context) {
 
@@ -29,38 +27,34 @@ class AppContainer(val context: Context) {
     val reference: ReferenceRepository by lazy { ReferenceRepository(context) }
     val compliance: ComplianceEngine by lazy { ComplianceEngine(reference) }
     val location: LocationProvider by lazy { LocationProvider(context) }
-    val compass: CompassProvider by lazy { CompassProvider(context) }
-    val photos: PhotoStore by lazy { PhotoStore(context) }
     val settings: SettingsStore by lazy { SettingsStore(context) }
-
-    val powerManager: FieldPowerManager by lazy { FieldPowerManager(context) }
-    val learningEngine: GinsengMemoryAndLearningEngine by lazy { GinsengMemoryAndLearningEngine(context, database) }
-    val terraCore: GinsengTerraCore by lazy { GinsengTerraCore(context = context) }
-    val tours by lazy { database.tourDao() }
-
-    val habitat: HabitatEngine? by lazy { HabitatEngine.load(context) }
+    val keys: KeyVault by lazy { KeyVault(context) }
 
     /**
-     * Streaming elevation tiles for the map's relief, height overlay and habitat heatmap.
-     *
-     * Deliberately separate from [dem], the bundled offline grid. The bundled grid feeds
-     * the habitat MODEL and must keep working with no signal; this one feeds the map's
-     * VISUALISATION and streams like the basemap does, caching what it fetches so ground
-     * already walked stays available offline.
+     * Streaming elevation tiles, cached to app-private storage so ground already seen (or
+     * saved for offline) keeps working with no signal. Feeds the heatmap, the radius scan
+     * and the 3D view.
      */
     val demTiles: DemTileStore by lazy { DemTileStore(context) }
 
-    /**
-     * The coarse elevation grid is optional: if the asset is absent the app still works,
-     * it just leans on GPS altitude. Loading it is deferred because it is the largest
-     * asset and most sessions never open habitat analysis.
-     */
-    val dem: DemGrid? by lazy {
-        runCatching { context.assets.open(DEM_ASSET).use { DemGrid.read(it) } }.getOrNull()
+    val memory: FieldMemoryRepository by lazy { FieldMemoryRepository(database) }
+
+    val research: ResearchRepository by lazy {
+        ResearchRepository(
+            db = database,
+            dem = demTiles,
+            compliance = compliance,
+            settings = settings,
+            keys = keys,
+            isOnline = ::isOnline,
+        )
     }
 
-    companion object {
-        const val DEM_ASSET = "geo/dem_grid.bin"
+    fun isOnline(): Boolean {
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return false
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 }
 
@@ -74,19 +68,36 @@ class SettingsStore(context: Context) {
         get() = prefs.getString(KEY_STATE, null)
         set(v) = prefs.edit().putString(KEY_STATE, v).apply()
 
-    /** PRD §8.3: coordinates are blurred in list view until explicitly revealed. */
-    var blurCoordinates: Boolean
-        get() = prefs.getBoolean(KEY_BLUR, true)
-        set(v) = prefs.edit().putBoolean(KEY_BLUR, v).apply()
+    var provider: Provider
+        get() = runCatching { Provider.valueOf(prefs.getString(KEY_PROVIDER, null) ?: "") }
+            .getOrDefault(Provider.CLAUDE)
+        set(v) = prefs.edit().putString(KEY_PROVIDER, v.name).apply()
+
+    fun model(p: Provider): String = prefs.getString("$KEY_MODEL.${p.name}", null)
+        ?.takeIf { it.isNotBlank() } ?: p.defaultModel
+
+    fun setModel(p: Provider, model: String) =
+        prefs.edit().putString("$KEY_MODEL.${p.name}", model.trim()).apply()
 
     /**
-     * Phase 3 opt-in cloud sync. Present so Settings can state the app's actual posture
-     * rather than implying a capability; it is false and unchangeable in this build.
+     * Consent to send the coarse region, state rules, anonymised terrain numbers and outcome
+     * counts to the chosen provider. OFF by default: until the user turns it on, research runs
+     * entirely on the phone and nothing is sent anywhere.
      */
-    val cloudSyncEnabled: Boolean get() = false
+    var researchConsent: Boolean
+        get() = prefs.getBoolean(KEY_CONSENT, false)
+        set(v) = prefs.edit().putBoolean(KEY_CONSENT, v).apply()
+
+    /** Refresh suggestions automatically after moving 5 km (only with consent, battery > 30%). */
+    var autoResearch: Boolean
+        get() = prefs.getBoolean(KEY_AUTO, true)
+        set(v) = prefs.edit().putBoolean(KEY_AUTO, v).apply()
 
     private companion object {
         const val KEY_STATE = "manual_state_code"
-        const val KEY_BLUR = "blur_coordinates"
+        const val KEY_PROVIDER = "research_provider"
+        const val KEY_MODEL = "research_model"
+        const val KEY_CONSENT = "research_consent"
+        const val KEY_AUTO = "auto_research"
     }
 }

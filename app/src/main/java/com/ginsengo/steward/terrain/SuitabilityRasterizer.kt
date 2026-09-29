@@ -37,16 +37,15 @@ object SuitabilityRasterizer {
      * @param tpiRadiusM   neighbourhood radius for the position index, in METRES
      * @param minScore     scores below this render fully transparent, so the map stays
      *                     readable instead of being tinted edge to edge
-     * @param matrixMode   active ESI layer mode to render
-     * @param weights      custom environmental layer blending weights
+     * @param weights      factor weights in [GinsengSuitability.Factor] order: the published
+     *                     prior, or learned weights once held-out finds have justified them
      */
     suspend fun rasterise(
         mosaic: DemTileStore.Mosaic,
         outSize: Int,
         tpiRadiusM: Double,
         minScore: Double = 0.35,
-        matrixMode: EsiMatrixModel.LayerMode = EsiMatrixModel.LayerMode.COMPOSITE_ESI,
-        weights: EsiMatrixModel.MatrixWeights = EsiMatrixModel.MatrixWeights(),
+        weights: DoubleArray = GinsengSuitability.PRIOR_WEIGHTS,
     ): Raster = withContext(Dispatchers.Default) {
         val g = mosaic.grid
         val halo = mosaic.haloPx
@@ -64,34 +63,24 @@ object SuitabilityRasterizer {
         // every viewport the user pans through.
         val analysis = TerrainAnalysis.of(mosaic, withWetness = true)
 
-        val cellsPerOutPx = iw.toDouble() / outSize
-        val superSample = when {
-            cellsPerOutPx >= 4.0 -> 4
-            cellsPerOutPx >= 2.0 -> 3
-            cellsPerOutPx >= 1.0 -> 2
-            else -> 1
-        }
+        // ---- ADAPTIVE ANTIALIASING -------------------------------------------------
+        // The ratio between one output pixel and one DEM cell decides which artefact is
+        // about to appear, and they need opposite fixes:
+        //
+        //   many DEM cells per output pixel  -> point-sampling ALIASES. Ridge lines beat
+        //       against the sample grid and the heatmap shimmers as the camera moves.
+        //       Fix: supersample and average, so each output pixel integrates the cells it
+        //       actually covers.
+        //   many output pixels per DEM cell  -> point-sampling looks BLOCKY, and blockiness
+        //       here reads as false precision: a chunky square implies the model knows the
+        //       terrain to that edge. Fix: bilinear interpolation between cell centres.
+        //
+        // So the supersample factor is derived from the ratio rather than fixed, and the
+        // sub-cell case falls through to interpolation.
+        val superSample = superSampleFor(iw.toDouble() / outSize)
 
-        val px = IntArray(outSize * outSize)
-
-        for (oy in 0 until outSize) {
-            for (ox in 0 until outSize) {
-                var acc = 0.0
-                var n = 0
-                for (sy in 0 until superSample) {
-                    for (sx in 0 until superSample) {
-                        val fx = (ox + (sx + 0.5) / superSample) / outSize
-                        val fy = (oy + (sy + 0.5) / superSample) / outSize
-                        val gx = ix0 + fx * iw
-                        val gy = iy0 + fy * ih
-                        acc += scoreAt(g, analysis, gx, gy, mosaic, tpiRadiusCells, superSample == 1, matrixMode, weights)
-                        n++
-                    }
-                }
-                val s = if (n == 0) 0.0 else acc / n
-                px[oy * outSize + ox] = colourFor(s, minScore)
-            }
-        }
+        val scores = scorePixels(g, analysis, mosaic, ix0, iy0, iw, ih, outSize, superSample, tpiRadiusCells, weights)
+        val px = IntArray(outSize * outSize) { colourFor(scores[it], minScore) }
 
         val bmp = Bitmap.createBitmap(outSize, outSize, Bitmap.Config.ARGB_8888)
         bmp.setPixels(px, 0, outSize, 0, 0, outSize, outSize)
@@ -111,6 +100,66 @@ object SuitabilityRasterizer {
         )
     }
 
+    /**
+     * The score behind every output pixel, before colouring: exactly what [rasterise] draws.
+     * Split out so the drawn surface itself is testable on the JVM (android.graphics.Bitmap
+     * is a stub there). The Phase 7 regression was precisely a drawn surface that no longer
+     * matched the model its tests pinned; testing this function closes that gap.
+     */
+    fun scoreGrid(
+        mosaic: DemTileStore.Mosaic,
+        outSize: Int,
+        tpiRadiusM: Double,
+        weights: DoubleArray = GinsengSuitability.PRIOR_WEIGHTS,
+    ): DoubleArray {
+        val g = mosaic.grid
+        val halo = mosaic.haloPx
+        val iw = g.w - 2 * halo
+        val ih = g.h - 2 * halo
+        val tpiRadiusCells = (tpiRadiusM / g.cellSizeM).roundToInt().coerceIn(1, 60)
+        val analysis = TerrainAnalysis.of(mosaic, withWetness = true)
+        return scorePixels(g, analysis, mosaic, halo, halo, iw, ih, outSize,
+            superSampleFor(iw.toDouble() / outSize), tpiRadiusCells, weights)
+    }
+
+    private fun superSampleFor(cellsPerOutPx: Double): Int = when {
+        cellsPerOutPx >= 4.0 -> 4
+        cellsPerOutPx >= 2.0 -> 3
+        cellsPerOutPx >= 1.0 -> 2
+        else -> 1
+    }
+
+    private fun scorePixels(
+        g: TerrainMath.Grid,
+        analysis: TerrainAnalysis,
+        mosaic: DemTileStore.Mosaic,
+        ix0: Int, iy0: Int, iw: Int, ih: Int,
+        outSize: Int,
+        superSample: Int,
+        tpiRadiusCells: Int,
+        weights: DoubleArray,
+    ): DoubleArray {
+        val out = DoubleArray(outSize * outSize)
+        for (oy in 0 until outSize) {
+            for (ox in 0 until outSize) {
+                var acc = 0.0
+                var n = 0
+                for (sy in 0 until superSample) {
+                    for (sx in 0 until superSample) {
+                        val fx = (ox + (sx + 0.5) / superSample) / outSize
+                        val fy = (oy + (sy + 0.5) / superSample) / outSize
+                        val gx = ix0 + fx * iw
+                        val gy = iy0 + fy * ih
+                        acc += scoreAt(g, analysis, gx, gy, mosaic, tpiRadiusCells, superSample == 1, weights)
+                        n++
+                    }
+                }
+                out[oy * outSize + ox] = if (n == 0) 0.0 else acc / n
+            }
+        }
+        return out
+    }
+
     private fun scoreAt(
         g: TerrainMath.Grid,
         analysis: TerrainAnalysis,
@@ -118,8 +167,7 @@ object SuitabilityRasterizer {
         mosaic: DemTileStore.Mosaic,
         tpiRadiusCells: Int,
         interpolate: Boolean,
-        matrixMode: EsiMatrixModel.LayerMode = EsiMatrixModel.LayerMode.COMPOSITE_ESI,
-        weights: EsiMatrixModel.MatrixWeights = EsiMatrixModel.MatrixWeights(),
+        weights: DoubleArray,
     ): Double {
         val xi = gx.toInt().coerceIn(1, g.w - 2)
         val yi = gy.toInt().coerceIn(1, g.h - 2)
@@ -137,51 +185,17 @@ object SuitabilityRasterizer {
             g[xi, yi].toDouble()
         }
 
-        return when (matrixMode) {
-            EsiMatrixModel.LayerMode.COMPOSITE_ESI -> {
-                val sElev = EsiMatrixModel.computeElevationScore(elev)
-                val sSlope = EsiMatrixModel.computeSlopeAspectScore(slopeDeg, aspectDeg)
-                // Canopy estimate: coves & north slopes retain dense 78-84% hardwood cover
-                val canopyEst = if (aspectDeg in 315.0..360.0 || aspectDeg in 0.0..90.0) 82.0 else 68.0
-                val sCanopy = EsiMatrixModel.computeCanopyScore(canopyEst)
-                // Soil estimate: concave terrain (curv > 0) with low TPI (toe slopes/coves)
-                val concavity = (curv * 20.0).coerceIn(0.2, 1.0)
-                val drainage = if (slopeDeg > 4.0 && slopeDeg < 35.0) 0.88 else 0.40
-                val sSoil = EsiMatrixModel.computeSoilCompanionScore(concavity, drainage)
-
-                val baseScore = (sElev * weights.normalizedElevation +
-                        sSlope * weights.normalizedSlopeAspect +
-                        sCanopy * weights.normalizedCanopy +
-                        sSoil * weights.normalizedSoil).toDouble()
-
-                if (weights.normalizedLunarSolarShade > 0f) {
-                    val lon = lonOfCol(mosaic, gx)
-                    val sAstro = EsiMatrixModel.computeLunarSolarShadeScore(lat, lon, slopeDeg, aspectDeg)
-                    (baseScore + sAstro * weights.normalizedLunarSolarShade).coerceIn(0.0, 1.0)
-                } else {
-                    baseScore.coerceIn(0.0, 1.0)
-                }
-            }
-            EsiMatrixModel.LayerMode.ELEVATION_DEM -> {
-                EsiMatrixModel.computeElevationScore(elev)
-            }
-            EsiMatrixModel.LayerMode.SLOPE_ASPECT -> {
-                EsiMatrixModel.computeSlopeAspectScore(slopeDeg, aspectDeg)
-            }
-            EsiMatrixModel.LayerMode.CANOPY_OVERSTORY -> {
-                val canopyEst = if (aspectDeg in 315.0..360.0 || aspectDeg in 0.0..90.0) 82.0 else 65.0
-                EsiMatrixModel.computeCanopyScore(canopyEst)
-            }
-            EsiMatrixModel.LayerMode.SOIL_COMPANION -> {
-                val concavity = (curv * 20.0).coerceIn(0.2, 1.0)
-                val drainage = if (slopeDeg > 4.0 && slopeDeg < 35.0) 0.88 else 0.40
-                EsiMatrixModel.computeSoilCompanionScore(concavity, drainage)
-            }
-            EsiMatrixModel.LayerMode.LUNAR_SOLAR_SHADE -> {
-                val lon = lonOfCol(mosaic, gx)
-                EsiMatrixModel.computeLunarSolarShadeScore(lat, lon, slopeDeg, aspectDeg)
-            }
-        }
+        return GinsengSuitability.weighted(
+            GinsengSuitability.factorValues(
+                heatLoadRaw = hl,
+                tpiMeters = tpi,
+                twi = wet,
+                slopeDeg = slopeDeg,
+                curvature = curv,
+                elevationM = elev,
+            ),
+            weights,
+        )
     }
 
     private fun bilinear(a: DoubleArray, w: Int, h: Int, x: Double, y: Double): Double {
@@ -232,7 +246,7 @@ object SuitabilityRasterizer {
      * tools/check_palette.py. Alpha still ramps with the score, so the strongest ground is the
      * brightest AND most opaque and the basemap stays legible everywhere else.
      */
-    private val RAMP = intArrayOf(
+    internal val RAMP = intArrayOf(
         0x041E1A, // 0.00  deep forest, nearly the base colour
         0x0B4D3A, // 0.25  shaded cove
         0x148F5B, // 0.50  emerald

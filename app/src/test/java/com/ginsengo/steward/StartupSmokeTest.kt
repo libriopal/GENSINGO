@@ -124,13 +124,7 @@ class StartupSmokeTest {
     @Test
     fun theDefaultLayerStateIsCoherentWithTheWorkItImplies() {
         val s = MapLayerState()
-        assertTrue("layers are on, so the DEM must be requested", s.needsDem)
-        assertTrue("pitched relief is on, so the camera must tilt", s.wantsTilt)
-        assertTrue(
-            "the GL mesh must stay off - it punches through the TextureView map",
-            !s.terrainMesh,
-        )
-        assertTrue("opacities must be usable", s.heightOpacity in 0.1f..1f)
+        assertTrue("the habitat layer is on, so first paint asks for elevation", s.habitat)
         assertTrue("opacities must be usable", s.heatmapOpacity in 0.1f..1f)
     }
 
