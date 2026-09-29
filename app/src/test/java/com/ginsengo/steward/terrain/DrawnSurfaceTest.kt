@@ -36,6 +36,20 @@ class DrawnSurfaceTest {
         }
     }
 
+    /**
+     * Scoring each DEM cell once (the Phase 7 speed-up) must not change a single output bit,
+     * with and without a halo, at every supersample factor.
+     */
+    @Test
+    fun scoringEachCellOnceChangesNoPixel() {
+        val m = mosaic.copy(haloPx = 64)
+        for ((src, out) in listOf(mosaic to 96, mosaic to 200, mosaic to 400, m to 150, m to 300)) {
+            val fast = SuitabilityRasterizer.scoreGrid(src, out, 700.0, prior)
+            val slow = SuitabilityRasterizer.scoreGrid(src, out, 700.0, prior, memoise = false)
+            assertTrue("out=$out halo=${src.haloPx} differs", fast.contentEquals(slow))
+        }
+    }
+
     /** Each factor alone draws a non-flat surface: none of them is a constant stand-in. */
     @Test
     fun eachFactorAloneIsAMeasuredSurface() {

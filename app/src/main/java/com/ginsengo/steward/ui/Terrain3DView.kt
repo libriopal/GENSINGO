@@ -137,7 +137,7 @@ fun Terrain3DView(
             suggestions.forEach { s ->
                 mark(s.lat, s.lng, if (s.provenance == Suggestion.PROVENANCE_MODEL) Color(0xFF00FF88) else Color(0xFF8FA89A), 14f, false)
             }
-            finds.forEach { f -> mark(f.lat, f.lng, Color(0xFFFFB02E), 8f, f.verification == "VERIFIED") }
+            finds.forEach { f -> mark(f.lat, f.lng, Color(0xFFFFB02E), 8f, true) }
             mark(cLat, cLng, Color(0xFFE6F4EC), 10f, true)
         }
     }

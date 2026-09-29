@@ -71,15 +71,16 @@ abstract class AppDatabase : RoomDatabase() {
         )
 
         /**
-         * Patches logged by the older app become finds, marked LEGACY: they are shown on the
-         * finds map, and never learned from, because no accuracy or identification checks
-         * were recorded with them. The patch rows themselves are left in place.
+         * Patches logged by the older app become finds, confirmed like any other: the user's
+         * field data is treated as true and accurate (UserFinds), so they are drawn at full
+         * weight and learned from. `sourcePatchId` records where each came from; the patch
+         * rows themselves are left in place.
          */
         const val IMPORT_PATCHES =
             "INSERT OR IGNORE INTO `finds` (`id`, `lat`, `lng`, `accuracyM`, `fixCount`, `fixTime`, " +
                 "`time`, `plantCount`, `maxProngs`, `note`, `checks`, `verification`, `sourcePatchId`) " +
                 "SELECT 'patch-' || `id`, `lat`, `lng`, NULL, 0, NULL, `lastVisitedDate`, `plantCount`, " +
-                "NULL, `name` || CASE WHEN `notes` = '' THEN '' ELSE ' - ' || `notes` END, 0, 'LEGACY', `id` " +
+                "NULL, `name` || CASE WHEN `notes` = '' THEN '' ELSE ' - ' || `notes` END, 0, 'VERIFIED', `id` " +
                 "FROM `ginseng_patches`"
 
         private fun upgradeTo5(db: SupportSQLiteDatabase) {

@@ -19,7 +19,7 @@ track, or where any find is (`docs/PLAY_DATA_SAFETY.md`).
 | Button | What it does |
 |---|---|
 | **Track** | Records where you walk, screen off, until you stop it (foreground service; no background-location permission). Battery policy: interval, batching and accuracy from measured battery, charging, screen and movement. |
-| **Find** | Hold still while fixes average, confirm three identification checks, save. A find is **verified** only if the averaged fix is ≤ 20 m, fresh, and all three checks hold; otherwise it is saved unverified and never learned from. |
+| **Find** | Hold still while fixes average, add plants, prongs and a note, save. **Your finds are treated as true and accurate:** every one is drawn at full weight and learned from, whatever the GPS reported. The measured accuracy is kept with it as information, never as a filter. |
 | **Suggest** | Places worth walking inside 10 miles. Always computed on the phone; annotated by Claude or Gemini (web-searched, sources kept only if retrieved in that call) when you allow it. Refreshes itself after you move 3 km. |
 | **Layers** | Heatmaps, basemap, the learner's verdict, "Save 10 miles around me" for offline use, and research-model settings. |
 
@@ -32,7 +32,7 @@ recentre.
 |---|---|
 | **Habitat** (green) | The published six-factor terrain model below, computed per viewport on the phone. Switches to learned weights only after they beat the published ones on held-out finds. |
 | **Where I've been** (blue) | GPU heatmap of your recorded track. |
-| **My finds** (amber) | GPU heatmap of your finds; verified ones weigh most. |
+| **My finds** (amber) | GPU heatmap of your finds, including patches logged in the older app, all at full weight. |
 
 ### Suggestions that cannot invent places
 
@@ -42,7 +42,7 @@ recentre.
    only admits those IDs. It can rank and explain; it cannot add or move a place.
 3. **Witness** — citations survive only if the model's own search retrieved them in this
    call; coordinates and "legal to dig" sentences are stripped from its prose.
-4. **Earn** — your verified finds refit the model's weights, adopted only if they rank
+4. **Earn** — your finds (all of them, imported patches included) refit the model's weights, adopted only if they rank
    held-out finds better than the published weights, holding out whole blocks at the
    distance this terrain stops resembling itself (measured by the scan), with an exact
    sign-flip test. It needs finds in 5 separate spots before it can learn anything.
@@ -136,7 +136,7 @@ from rather than typed in beside it.
 | Elevation grid | VERIFIED | NASA SRTM 90 m, sampled once at build time to a 0.1° grid |
 | Protected-area boundaries | **APPROXIMATE** | Bounding polygons. They over-cover and may warn outside the real unit. |
 | Habitat suitability score | RESEARCH-GRADE ESTIMATE | 235-byte linear baseline graph |
-| Your patches and readings | PROTOTYPE | Entered by you, unverified |
+| Your finds, patches and readings | VERIFIED (by you) | Entered by you and treated as true and accurate: learned from and drawn at full weight |
 
 **State season closing dates.** FWS publishes only that harvest season *starts* in September
 in all 19 approved states; it does not publish per-state end dates. GENSINGO therefore shows
@@ -147,7 +147,7 @@ says *"confirm with \<agency\>"*. It will not show you a closing date it cannot 
 
 The only habitat score the app shows is the six-factor terrain model above: expert weights,
 not a fitted species distribution model, labelled as a research-grade estimate. Your
-verified finds can replace those weights, but only after held-out finds prove the learned
+finds can replace those weights, but only after held-out finds prove the learned
 ones rank better. The bundled 235-byte ONNX graph from the original PRD (which weights slope
 and aspect at exactly zero; see `EINCOL_REPORT.md` Phase 1) is still in the assets and is not
 used by any screen.

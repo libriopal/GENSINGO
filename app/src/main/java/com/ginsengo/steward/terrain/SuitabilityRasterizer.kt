@@ -2,6 +2,7 @@ package com.ginsengo.steward.terrain
 
 import android.graphics.Bitmap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -79,7 +80,11 @@ object SuitabilityRasterizer {
         // sub-cell case falls through to interpolation.
         val superSample = superSampleFor(iw.toDouble() / outSize)
 
-        val scores = scorePixels(g, analysis, mosaic, ix0, iy0, iw, ih, outSize, superSample, tpiRadiusCells, weights)
+        // Row-wise cancellation: a pan that supersedes this viewport stops the work instead of
+        // letting a stale raster run to completion on a phone's battery.
+        val scores = scorePixels(g, analysis, mosaic, ix0, iy0, iw, ih, outSize, superSample, tpiRadiusCells, weights) {
+            ensureActive()
+        }
         val px = IntArray(outSize * outSize) { colourFor(scores[it], minScore) }
 
         val bmp = Bitmap.createBitmap(outSize, outSize, Bitmap.Config.ARGB_8888)
@@ -111,6 +116,7 @@ object SuitabilityRasterizer {
         outSize: Int,
         tpiRadiusM: Double,
         weights: DoubleArray = GinsengSuitability.PRIOR_WEIGHTS,
+        memoise: Boolean = true,
     ): DoubleArray {
         val g = mosaic.grid
         val halo = mosaic.haloPx
@@ -119,7 +125,7 @@ object SuitabilityRasterizer {
         val tpiRadiusCells = (tpiRadiusM / g.cellSizeM).roundToInt().coerceIn(1, 60)
         val analysis = TerrainAnalysis.of(mosaic, withWetness = true)
         return scorePixels(g, analysis, mosaic, halo, halo, iw, ih, outSize,
-            superSampleFor(iw.toDouble() / outSize), tpiRadiusCells, weights)
+            superSampleFor(iw.toDouble() / outSize), tpiRadiusCells, weights, memoise = memoise)
     }
 
     private fun superSampleFor(cellsPerOutPx: Double): Int = when {
@@ -138,9 +144,18 @@ object SuitabilityRasterizer {
         superSample: Int,
         tpiRadiusCells: Int,
         weights: DoubleArray,
+        memoise: Boolean = true,
+        onRow: () -> Unit = {},
     ): DoubleArray {
         val out = DoubleArray(outSize * outSize)
+        // With supersampling, every sample's score depends only on the cell it lands in
+        // (interpolation is used only when superSample == 1), and there are more samples than
+        // cells: 768 px x 2 x 2 over a 1024 x 512 interior is 2.4 M samples for 0.5 M cells.
+        // Each cell is scored once and reused, which changes no output bit. Measured on the
+        // Phase 7 device run: 4.8 s per camera move on a desktop JVM before this.
+        val memo = if (memoise && superSample > 1) DoubleArray(iw * ih) { Double.NaN } else null
         for (oy in 0 until outSize) {
+            onRow()
             for (ox in 0 until outSize) {
                 var acc = 0.0
                 var n = 0
@@ -150,7 +165,14 @@ object SuitabilityRasterizer {
                         val fy = (oy + (sy + 0.5) / superSample) / outSize
                         val gx = ix0 + fx * iw
                         val gy = iy0 + fy * ih
-                        acc += scoreAt(g, analysis, gx, gy, mosaic, tpiRadiusCells, superSample == 1, weights)
+                        acc += if (memo == null) {
+                            scoreAt(g, analysis, gx, gy, mosaic, tpiRadiusCells, superSample == 1, weights)
+                        } else {
+                            // The same clamped cell scoreAt reads; always inside the interior.
+                            val cell = (gy.toInt().coerceIn(1, g.h - 2) - iy0) * iw + (gx.toInt().coerceIn(1, g.w - 2) - ix0)
+                            memo[cell].takeUnless { it.isNaN() }
+                                ?: scoreAt(g, analysis, gx, gy, mosaic, tpiRadiusCells, false, weights).also { memo[cell] = it }
+                        }
                         n++
                     }
                 }

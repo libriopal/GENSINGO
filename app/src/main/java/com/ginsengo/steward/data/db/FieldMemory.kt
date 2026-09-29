@@ -26,9 +26,9 @@ data class TrackPoint(
 /**
  * A place where the user found ginseng.
  *
- * [verification] is computed by [com.ginsengo.steward.learn.FindVerifier] from the recorded
- * accuracy, fix age and identification checks, never typed in. Only VERIFIED finds are used
- * by the learner.
+ * Every find is the user's word and is treated as true and accurate ([com.ginsengo.steward.learn.UserFinds]):
+ * [verification] is always CONFIRMED for new and imported finds, and nothing filters on it.
+ * [accuracyM], [fixCount] and [fixTime] record what the phone measured, as information.
  *
  * The six `f*` columns are the terrain factors at this point, filled in by the radius scan
  * (same DEM zoom as the learner's background) and null until a scan has covered the find.

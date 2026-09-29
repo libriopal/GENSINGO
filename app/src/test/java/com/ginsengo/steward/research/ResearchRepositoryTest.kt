@@ -6,12 +6,13 @@ import androidx.test.core.app.ApplicationProvider
 import com.ginsengo.steward.Fixtures
 import com.ginsengo.steward.SettingsStore
 import com.ginsengo.steward.compliance.ComplianceEngine
+import com.ginsengo.steward.data.db.Find
 import com.ginsengo.steward.data.db.AppDatabase
 import com.ginsengo.steward.data.db.Suggestion
 import com.ginsengo.steward.data.db.TrackPoint
 import com.ginsengo.steward.data.reference.ReferenceRepository
 import com.ginsengo.steward.field.FixAverager
-import com.ginsengo.steward.learn.FindVerifier
+import com.ginsengo.steward.learn.UserFinds
 import com.ginsengo.steward.memory.FieldMemoryRepository
 import com.ginsengo.steward.terrain.DemTileStore
 import kotlinx.coroutines.runBlocking
@@ -150,20 +151,23 @@ class ResearchRepositoryTest {
         memory.storeTrack(listOf(TrackPoint(sessionId = "s", lat = target.lat + 0.0002, lng = target.lng, accuracyM = 5f, altitudeM = null, time = 2)))
         assertEquals(Suggestion.STATUS_VISITED, db.suggestionDao().all().first { it.id == target.id }.status)
 
-        // A verified find within 60 m makes it FOUND.
+        // A find within 60 m makes it FOUND.
         val fix = FixAverager.Result(target.lat + 0.0003, target.lng, 8f, 10, 1_000)
-        val find = memory.addFind(fix, 5_000, 3, 3, "", FindVerifier.Check.ALL)
+        val find = memory.addFind(fix, 5_000, 3, 3, "")
         assertEquals("VERIFIED", find.verification)
         assertEquals(Suggestion.STATUS_FOUND, db.suggestionDao().all().first { it.id == target.id }.status)
     }
 
+    /** The user's word is the record: a poor or stale GPS fix never demotes a find. */
     @Test
-    fun aFindCannotBeDeclaredVerifiedByTheCaller() = runBlocking {
+    fun noFindTheUserEntersIsSavedAsLess() = runBlocking {
         val memory = FieldMemoryRepository(db)
-        val poor = memory.addFind(FixAverager.Result(lat, lng, 35f, 1, 0), 1_000, 1, null, "", FindVerifier.Check.ALL)
-        assertEquals("UNVERIFIED", poor.verification)
-        val stale = memory.addFind(FixAverager.Result(lat, lng, 5f, 1, 0), 600_000, 1, null, "", FindVerifier.Check.ALL)
-        assertEquals("UNVERIFIED", stale.verification)
+        val poor = memory.addFind(FixAverager.Result(lat, lng, 35f, 1, 0), 1_000, 1, null, "")
+        val stale = memory.addFind(FixAverager.Result(lat, lng, 5f, 1, 0), 600_000, 1, null, "")
+        val awful = memory.addFind(FixAverager.Result(lat, lng, 250f, 1, 0), 3_600_000, 1, null, "")
+        for (f in listOf(poor, stale, awful)) assertEquals(UserFinds.CONFIRMED, f.verification)
+        // What the phone measured is kept, as information.
+        assertEquals(250f, awful.accuracyM!!, 0f)
     }
 
     /**
@@ -175,7 +179,7 @@ class ResearchRepositoryTest {
     fun learningBlocksAtTheMeasuredRange() = runBlocking {
         val memory = FieldMemoryRepository(db)
         repeat(6) { i ->
-            memory.addFind(FixAverager.Result(lat + i * 0.0027, lng, 8f, 5, 0), 1_000, 2, 3, "", FindVerifier.Check.ALL)
+            memory.addFind(FixAverager.Result(lat + i * 0.0027, lng, 8f, 5, 0), 1_000, 2, 3, "")
         }
         val r = repo()
         val s = r.scanAround(lat, lng)!!
@@ -185,17 +189,28 @@ class ResearchRepositoryTest {
         assertEquals("finds 300 m apart counted as separate spots", 1, v.clusters)
     }
 
+    /**
+     * Every find the user entered teaches the learner: imprecise and stale fixes, and patches
+     * imported from the older app with no accuracy recorded at all, exactly like the rest.
+     */
     @Test
-    fun onlyVerifiedFindsReachTheLearner() = runBlocking {
+    fun everyFindTheUserEnteredReachesTheLearner() = runBlocking {
         val memory = FieldMemoryRepository(db)
-        repeat(6) { i ->
-            memory.addFind(FixAverager.Result(lat + i * 0.005, lng, 30f, 1, 0), 1_000, 1, null, "", FindVerifier.Check.ALL)
+        repeat(4) { i ->
+            memory.addFind(FixAverager.Result(lat + i * 0.005, lng, 30f, 1, 0), 600_000, 1, null, "")
+        }
+        // As MIGRATION_1_5 imports them: no accuracy, no fix time, a source patch id.
+        repeat(3) { i ->
+            db.findDao().upsert(Find(
+                id = "patch-p$i", lat = lat - (i + 1) * 0.005, lng = lng, accuracyM = null, fixCount = 0,
+                fixTime = null, time = 1_000, plantCount = 5, maxProngs = null, note = "Old patch $i",
+                checks = 0, verification = UserFinds.CONFIRMED, sourcePatchId = "p$i",
+            ))
         }
         val r = repo()
         val v = r.learn(r.scanAround(lat, lng)!!)
-        assertEquals(0, v.findsUsed)
-        assertNull(v.heldOutAucPrior)
-        // ...but every find in range now carries its terrain factors for later.
+        assertEquals(7, v.findsUsed)
+        // ...and every find in range now carries its terrain factors for later.
         assertTrue(db.findDao().all().all { it.factors() != null })
     }
 }

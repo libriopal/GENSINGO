@@ -61,7 +61,24 @@ android {
             applicationIdSuffix = ".debug"
             isMinifyEnabled = false
         }
+        // A shrunk APK you can sideload without the release keystore: R8 on, debug-signed,
+        // one ABI (arm64 unless -Pgensingo.abis=x86_64,... says otherwise). The universal
+        // debug APK is ~80 MB, most of it unshrunk dex. Installs as its own app (".field").
+        create("field") {
+            initWith(getByName("release"))
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("debug")
+            applicationIdSuffix = ".field"
+            versionNameSuffix = "-field"
+            matchingFallbacks += listOf("release")
+            ndk {
+                abiFilters += (project.findProperty("gensingo.abis") as String? ?: "arm64-v8a").split(",")
+            }
+        }
     }
+    // -Pgensingo.testBuildType=field runs the on-device tests against the shrunk build.
+    testBuildType = project.findProperty("gensingo.testBuildType") as String? ?: "debug"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

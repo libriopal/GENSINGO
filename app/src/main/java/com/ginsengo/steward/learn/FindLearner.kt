@@ -5,11 +5,12 @@ import kotlin.math.exp
 import kotlin.random.Random
 
 /**
- * Learns from the user's verified finds, and decides whether the learning earned its keep.
+ * Learns from the user's finds (all of them: see UserFinds), and decides whether the learning
+ * earned its keep.
  *
  * THE MODEL. The terrain surface scores a place as a weighted sum of six factor values in
  * 0..1 (GinsengSuitability). The published weights are the PRIOR. Learning fits new weights
- * from verified finds (presences) against points sampled across the same radius
+ * from the user's finds (presences) against points sampled across the same radius
  * (background): an L2-regularised logistic regression whose penalty pulls toward the prior,
  * and pulls less as finds accumulate. Negative coefficients are clipped to zero and the
  * weights renormalised, so the learned surface is still a 0..1 weighted sum the heatmap can
@@ -52,7 +53,7 @@ object FindLearner {
         val adopted: Boolean,
         /** Weights to draw with: learned if adopted, otherwise the prior. */
         val active: DoubleArray,
-        /** What the fit on ALL verified finds produced, shown even when not adopted. */
+        /** What the fit on ALL the user's finds produced, shown even when not adopted. */
         val learned: DoubleArray?,
         val prior: DoubleArray,
         val findsUsed: Int,
@@ -169,7 +170,7 @@ object FindLearner {
                 aucP, aucL, gain, p, reason)
 
         if (finds.size < MIN_FINDS) {
-            return notAdopted("Learning starts at $MIN_FINDS verified finds in this area " +
+            return notAdopted("Learning starts at $MIN_FINDS finds in this area " +
                     "(have ${finds.size}). The map is using the published weights.")
         }
         if (background.size < 40) return notAdopted("Not enough terrain sampled around you yet.")

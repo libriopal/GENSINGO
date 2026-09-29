@@ -6,7 +6,6 @@ import com.ginsengo.steward.data.db.AppDatabase
 import com.ginsengo.steward.data.db.Find
 import com.ginsengo.steward.data.db.ResearchRun
 import com.ginsengo.steward.learn.FindLearner
-import com.ginsengo.steward.learn.FindVerifier
 import com.ginsengo.steward.prospect.Prospects
 import com.ginsengo.steward.terrain.DemTileStore
 import com.ginsengo.steward.terrain.GinsengSuitability
@@ -97,9 +96,8 @@ class ResearchRepository(
             if (f.featureZoom != s.zoom || f.factors()?.contentEquals(factors) != true) {
                 updated += f.withFactors(factors, s.zoom)
             }
-            if (f.verification == FindVerifier.Level.VERIFIED.name) {
-                samples += FindLearner.Sample(factors, f.lat, f.lng)
-            }
+            // Every find is the user's word (UserFinds): all of them teach the learner.
+            samples += FindLearner.Sample(factors, f.lat, f.lng)
         }
         if (updated.isNotEmpty()) db.findDao().updateAll(updated)
         FindLearner.evaluate(

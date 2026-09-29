@@ -7,34 +7,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.random.Random
 
-class FindVerifierTest {
-
-    private val all = FindVerifier.Check.ALL
-
-    @Test
-    fun verifiedNeedsPositionFreshnessAndAllThreeChecks() {
-        assertEquals(FindVerifier.Level.VERIFIED, FindVerifier.verify(12f, 5_000, all).level)
-    }
-
-    @Test
-    fun eachMissingConditionAloneBreaksVerification() {
-        assertEquals(FindVerifier.Level.UNVERIFIED, FindVerifier.verify(25f, 5_000, all).level)
-        assertEquals(FindVerifier.Level.UNVERIFIED, FindVerifier.verify(12f, 120_000, all).level)
-        assertEquals(FindVerifier.Level.UNVERIFIED, FindVerifier.verify(null, 5_000, all).level)
-        assertEquals(FindVerifier.Level.UNVERIFIED, FindVerifier.verify(12f, null, all).level)
-        for (c in FindVerifier.Check.entries) {
-            val r = FindVerifier.verify(12f, 5_000, all and c.bit.inv())
-            assertEquals("missing ${c.name}", FindVerifier.Level.UNVERIFIED, r.level)
-            assertTrue(r.reasons.isNotEmpty())
-        }
-    }
-
-    @Test
-    fun theThresholdIsInclusiveAtTwentyMetres() {
-        assertEquals(FindVerifier.Level.VERIFIED, FindVerifier.verify(20f, 0, all).level)
-    }
-}
-
 class FindLearnerTest {
 
     private val prior = GinsengSuitability.PRIOR_WEIGHTS

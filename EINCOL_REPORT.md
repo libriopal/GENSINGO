@@ -1232,9 +1232,9 @@ The architecture is the tail of the Step 2 distribution: **compute → annotate 
 | "Research-based" that can be checked | Validator: unknown IDs dropped, citations kept only if this call's search retrieved them, coordinates and "legal to dig" sentences stripped | `research/ResearchValidator.kt` |
 | Privacy | The prompt carries the 0.1° cell, never the fix, a find or a candidate position | `ResearchRepository.buildRequest`, `SuggestionAssembler.coarseRegion` |
 | Suggestions follow you | Fresh fixes only; on-device refresh after 3 km or 12 h; model only when the auto policy allows | `research/ResearchTrigger.kt` |
-| Real-time heatmapping | Habitat raster (published model restored, learned weights once earned); GPU heatmaps for where you have been and for your finds; pushes keyed by what changed | `ui/map/FieldMap.kt`, `terrain/SuitabilityRasterizer.kt` |
-| Persistent memory | Room v5 with real migrations from 1 and 4 (field patches imported as LEGACY finds), tracks, finds, suggestion lifecycle driven by evidence (VISITED from the track, FOUND from a find), research runs with audit counts | `data/db/*`, `memory/FieldMemoryRepository.kt` |
-| Verified finds + learning | Verification computed from averaged fix accuracy, fix age and a 3-item ID checklist; learner refits the six weights and is adopted only if it beats the prior on held-out spatial blocks at the terrain's measured correlation range | `learn/FindVerifier.kt`, `learn/FindLearner.kt` |
+| Real-time heatmapping | Habitat raster (published model restored, learned weights once earned; each elevation cell scored once, redrawn only when the tile set changes, superseded work cancelled row by row); GPU heatmaps for where you have been and for your finds; pushes keyed by what changed | `ui/map/FieldMap.kt`, `terrain/SuitabilityRasterizer.kt` |
+| Persistent memory | Room v5 with real migrations from 1 and 4 (field patches imported as confirmed finds), tracks, finds, suggestion lifecycle driven by evidence (VISITED from the track, FOUND from a find), research runs with audit counts | `data/db/*`, `memory/FieldMemoryRepository.kt` |
+| Your finds + learning | Every find the user saves, and every patch logged in the older app, is treated as true and accurate (user direction, below); the learner refits the six weights from all of them and is adopted only if the refit beats the prior on held-out spatial blocks at the terrain's measured correlation range | `learn/UserFinds.kt`, `learn/FindLearner.kt` |
 | Where you've been / are | Foreground service (type `location`, no background-location permission), filter with Doppler-speed and centroid rules, live dot | `field/TrackService.kt`, `field/TrackFilter.kt` |
 | Offline | Everything above runs from cached elevation; "Save 10 miles" prefetches ~175 elevation tiles and a basemap region; local fallback style when the basemap cannot load; platform-GPS fallback when Play services cannot deliver | `ui/OfflineArea.kt`, `ui/map/FieldMap.kt`, `field/LocationProvider.kt` |
 | Battery | Measured-input power policy (interval, batching with screen off, balanced when still, low/critical battery); map capped at 30 fps; 3D renders only when dirty; heavy scan once per 3 km | `field/PowerPolicy.kt` |
@@ -1254,11 +1254,34 @@ is still a recommendation); accuracy/2 as the track noise floor; sqrt(n) accurac
 fixes (GNSS error is correlated); fixed 200 m held-out blocks; a space as the list separator;
 Play-services-only location; starting research from a stale last-known fix.
 
+### User direction: the user's field data is ground truth
+
+After the first delivery the user directed that patches and finds they enter be *"treated as
+true and accurate and nothing less"*. Both versions, as the protocol requires:
+
+| | First version | Now |
+|---|---|---|
+| A new find with a GPS fix worse than ±20 m, over a minute old, or an unticked ID box | saved **unverified**, drawn at 0.35 weight, never learned from | confirmed, full weight, learned from |
+| A patch logged in the older app (no accuracy recorded) | imported as **LEGACY**, never learned from | imported as a confirmed find, full weight, learned from |
+| What the phone measured (accuracy, fix count, fix time) | a gate | kept with the find and shown back to the user, as information |
+| What the research model is told | "verified finds: n (plus m unverified or imported)" | "the user's own confirmed finds: n + m" |
+
+The gate was mine, not the user's; it is gone (`learn/FindVerifier.kt` deleted, rule stated in
+`learn/UserFinds.kt`). Nothing in the app now reads a quality label to demote a find. The learner's
+held-out test is unchanged: it never doubted a find, only whether weights fitted to them predict
+the user's *other* finds better than the published weights do.
+
+Pinned so it cannot quietly come back: `noFindTheUserEntersIsSavedAsLess` (a ±250 m, hour-old fix is
+saved confirmed, its accuracy kept), `everyFindTheUserEnteredReachesTheLearner` (4 imprecise, stale
+finds and 3 imported patches with no accuracy: all 7 reach the learner), the migration test (a
+field-build patch arrives confirmed), and four mutants that each re-introduce one demotion
+(F1–F3, D3: all killed).
+
 ## Step 5 — evaluators
 
 ### Rung 1 — mutation (`tools/mutate.py`)
 
-38 mutations, each a literal edit that breaks one claimed property, run against the tests
+39 mutations, each a literal edit that breaks one claimed property, run against the tests
 named for it; the harness refuses an edit that matches nothing (it did, twice, after a
 refactor moved the target: reported INVALID, not "killed").
 
@@ -1295,7 +1318,7 @@ power — about 4 in 10 for a moderate signal in 8 separate spots — stated bel
 
 ### Rung 2 — execution against reality
 
-- **JVM, real data.** 290 unit tests pass (1 skipped: the full-scan timing test, which needs
+- **JVM, real data.** 288 unit tests pass (1 skipped: the full-scan timing test, which needs
   a fixture built separately). They run on real Terrarium elevation (a committed 2×2-tile z12 Boone
   mosaic), a real SQLite migration from schema-1 and schema-4 files (Robolectric), both
   providers' wire formats through the real SDK against a mock server.

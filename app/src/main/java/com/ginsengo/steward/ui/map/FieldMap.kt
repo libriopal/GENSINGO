@@ -17,7 +17,6 @@ import com.ginsengo.steward.data.db.Find
 import com.ginsengo.steward.data.db.Suggestion
 import com.ginsengo.steward.data.db.TrackPoint
 import com.ginsengo.steward.field.FieldLocation
-import com.ginsengo.steward.learn.FindVerifier
 import com.ginsengo.steward.research.RadiusScan
 import com.ginsengo.steward.terrain.DemTileStore
 import com.ginsengo.steward.terrain.SuitabilityRasterizer
@@ -152,12 +151,21 @@ fun FieldMap(
             region.latitudeNorth, region.longitudeWest, region.latitudeSouth, region.longitudeEast,
             DemTileStore.demZoomFor(cam.zoom),
         )
-        val key = "$z:%.3f:%.3f:%.3f:%.3f:%s".format(
-            region.latitudeNorth, region.longitudeWest, region.latitudeSouth, region.longitudeEast,
-            curWeights.value.joinToString { "%.3f".format(it) },
+        // The raster covers whole tiles, so what it draws depends on the tile range, not on the
+        // exact viewport. Keying on the viewport recomputed an identical picture on every pan
+        // (seconds of CPU each on a phone, Phase 7).
+        val weights = curWeights.value
+        val key = "$z:%d-%d:%d-%d:%d:%.0f:%s".format(
+            DemTileStore.lonToTileX(region.longitudeWest, z), DemTileStore.lonToTileX(region.longitudeEast, z),
+            DemTileStore.latToTileY(region.latitudeNorth, z), DemTileStore.latToTileY(region.latitudeSouth, z),
+            DemTileStore.rasterSizeFor(cam.zoom), DemTileStore.tpiRadiusMetresFor(cam.zoom),
+            weights.joinToString { "%.3f".format(it) },
         )
-        if (!force && key == st.habitatKey) return
-        st.habitatKey = key
+        if (!force) {
+            if (key == st.habitatKey && st.habitatComplete) return                // drawn; nothing new can arrive
+            if (key == st.pendingHabitatKey && st.heatJob?.isActive == true) return  // already computing it
+        }
+        st.pendingHabitatKey = key
         st.heatJob?.cancel()
         st.heatJob = scope.launch {
             val mosaic = demStore.grid(
@@ -168,11 +176,13 @@ fun FieldMap(
                 Log.i(TAG, "habitat: no elevation tiles at DEM zoom $z")
                 onHabitatStatus("No elevation tiles here yet"); return@launch
             }
+            // Offline with gaps: redraw only when more of the range has arrived.
+            if (!force && key == st.habitatKey && mosaic.tilesLoaded == st.habitatTiles) return@launch
             Log.i(TAG, "habitat: DEM zoom $z, ${mosaic.tilesLoaded}/${mosaic.tilesRequested} tiles")
             val t0 = android.os.SystemClock.elapsedRealtime()
             val r = SuitabilityRasterizer.rasterise(
                 mosaic, DemTileStore.rasterSizeFor(cam.zoom), DemTileStore.tpiRadiusMetresFor(cam.zoom),
-                weights = curWeights.value,
+                weights = weights,
             )
             Log.i(TAG, "habitat: rasterised ${r.bitmap.width}x${r.bitmap.height} in ${android.os.SystemClock.elapsedRealtime() - t0} ms")
             runCatching {
@@ -185,6 +195,11 @@ fun FieldMap(
                 )
                 src?.setImage(r.bitmap)
                     ?: Log.w(TAG, "habitat: image source missing from the style")
+                if (src != null) {
+                    st.habitatKey = key
+                    st.habitatTiles = mosaic.tilesLoaded
+                    st.habitatComplete = mosaic.tilesLoaded == mosaic.tilesRequested
+                }
             }.onFailure { Log.w(TAG, "habitat: image upload failed", it) }
             onHabitatStatus("%.1f m cells · %d/%d tiles".format(r.metresPerDemCell, r.tilesLoaded, r.tilesRequested))
         }
@@ -298,7 +313,10 @@ private class State {
     var style: Style? = null
     var basemap: Basemap? = null
     var heatJob: Job? = null
-    var habitatKey: String? = null
+    var habitatKey: String? = null        // what the map shows now
+    var habitatTiles = -1
+    var habitatComplete = false
+    var pendingHabitatKey: String? = null // what is being computed
     var centred = false
     /** True once the offline fallback style has been loaded. */
     var fallback = false
@@ -308,7 +326,7 @@ private class State {
     var keySuggest = ""
     var keyRing = ""
     var keyMe = ""
-    fun resetKeys() { habitatKey = null; keyTrack = ""; keyFinds = ""; keySuggest = ""; keyRing = ""; keyMe = "" }
+    fun resetKeys() { habitatKey = null; habitatTiles = -1; habitatComplete = false; pendingHabitatKey = null; keyTrack = ""; keyFinds = ""; keySuggest = ""; keyRing = ""; keyMe = "" }
 }
 
 private fun loadStyle(map: MapLibreMap, basemap: Basemap, st: State, onReady: () -> Unit) {
@@ -387,11 +405,10 @@ private fun install(style: Style, basemap: Basemap?) {
         )
     )
 
-    // Your finds: amber heat, weighted 1.0 verified, 0.35 otherwise.
+    // Your finds: amber heat, every find at full weight (UserFinds).
     style.addSource(GeoJsonSource(SRC_FINDS, FeatureCollection.fromFeatures(emptyList())))
     style.addLayer(
         HeatmapLayer("g-finds-heat", SRC_FINDS).withProperties(
-            PropertyFactory.heatmapWeight(get("w")),
             PropertyFactory.heatmapRadius(interpolate(linear(), zoom(), stop(10, 10f), stop(16, 40f))),
             PropertyFactory.heatmapColor(
                 interpolate(
@@ -407,7 +424,7 @@ private fun install(style: Style, basemap: Basemap?) {
     style.addLayer(
         CircleLayer("g-finds-dots", SRC_FINDS).withProperties(
             PropertyFactory.circleRadius(5f),
-            PropertyFactory.circleColor(match(get("v"), literal("VERIFIED"), Expression.color(0xFFFFB02E.toInt()), Expression.color(0x00000000))),
+            PropertyFactory.circleColor("#FFB02E"),
             PropertyFactory.circleStrokeColor("#FFB02E"),
             PropertyFactory.circleStrokeWidth(1.5f),
             PropertyFactory.circleOpacity(interpolate(linear(), zoom(), stop(12, 0f), stop(14, 1f))),
@@ -475,16 +492,11 @@ private fun pushData(
         }
         style.getSourceAs<GeoJsonSource>(SRC_TRACK)?.setGeoJson(FeatureCollection.fromFeatures(lines))
     }
-    val kFinds = finds.joinToString { it.id + it.verification }
+    val kFinds = finds.joinToString { it.id }
     if (kFinds != st.keyFinds) {
         st.keyFinds = kFinds
         style.getSourceAs<GeoJsonSource>(SRC_FINDS)?.setGeoJson(
-            FeatureCollection.fromFeatures(finds.map { f ->
-                Feature.fromGeometry(Point.fromLngLat(f.lng, f.lat)).apply {
-                    addNumberProperty("w", if (f.verification == FindVerifier.Level.VERIFIED.name) 1.0 else 0.35)
-                    addStringProperty("v", f.verification)
-                }
-            })
+            FeatureCollection.fromFeatures(finds.map { f -> Feature.fromGeometry(Point.fromLngLat(f.lng, f.lat)) })
         )
     }
     val kSug = suggestions.joinToString { it.id + it.status }

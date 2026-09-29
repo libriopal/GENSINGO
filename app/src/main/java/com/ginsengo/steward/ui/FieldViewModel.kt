@@ -141,9 +141,9 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
             when {
                 refresh || modelOk -> container.research.run(loc.lat, loc.lng, allowModel = modelOk)
                 !firstFixHandled && now - loc.timestamp <= ResearchTrigger.FRESH_MS &&
-                        container.database.findDao().all().any { it.verification == "VERIFIED" } ->
+                        container.database.findDao().all().isNotEmpty() ->
                     // Same area as last time and there is something to learn from: reload the
-                    // scan so the learned layer is ready. With no verified finds this scan was
+                    // scan so the learned layer is ready. With no finds this scan was
                     // pure cost at every launch (seen on the Phase 7 device run), so it is skipped.
                     container.research.scanAround(loc.lat, loc.lng)?.let { container.research.learn(it) }
             }
@@ -199,10 +199,10 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
         return FixAverager.average(fixes.ifEmpty { listOfNotNull(_location.value) })
     }
 
-    fun saveFind(fix: FixAverager.Result, plantCount: Int, maxProngs: Int?, note: String, checks: Int) {
+    fun saveFind(fix: FixAverager.Result, plantCount: Int, maxProngs: Int?, note: String) {
         viewModelScope.launch {
-            val f = container.memory.addFind(fix, System.currentTimeMillis(), plantCount, maxProngs, note, checks)
-            _toast.value = if (f.verification == "VERIFIED") "Verified find saved" else "Saved as unverified"
+            val f = container.memory.addFind(fix, System.currentTimeMillis(), plantCount, maxProngs, note)
+            _toast.value = "Find saved. The map learns from it."
             container.research.scanAround(f.lat, f.lng)?.let { container.research.learn(it) }
         }
     }

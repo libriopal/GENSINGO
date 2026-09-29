@@ -17,10 +17,13 @@ enum class Provenance(val label: String, val detail: String) {
         "Model output. An estimate, not a field guarantee."
     ),
 
-    /** Synthetic, unverified, or user-reported. */
+    /**
+     * Synthetic or unverified. Not the user's own field data: their finds and patches are
+     * treated as true and accurate (learn/UserFinds.kt).
+     */
     PROTOTYPE(
         "PROTOTYPE",
-        "Unverified or user-reported."
+        "Synthetic or unverified."
     ),
 
     /**

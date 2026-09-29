@@ -70,7 +70,8 @@ class MigrationTest {
         assertEquals(listOf("Black cohosh"), reading.companionPlantsSeen)
         val finds = db.findDao().all()
         assertEquals(1, finds.size)
-        assertEquals("LEGACY", finds.single().verification)
+        // The user's logged patch is a confirmed find, not a lesser "legacy" one.
+        assertEquals("VERIFIED", finds.single().verification)
         assertEquals("p1", finds.single().sourcePatchId)
         assertEquals(12, finds.single().plantCount)
         assertEquals(35.51, finds.single().lat, 0.0)

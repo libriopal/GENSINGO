@@ -5,7 +5,7 @@ import com.ginsengo.steward.data.db.Find
 import com.ginsengo.steward.data.db.Suggestion
 import com.ginsengo.steward.data.db.TrackPoint
 import com.ginsengo.steward.field.FixAverager
-import com.ginsengo.steward.learn.FindVerifier
+import com.ginsengo.steward.learn.UserFinds
 import com.ginsengo.steward.prospect.Prospects
 import kotlinx.coroutines.flow.Flow
 
@@ -38,8 +38,8 @@ class FieldMemoryRepository(private val db: AppDatabase) {
     }
 
     /**
-     * Records a find. Verification is computed here from the measured fix, never passed in,
-     * so no caller can declare a find verified.
+     * Records a find as the user's word: confirmed, whatever the GPS reported (UserFinds).
+     * The measured accuracy and fix count are kept with it as information.
      */
     suspend fun addFind(
         fix: FixAverager.Result,
@@ -47,9 +47,7 @@ class FieldMemoryRepository(private val db: AppDatabase) {
         plantCount: Int,
         maxProngs: Int?,
         note: String,
-        checksMask: Int,
     ): Find {
-        val verdict = FindVerifier.verify(fix.accuracyM, now - fix.newestTime, checksMask)
         val find = Find(
             lat = fix.lat, lng = fix.lng,
             accuracyM = fix.accuracyM,
@@ -59,8 +57,8 @@ class FieldMemoryRepository(private val db: AppDatabase) {
             plantCount = plantCount,
             maxProngs = maxProngs,
             note = note.trim(),
-            checks = checksMask,
-            verification = verdict.level.name,
+            checks = 0,
+            verification = UserFinds.CONFIRMED,
         )
         db.findDao().upsert(find)
         for (s in db.suggestionDao().open()) {

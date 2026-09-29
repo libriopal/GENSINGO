@@ -28,7 +28,7 @@ enum class Basemap(val label: String, val attribution: String) {
  *  - [habitat]: the terrain model under the published weights, or under learned weights once
  *    held-out finds have justified them. Computed on the phone per viewport.
  *  - [visited]: where you have been, a GPU heatmap of stored track points.
- *  - [finds]: your finds, a GPU heatmap; verified finds weigh more than unverified ones.
+ *  - [finds]: your finds, a GPU heatmap; every find at full weight (UserFinds).
  *
  * plus the track line and the suggestion markers. Everything defaults on except the track
  * line, which the visited heatmap already summarises.

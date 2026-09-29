@@ -27,7 +27,7 @@ their key. It contains, and only contains:
 | The grid cell the user is in | 0.1° (~11 km), the cell centre, never the fix | `SuggestionAssembler.coarseRegion`, `PromptPrivacyTest` |
 | State name, season line, the state's rule text | From the bundled sourced data | `ResearchRepository.buildRequest` |
 | Each candidate's terrain numbers and a distance band | No coordinates; distance banded (e.g. "3-6 km") | `ResearchPrompt.user` |
-| Counts of past suggestion outcomes and average factor values of verified finds | Aggregates only | `MemorySummary.describe` |
+| Counts of past suggestion outcomes and average factor values of the user's finds | Aggregates only | `MemorySummary.describe` |
 
 **Never sent:** the GPS fix, the recorded track, the location of any find or suggestion,
 notes, or photos. A canary test puts a distinctive fix through the real prompt builder and

@@ -31,7 +31,6 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -67,7 +66,6 @@ import androidx.compose.ui.unit.sp
 import com.ginsengo.steward.data.db.Suggestion
 import com.ginsengo.steward.field.FixAverager
 import com.ginsengo.steward.learn.FindLearner
-import com.ginsengo.steward.learn.FindVerifier
 import com.ginsengo.steward.prospect.Prospects
 import com.ginsengo.steward.research.Provider
 import com.ginsengo.steward.research.ResearchPrompt
@@ -304,7 +302,6 @@ private fun FindSheet(vm: FieldViewModel, onClose: () -> Unit) {
     var fix by remember { mutableStateOf<FixAverager.Result?>(null) }
     var plants by remember { mutableIntStateOf(1) }
     var prongs by remember { mutableStateOf<Int?>(null) }
-    var checks by remember { mutableIntStateOf(0) }
     var note by remember { mutableStateOf("") }
 
     LaunchedEffect(burst) {
@@ -326,15 +323,6 @@ private fun FindSheet(vm: FieldViewModel, onClose: () -> Unit) {
             }
             Text("Position ±${f.accuracyM.roundToInt()} m from ${f.fixCount} fix(es)", color = Gen.TextDim, fontSize = 12.sp)
 
-            Spacer(Modifier.height(10.dp))
-            Text("Identification: confirm all three to verify", fontWeight = FontWeight.SemiBold)
-            FindVerifier.Check.entries.forEach { c ->
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { checks = checks xor c.bit }) {
-                    Checkbox(checked = checks and c.bit != 0, onCheckedChange = { checks = checks xor c.bit })
-                    Text(c.label, fontSize = 13.sp)
-                }
-            }
-
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                 Text("Plants", modifier = Modifier.width(70.dp))
                 OutlinedButton(onClick = { plants = (plants - 1).coerceAtLeast(1) }) { Text("−") }
@@ -347,15 +335,10 @@ private fun FindSheet(vm: FieldViewModel, onClose: () -> Unit) {
             }
             OutlinedTextField(note, { note = it }, label = { Text("Note (optional)") }, modifier = Modifier.fillMaxWidth())
 
-            val preview = FindVerifier.verify(f.accuracyM, System.currentTimeMillis() - f.newestTime, checks)
             Spacer(Modifier.height(8.dp))
-            if (preview.level == FindVerifier.Level.VERIFIED) {
-                Text("Will be saved as VERIFIED and can teach the model.", color = Gen.Accent, fontSize = 13.sp)
-            } else {
-                Text("Will be saved as unverified (shown on the map, not learned from): " +
-                        preview.reasons.joinToString("; "), color = Gen.Amber, fontSize = 13.sp)
-            }
-            Button(onClick = { vm.saveFind(f, plants, prongs, note, checks); onClose() },
+            // The user's word is the record (UserFinds): no find is saved as anything less.
+            Text("Saved as your find. The map and the learner treat it as true.", color = Gen.Accent, fontSize = 13.sp)
+            Button(onClick = { vm.saveFind(f, plants, prongs, note); onClose() },
                 modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) { Text("Save find") }
         }
     }
@@ -388,7 +371,7 @@ private fun LayersSheet(vm: FieldViewModel, verdict: FindLearner.Verdict?, onClo
             Text("Heat opacity", color = Gen.TextDim, fontSize = 12.sp)
             Slider(layers.heatmapOpacity, { vm.setLayers(layers.copy(heatmapOpacity = it)) }, valueRange = 0.2f..1f)
             Text("Green: terrain model (research-grade estimate; cannot see soil calcium or canopy). " +
-                    "Blue: where you've recorded a track. Amber: your finds, verified ones weighted most.",
+                    "Blue: where you've recorded a track. Amber: your finds.",
                 color = Gen.TextDim, fontSize = 11.sp)
 
             Spacer(Modifier.height(14.dp))

@@ -3,7 +3,6 @@ package com.ginsengo.steward.research
 import com.ginsengo.steward.data.db.Find
 import com.ginsengo.steward.data.db.Suggestion
 import com.ginsengo.steward.learn.FindLearner
-import com.ginsengo.steward.learn.FindVerifier
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonArray
@@ -126,12 +125,12 @@ object MemorySummary {
         } else {
             appendLine("- Earlier suggestions in this area: ${pastSuggestions.size}; walked to $visited; ginseng found at $found; walked with none found at $none.")
         }
-        val verified = findsInRadius.filter { it.verification == FindVerifier.Level.VERIFIED.name }
-        appendLine("- Verified finds in this area: ${verified.size} (plus ${findsInRadius.size - verified.size} unverified or imported).")
-        val withF = verified.mapNotNull { it.factors() }
+        // Every find is the user's word (UserFinds): all of them count, imported patches included.
+        appendLine("- The user's own confirmed ginseng finds in this area: ${findsInRadius.size}.")
+        val withF = findsInRadius.mapNotNull { it.factors() }
         if (withF.isNotEmpty() && backgroundMean != null) {
             val mean = DoubleArray(6) { i -> withF.sumOf { it[i] } / withF.size }
-            appendLine("- Average terrain factors at verified finds (heat position wetness steepness cove elevation): " +
+            appendLine("- Average terrain factors at the user's finds (heat position wetness steepness cove elevation): " +
                     mean.joinToString(" ") { "%.2f".format(java.util.Locale.ROOT, it) })
             appendLine("- Average across the area for comparison: " +
                     backgroundMean.joinToString(" ") { "%.2f".format(java.util.Locale.ROOT, it) })
