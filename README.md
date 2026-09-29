@@ -42,8 +42,8 @@ recentre.
    only admits those IDs. It can rank and explain; it cannot add or move a place.
 3. **Witness** — citations survive only if the model's own search retrieved them in this
    call; coordinates and "legal to dig" sentences are stripped from its prose.
-4. **Earn** — your finds (all of them, imported patches included) refit the model's weights, adopted only if they rank
-   held-out finds better than the published weights, holding out whole blocks at the
+4. **Earn** — your finds (all of them, imported patches included) refit the model's weights,
+   adopted only if they rank held-out finds better than the published weights, holding out whole blocks at the
    distance this terrain stops resembling itself (measured by the scan), with an exact
    sign-flip test. It needs finds in 5 separate spots before it can learn anything.
 
@@ -94,7 +94,9 @@ Requires JDK 17+ and an Android SDK with platform 36 and build-tools 35.0.0.
 
 ```bash
 echo "sdk.dir=/path/to/android-sdk" > local.properties
-./gradlew :app:assembleDebug        # debug APK, installable (debug-signed)
+./gradlew :app:assembleDebug        # debug APK, installable (debug-signed), ~80 MB universal
+./gradlew :app:assembleField        # shrunk sideload APK: R8, debug-signed, arm64, ~21 MB
+                                    #   (-Pgensingo.abis=x86_64 for an emulator)
 ./gradlew :app:testDebugUnitTest    # JVM unit tests (incl. Robolectric migration tests)
 ./gradlew :app:connectedDebugAndroidTest   # on a device: SDK-on-ART and Keystore tests
 python3 tools/mutate.py             # mutation harness: every claimed property, broken on purpose

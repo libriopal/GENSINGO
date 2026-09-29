@@ -1326,6 +1326,12 @@ power — about 4 in 10 for a moderate signal in 8 separate spots — stated bel
   build 1.9 s → **1.05 s**, ranking 1.7 s → **1.3 s**, heap growth ~138 MB → **~104 MB**
   after replacing two boxed sorts with one primitive sort proven order-identical
   (`DescendingOrderTest`). Picks unchanged.
+- **Habitat heatmap timing** (768 px over a 6 × 4-tile z14 mosaic, desktop JVM, warmed): **4.8 s
+  per camera move** before, because each output pixel took 2 × 2 samples and each sample
+  rescored its cell from scratch: 2.4 M full evaluations for 0.5 M cells. Scoring each cell
+  once: **0.78 s**, with no output bit changed (`scoringEachCellOnceChangesNoPixel`, mutant H9).
+  The raster is also redrawn only when the tile set changes (it was redrawn on every pan), and
+  superseded work now stops at the next row instead of running to completion.
 - **Track filter, measured.** The first rule (accuracy/2) stored **456 of 600** fixes from a
   standing phone. Without Doppler speed, the single-fix rule accrued **3,432 m** of phantom
   track in ten minutes; the centroid rule: **0.0 m**. Walking with no speed: 988.9 m of 1,000.
@@ -1364,6 +1370,9 @@ power — about 4 in 10 for a moderate signal in 8 separate spots — stated bel
 6. The 3D mesh shader kept the ramp Phase 5 removed from the 2D map, under a comment saying
    they matched (found while wiring the 3D view; now pinned stop-for-stop).
 7. My own tally of the idea pool (all four numbers wrong).
+8. The habitat heatmap was **far too slow to be live**: 7.4 minutes on the emulator, 4.8 s
+   per camera move on a desktop JVM, recomputed on every pan (device, then timed on the JVM).
+   Fixed as above.
 
 ### My errors along the way, recorded because the protocol says the first version is evidence
 
