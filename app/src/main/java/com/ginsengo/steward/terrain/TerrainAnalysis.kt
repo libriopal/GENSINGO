@@ -33,7 +33,12 @@ class TerrainAnalysis private constructor(
         TerrainMath.tpiFast(grid, summedArea, x, y, radiusCells)
 
     companion object {
-        private const val MAX_CACHED = 3
+        /**
+         * Two: the map's current tile set and the 3D view's. Each entry is a summed-area table
+         * and a wetness grid in doubles, ~26 MB for the HD view's 1280 x 1280 mosaic, so three
+         * (Phase 7) could hold ~78 MB next to the 3D scene on a phone with a 192 MB heap.
+         */
+        private const val MAX_CACHED = 2
         private val cache = LinkedHashMap<String, TerrainAnalysis>()
 
         /**
