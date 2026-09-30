@@ -1298,6 +1298,10 @@ refactor moved the target: reported INVALID, not "killed").
 
 **Final: 37 / 38 killed**, L4 equivalent. (Table: `python3 tools/mutate.py`.)
 
+Re-run in full after the user's direction and the heatmap speed-up changed the code (the old
+verification mutants replaced by F1–F3 and D3, which re-introduce a demotion, plus H9 for the
+heatmap memo): **38 / 39 killed**, L4 still the one equivalent survivor.
+
 ### Rung 3 — an independent model, shown the claim and not the reasoning
 
 Sent to Tavily's research model (a different vendor; the only non-Anthropic model reachable
@@ -1408,10 +1412,12 @@ power — about 4 in 10 for a moderate signal in 8 separate spots — stated bel
    view and thermal behaviour are all unmeasured. The emulator is x86_64 with a software GPU.
 3. **Shrinking is verified for the `field` build only.** It is 20.9 MB for arm64 (the universal
    debug APK is 81.9 MB), R8 on, with the SDK's, Room's and kotlinx-serialization's own keep
-   rules. On the emulator (the x86_64 variant of the same shrunk code) it launched, drew the
-   map and the heatmap, took GPS fixes and started a research run; whether that run completes and stores its suggestions under R8 is
-   being checked. The live model call through the
-   shrunk SDK is untested (item 1). The `release` build type still ships unshrunk.
+   rules. On the emulator (the x86_64 variant of the same shrunk code) it launched, drew the map
+   and the heatmap, took GPS fixes, and **completed two research runs** (722 s and 589 s on the
+   interpreted CPU): 10 suggestions each, stored through Room, their source lists through
+   kotlinx-serialization, one protected place excluded, suggestion 1 at the same point as the
+   desktop scan. The live model call through the shrunk SDK is untested (item 1). The `release`
+   build type still ships unshrunk.
 4. **~104 MB heap** for the full scan on a desktop JVM. A low-end phone may run out; the scan
    could be tiled.
 5. **Learning power ~42%** for a moderate signal in 8 separate spots under range blocking.
