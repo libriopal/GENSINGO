@@ -171,12 +171,12 @@ how nice it would be. Disposition: **BUILD** (this iteration) · **DEFER** (real
 
 | ID | Idea | p | Disposition |
 |---|---|---|---|
-| N060 | Verified = averaged accuracy ≤ 20 m + fresh fix + 3-item ID checklist; otherwise saved unverified | 0.70 | BUILD |
+| N060 | Verified = averaged accuracy ≤ 20 m + fresh fix + 3-item ID checklist; otherwise saved unverified | 0.70 | REJECT — built, then removed at the user's direction: their finds are treated as true and accurate (Phase 7) |
 | N061 | Average fixes for up to 20 s before marking | 0.50 | BUILD |
 | N062 | Six-factor terrain snapshot per find, from cached DEM, filled in later if offline | 0.70 | BUILD |
 | N063 | Presence-background learner: L2-regularised logistic regression centred on the prior | 0.60 | BUILD |
 | N064 | Adopt learned weights only if held-out AUC beats the prior by ≥ 0.02 | 0.70 | BUILD |
-| N065 | ≥ 5 verified finds before learning may be adopted | 0.60 | BUILD |
+| N065 | ≥ 5 finds before learning may be adopted | 0.60 | BUILD |
 | N066 | Negative control: random points as "finds" must be rejected by the gate (registry #93) | 0.70 | BUILD |
 | N067 | Hold out whole ≤ 200 m clusters, not single finds (registry #95, reduced) | 0.40 | BUILD |
 | N068 | Background points sampled across the radius from the same DEM | 0.50 | BUILD |
@@ -185,7 +185,7 @@ how nice it would be. Disposition: **BUILD** (this iteration) · **DEFER** (real
 | N071 | Coordinates hidden in lists until tapped | 0.30 | BUILD |
 | N072 | Prior vs learned weight table, with the held-out AUCs | 0.40 | BUILD |
 | N073 | Stewardship prompt on a find (plant the berries) | 0.30 | DEFER |
-| N074 | Learn from unverified finds at lower weight | 0.10 | REJECT — that is exactly the unchecked signal |
+| N074 | Learn from unverified finds at lower weight | 0.10 | REJECT — superseded: at the user's direction every find is learned from at full weight (N060) |
 
 ### E. Tracking
 
@@ -317,9 +317,10 @@ any future prior improvement measurable, because the held-out-find gate will sco
 | Registry 107 (PAD-US) | 1 | **DEFER** as N135 | |
 | Registry 108 (edge-to-edge) | 1 | **BUILD** as N122 | |
 
-Totals: **128 new + 186 imported = 314 candidates.** Of the new ones: **98 BUILD, 19 DEFER,
-9 REJECT, 2 OPEN** (both OPEN items need a physical handset; none here). Seven of the new
-ones (K) were found by the evaluators after Step 5 ran.
+Totals: **128 new + 186 imported = 314 candidates.** Of the new ones: **97 BUILD, 19 DEFER,
+10 REJECT, 2 OPEN** (both OPEN items need a physical handset; none here). Seven of the new
+ones (K) were found by the evaluators after Step 5 ran. One BUILD (N060, the find-verification
+gate) became REJECT after delivery, at the user's direction.
 
 These totals were first typed in by hand as "124 new, 88 BUILD, 18 DEFER, 14 REJECT", and
 every one of those numbers was wrong. They are now counted from the tables by a script

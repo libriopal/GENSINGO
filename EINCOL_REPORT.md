@@ -1216,6 +1216,8 @@ attempt compiled the working tree I was already editing: a self-witness, caught 
 9 REJECT, 2 OPEN** — every typed number wrong. The earlier UPGRADES list was caught the same
 way in Phase 5. After the evaluators ran, seven more candidates they surfaced were added
 (section K): **128 new + 186 imported = 314; 98 BUILD, 19 DEFER, 9 REJECT, 2 OPEN**, counted.
+After delivery the user's direction turned one BUILD (N060, the verification gate) into a
+REJECT: **97 BUILD, 19 DEFER, 10 REJECT, 2 OPEN**, recounted.
 
 ```
 python3 -c "import re,collections;t=open('docs/IDEA_CANDIDATES.md').read();r=re.findall(r'^\| (N\d{3}) \|.*\| ([0-9.]+) \| (\w+)',t,re.M);print(len(r),collections.Counter(d for *_,d in r))"
@@ -1352,10 +1354,12 @@ power — about 4 in 10 for a moderate signal in 8 separate spots — stated bel
     layers again), elevation downloads retried on every frame while offline (now a 5-minute
     negative cache), a tilted view whose footprint exceeded the tile cap drew no heatmap (now
     drops resolution instead), and light system bars on a light-mode phone under the dark UI.
-  - **Not yet seen: the habitat heatmap.** Its computation starts on the device (logged: DEM
-    zoom 14, 20 of 24 tiles from cache), but after 13 minutes of interpreted CPU the raster
-    had not appeared. A completion log with its timing was added to tell "slow here" from
-    "drawn but invisible"; until it reports, this is open, not a success.
+  - **The habitat heatmap, drawn** by the shrunk `field` build over the offline fallback map:
+    the terrain-patterned green surface, from 20 of 24 cached z14 tiles. It first looked
+    absent because it was slow, not because it was invisible: the old code took 445 s on this
+    interpreted CPU, which a completion log measured. The new code took 611 s, which does
+    **not** show the desktop speed-up. That run shared the CPU with a full 10-mile research
+    scan ("Ranking places…" on screen), which the old run did not. An uncontended re-run is pending.
 
 ### What the evaluators caught that I did not
 
@@ -1395,9 +1399,12 @@ power — about 4 in 10 for a moderate signal in 8 separate spots — stated bel
    accepting these exact requests is unverified until someone runs it with a key.
 2. **No real handset.** Battery drain, GNSS behaviour under canopy, GPU drivers for the 3D
    view and thermal behaviour are all unmeasured. The emulator is x86_64 with a software GPU.
-3. **APK size 81 MB** (universal debug: four ABIs, R8 off). An arm64-only release with R8 would
-   be far smaller; R8 needs keep rules for Room, kotlinx-serialization and the SDK's Jackson
-   models, and a shrink mistake fails at runtime, so it is not done blind.
+3. **Shrinking is verified for the `field` build only.** It is 20.9 MB for arm64 (the universal
+   debug APK is 81.9 MB), R8 on, with the SDK's, Room's and kotlinx-serialization's own keep
+   rules. On the emulator (the x86_64 variant of the same shrunk code) it launched, drew the
+   map and the heatmap, took GPS fixes and started a research run; whether that run completes and stores its suggestions under R8 is
+   being checked. The live model call through the
+   shrunk SDK is untested (item 1). The `release` build type still ships unshrunk.
 4. **~104 MB heap** for the full scan on a desktop JVM. A low-end phone may run out; the scan
    could be tiled.
 5. **Learning power ~42%** for a moderate signal in 8 separate spots under range blocking.
@@ -1411,6 +1418,6 @@ power — about 4 in 10 for a moderate signal in 8 separate spots — stated bel
 9. The 3D terrain view has compiled and its matrices are unit-tested, but it has not been
    seen rendering on a device in this phase.
 10. `FindLearner.MIN_FINDS` is redundant with `MIN_CLUSTERS` (mutant L4); kept for its message.
-11. The habitat heatmap has not yet been seen drawing on a device (Rung 2 above). Its
-    per-pixel computation is pinned on the JVM (`DrawnSurfaceTest`); the upload to the map
-    on Android is what is unverified.
+11. Emulator timings are not comparable run to run (interpreted CPU, contention with the
+    research scan and Android's own system process, which raised "isn't responding" dialogs).
+    The heatmap speed-up is measured on a desktop JVM; on a phone it is unmeasured.
