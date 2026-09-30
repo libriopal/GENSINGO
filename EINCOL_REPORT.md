@@ -1446,3 +1446,115 @@ power — about 4 in 10 for a moderate signal in 8 separate spots — stated bel
     not; removing them is the next step if a handset shows the first render is slow. Emulator
     timings are not comparable run to run (interpreted CPU; contention with the research scan
     and with Android's own system process, which raised "isn't responding" dialogs).
+
+
+---
+
+# Phase 8 — the heatmap in 3D, high definition, and water
+
+The user, after installing the Phase 7 APK: *"everything works, except the heat map on the 3D
+rendering mode. Fix that and overall polish everything for more reliable; also add water:
+creeks, rivers etc. Make the 3D map more comprehensible and super high definition (since
+it's only a small area)."*
+
+## Why the 3D heatmap failed (read from the code before changing it)
+
+Phase 7 never saw the 3D view on a device (its Open item 9). Reading it against the report:
+
+1. **Colour per vertex, every ~60 m.** The mesh was 192 × 192 vertices over ±4 km of zoom-13
+   elevation (15.5 m cells), and each vertex carried its own suitability value. The heatmap's
+   detail (coves and benches tens of metres across) was averaged away between vertices.
+2. **Weak ground rendered black.** The shader's ramp starts at near-black `#041E1A`, and in
+   habitat mode it faded low scores' alpha toward a black clear colour. Most of the terrain
+   became a dark, unreadable mass, with the heatmap "not there".
+3. **Blank after backgrounding.** The renderer uploaded a mesh once, from a slot it then
+   emptied. When Android recreated the GL context, nothing was re-uploaded.
+4. **Missing tiles were 0 m.** A tile that failed to load stayed at sea level, a cliff
+   hundreds of metres deep in both the mesh and every neighbourhood measure.
+
+## What was built
+
+| | Built as | Files |
+|---|---|---|
+| The heatmap in 3D | A draped texture. Habitat colour is `SuitabilityRasterizer.colourFor(scoreGrid(...))`, the 2D heatmap's own function and ramp, at one score per elevation cell, composited over a neutral relief so weak ground reads as bare ground. Pinned bit-for-bit (`theHabitatColourIsTheTwoDimensionalHeatmapColour`, `theSceneUsesTheHeatmapsScoringFunction`) | `terrain3d/TerrainTextures.kt`, `Terrain3D.kt` |
+| High definition | Zoom 15 (3.9 m cells) over 3 × 3 tiles, about 3 km square, falling back to 14 and 13. Mesh 385² vertices (~298k triangles) with a solid base; texture up to 2048² (two texels per cell), full mip chain, anisotropic filtering where offered | `Terrain3D.kt`, `TerrainMesh.kt`, `TerrainGlRenderer.kt` |
+| Comprehension | Baked hillshade (north-west light, as relief maps use), contours every 5-100 m chosen from the relief with every fifth one stronger, creeks, numbered suggestion markers, finds, "You", a compass that faces north and refits the view, a legend, distance haze | `TerrainTextures.kt`, `ui/Terrain3DView.kt`, `TerrainShaders.kt` |
+| Water | `Hydrology`: Priority-Flood+ε depression filling (Barnes et al. 2014), D8 routing, contributing area in topological order, channel lines classed by drainage area (2 ha drainage, 20 ha creek, 200 ha stream). On the 2D map as a layer, in 3D in the texture, and in every suggestion as its nearest creek (distance, direction, height above it) | `terrain/Hydrology.kt`, `WaterLines.kt`, `ui/map/FieldMap.kt`, `research/RadiusScan.kt`, `OnDeviceRationale.kt` |
+| Privacy of the new field | The model is told the nearest creek in 50 m and 10 m steps and a compass octant, like the rest of a candidate's numbers: context, not a way to find the place | `ResearchPrompt.creekFor` |
+| Reliability | Mesh and texture re-uploaded on every new GL context; GL thread paused and resumed with the screen; depth buffer 24-bit with a 16-bit fallback instead of the stock chooser's crash; missing tiles edge-extended, with `missingInterior` reported so the 3D view prefers a complete lower zoom; the terrain-analysis cache capped at two mosaics (~52 MB instead of ~78 MB); the dead Phase 5 overlay removed | `TerrainGlRenderer.kt`, `ui/Terrain3DView.kt`, `terrain/DemTileStore.kt`, `terrain/TerrainAnalysis.kt` |
+
+Kept, with the reason: the habitat score is unchanged. Distance to a creek was **not** added as
+a seventh factor: wetness (TWI), position on slope (TPI) and curvature already carry the
+drainage signal, and adding it would count the same water twice without new evidence. Water is
+shown and described instead.
+
+## Step 5 — evaluators
+
+- **Unit tests: 308 pass**, 1 skipped (the full-scan timing fixture). New: `HydrologyTest` (a
+  valley's channel runs down its floor; a plane of the same size has none, the negative
+  control; a pit does not end the stream; filling never lowers and leaves every interior
+  cell draining; lines follow the flow and widen downstream; on real Boone terrain, channel
+  cells sit lower than their surroundings), `MissingTileFillTest`, `WaterLinesTest`,
+  `Terrain3DTest`, `WaterContextTest`.
+- **Mutation:** twelve new mutants, each breaking one claim, all killed. H2: the 3D colour
+  drifts from the 2D colour. H3: 3D scores the ground its own way. H4: weak ground goes
+  black again. H5: contours only darken. H6: texture coordinates stop spanning the model.
+  R1: pits are not filled. R2: channels are drawn without convergence. R3: a missing tile is
+  left as a cliff. R4: "nearest creek" becomes any drainage. R5: the model gets the exact
+  distance. The full harness (48 mutants) was not re-run after these
+  changes: the user asked to skip further testing and ship the APK, so only the new mutants
+  and the ones whose code changed were run.
+- **Shaders compiled by the real GLSL compiler** (`glslangValidator`, installed this phase), with
+  a negative control: a copy with one misspelt uniform is rejected.
+- **Timing, desktop JVM:** the whole HD scene (1280² cells: scores, creeks, mesh) 2.3 s, plus the
+  1536² texture 0.36 s; built once per ~1 km walked, off the main thread, with a status line.
+  Hydrology over the full 10-mile scan grid (1536²): 0.52-0.66 s, ~38 MB while it runs, then a
+  one-byte-per-cell map is kept. It traced ~3,400 km of creek-or-larger channel in the
+  2,200 km² square, about 1.5 km per km², which is plausible for Appalachian drainage density.
+- **On the device** (the shrunk `field` build, x86_64 emulator, offline, zoom-15 tiles from the
+  earlier seed). The status read *"HD 3D · 3.9 m elevation · 3.0 × 3.0 km · 40 km of creeks &
+  drains"*, so all nine interior zoom-15 tiles loaded and the scene built (about 14 minutes on
+  the interpreted CPU). **Seen on screen:** the relief with the habitat heatmap's greens on it,
+  contour lines, blue creeks, the "You" label, suggestion ①, and the legend (*"Contours every
+  20 m · relief ×1.5"*). The heatmap, the thing the user reported missing, is there.
+  The same screenshot showed three defects, all fixed:
+  - **The model floated in the top half of the screen.** The camera targeted sea level under
+    the user while the ground stood about 1.4 km above it (exaggerated). It now targets the
+    ground (`GroundedCameraTest`: a point at ground height lands exactly at screen centre,
+    and without the offset it sits well above).
+  - **The side walls were striped**, the edge texels stretched down them. They are now earth
+    coloured (`theSkirtIsAFlatBaseBelowTheLowestPoint` checks the wall flag).
+  - **The compass overlapped the status chip.** It now sits above the side buttons.
+  - **Not seen on the device:** the three fixes above. A second device pass was building
+    when the user asked to skip further testing and ship; they are covered by the unit tests
+    named above and the GLSL compiler, not by a screenshot.
+
+### What the evaluators caught
+
+1. **Contours vanished on dark ground** (`Terrain3DTest`). They were always mixed toward
+   near-black, so at the low end of the elevation tint and in shaded coves they could not be
+   seen. They are now light on dark ground and dark on light ground (mutant H5 pins it).
+2. Two of my test geometries were wrong, not the code. Contour lines covered half of a
+   128-texel hillshade test image and swamped its median. A 2.5 km perfectly planar side
+   slope does gather 2 ha per flow row, correctly. Both tests were fixed, and the reasons
+   are written into them.
+
+### My errors, recorded
+
+- Reused two mutant IDs (W1, W2 already existed), so selecting one ran two; renamed R1–R3.
+- `pgrep -f` matched its own command line again (third time), reporting an emulator that was
+  not running; the bracket pattern is now used every time.
+- My test-report script used `find('failure') or find('error')`. An ElementTree element with
+  no children is false in Python, so it hid a real failure until I re-read the counts.
+
+## Open
+
+0. **The grounded camera, earth walls and moved compass have not been seen on a device**
+   (above). Everything else in this phase's 3D view was seen on the emulator.
+1. **Real phone GPUs are unmeasured**: frame rate on a 298k-triangle mesh, texture memory
+   (16 MB for a 2048² texture plus mips) on a low-end device, and anisotropic filtering support.
+2. **HD build time on a phone is unmeasured** (2.3 s on a desktop JVM).
+3. **Channel classes are display thresholds by drainage area**, not field-mapped channel heads.
+   Rivers entering from outside the loaded tiles are drawn with less area than they have.
+4. The 2D creek layer recomputes with each new tile set (about 0.3 s on the desktop, more on
+   a phone). It is cached with the habitat raster, so pans within a tile set cost nothing.
