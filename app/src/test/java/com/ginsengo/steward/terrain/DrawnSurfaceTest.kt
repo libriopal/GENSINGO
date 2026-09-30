@@ -88,27 +88,6 @@ class DrawnSurfaceTest {
     }
 }
 
-/** The 3D mesh and the 2D heatmap must be the same ramp, stop for stop. */
-class ShaderRampParityTest {
-
-    @Test
-    fun meshRampEqualsHeatmapRamp() {
-        val src = com.ginsengo.steward.terrain3d.TerrainShaders.FRAGMENT
-        val fn = src.substring(src.indexOf("vec3 suitabilityTint"), src.indexOf("void main()"))
-        val stops = Regex("""vec3\(([\d.]+),\s*([\d.]+),\s*([\d.]+)\);\s*//\s*#([0-9A-Fa-f]{6})""").findAll(fn).toList()
-        assertEquals("stop count", SuitabilityRasterizer.RAMP.size, stops.size)
-        stops.forEachIndexed { i, m ->
-            val rgb = SuitabilityRasterizer.RAMP[i]
-            val want = intArrayOf((rgb shr 16) and 255, (rgb shr 8) and 255, rgb and 255)
-            assertEquals("hex comment $i", "%06X".format(rgb), m.groupValues[4].uppercase())
-            for (c in 0..2) {
-                val got = m.groupValues[c + 1].toDouble() * 255
-                assertEquals("stop $i channel $c", want[c].toDouble(), got, 1.0)
-            }
-        }
-    }
-}
-
 class ConvertersTest {
 
     private val c = com.ginsengo.steward.data.db.Converters()

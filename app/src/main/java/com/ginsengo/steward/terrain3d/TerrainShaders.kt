@@ -1,17 +1,18 @@
 package com.ginsengo.steward.terrain3d
 
 /**
- * GLSL ES 3.0 sources for the terrain overlay.
+ * GLSL ES 3.0 sources for the 3D terrain view.
  *
  * These are kept as plain constants in one file so they can be extracted and compiled by
- * `glslangValidator` outside the app — see `tools/validate_shaders.sh` and
- * `ShaderSourceTest`. A shader that fails to compile on a device is a black screen with a
- * message in logcat that nobody reads; catching it at build time is the difference between
- * a typo and a silent blank overlay.
+ * `glslangValidator` outside the app (see `tools/validate_shaders.sh` and `ShaderSourceTest`).
+ * A shader that fails to compile on a device is a black screen with a message in logcat that
+ * nobody reads; catching it at build time is the difference between a typo and a blank view.
  *
- * GLES 3.0 is safe at minSdk 26 (it has been guaranteed since API 18 on capable hardware
- * and is universal on Android 8+), and it buys `uint` index buffers, which a 192x192 mesh
- * plus skirts needs.
+ * All colour comes from one texture that [TerrainTextures] bakes on the CPU: the habitat
+ * surface (the same function and ramp as the 2D heatmap), relief shading, contours and
+ * water. The shader only drapes it, adds a little light from the mesh normal so the form
+ * reads in perspective, and hazes distant ground so depth reads too. Keeping the arithmetic
+ * out of GLSL keeps it testable.
  */
 object TerrainShaders {
 
@@ -20,24 +21,20 @@ precision highp float;
 
 layout(location = 0) in vec3 a_position;    // world pixels, relative to the mesh origin
 layout(location = 1) in vec3 a_normal;
-layout(location = 2) in float a_elevation;  // metres
-layout(location = 3) in float a_suitability;// 0..1
+layout(location = 2) in float a_elevation;  // metres (kept for completeness; colour is baked)
+layout(location = 3) in vec2 a_uv;          // 0..1 over the interior, north-west origin
 
 uniform mat4 u_mvp;
-uniform vec2 u_elevationRange;              // (min, max) metres, for the hypsometric tint
 
 out vec3 v_normal;
-out float v_elevNorm;
-out float v_suitability;
-out float v_elevation;
+out vec2 v_uv;
+out float v_depth;
 
 void main() {
     v_normal = normalize(a_normal);
-    v_suitability = a_suitability;
-    v_elevation = a_elevation;
-    float span = max(u_elevationRange.y - u_elevationRange.x, 1.0);
-    v_elevNorm = clamp((a_elevation - u_elevationRange.x) / span, 0.0, 1.0);
+    v_uv = a_uv;
     gl_Position = u_mvp * vec4(a_position, 1.0);
+    v_depth = gl_Position.w;
 }
 """
 
@@ -45,63 +42,24 @@ void main() {
 precision highp float;
 
 in vec3 v_normal;
-in float v_elevNorm;
-in float v_suitability;
-in float v_elevation;
+in vec2 v_uv;
+in float v_depth;
 
-uniform float u_opacity;
-uniform float u_suitabilityMix;   // 0 = hypsometric tint, 1 = habitat forecast
-uniform vec3  u_lightDir;         // normalised, pointing towards the light
-uniform float u_minScore;         // below this the forecast contributes nothing
+uniform sampler2D u_colour;
+uniform vec3 u_lightDir;     // normalised, pointing towards the light
+uniform vec3 u_hazeColour;   // the sky the far ground fades into
+uniform vec2 u_haze;         // (start, end) in eye depth
 
 out vec4 fragColor;
 
-// Hypsometric ramp over the Appalachian band, matching the 2D colour-relief layer so the
-// two views of the same ground do not disagree about what colour a ridge is.
-vec3 elevationTint(float t) {
-    vec3 c0 = vec3(0.024, 0.133, 0.180);  // #06222E
-    vec3 c1 = vec3(0.071, 0.353, 0.227);  // #125A3A
-    vec3 c2 = vec3(0.180, 0.490, 0.275);  // #2E7D46
-    vec3 c3 = vec3(0.549, 0.659, 0.306);  // #8CA84E
-    vec3 c4 = vec3(1.000, 0.784, 0.341);  // #FFC857
-    if (t < 0.25) return mix(c0, c1, t / 0.25);
-    if (t < 0.50) return mix(c1, c2, (t - 0.25) / 0.25);
-    if (t < 0.75) return mix(c2, c3, (t - 0.50) / 0.25);
-    return mix(c3, c4, (t - 0.75) / 0.25);
-}
-
-// Habitat forecast ramp: the SAME five stops as SuitabilityRasterizer.RAMP (monotonic in
-// L* under normal, deuteranope and protanope vision), so the 3D view and the flat heatmap
-// read as one surface. Pinned stop-for-stop by ShaderRampParityTest; the previous ramp here
-// (#0E4A5A -> #00FF88 -> #FFC857) was the one Phase 5 removed from the 2D map because its
-// lightness peaked mid-scale, and this shader had kept it under a comment saying it matched.
-vec3 suitabilityTint(float t) {
-    vec3 c0 = vec3(0.016, 0.118, 0.102);  // #041E1A
-    vec3 c1 = vec3(0.043, 0.302, 0.227);  // #0B4D3A
-    vec3 c2 = vec3(0.078, 0.561, 0.357);  // #148F5B
-    vec3 c3 = vec3(0.498, 0.808, 0.478);  // #7FCE7A
-    vec3 c4 = vec3(0.918, 0.965, 0.784);  // #EAF6C8
-    if (t < 0.25) return mix(c0, c1, t / 0.25);
-    if (t < 0.50) return mix(c1, c2, (t - 0.25) / 0.25);
-    if (t < 0.75) return mix(c2, c3, (t - 0.50) / 0.25);
-    return mix(c3, c4, (t - 0.75) / 0.25);
-}
-
 void main() {
-    vec3 n = normalize(v_normal);
-    float lambert = max(dot(n, normalize(u_lightDir)), 0.0);
-    float shade = 0.35 + 0.65 * lambert;
-
-    float score = clamp((v_suitability - u_minScore) / max(1.0 - u_minScore, 0.001), 0.0, 1.0);
-    vec3 base = elevationTint(v_elevNorm);
-    vec3 forecast = suitabilityTint(score);
-    vec3 rgb = mix(base, forecast, u_suitabilityMix * step(u_minScore, v_suitability));
-
-    // In forecast mode, weak ground fades out rather than tinting the whole hillside, so
-    // the map underneath stays readable everywhere the model has nothing to say.
-    float alpha = mix(u_opacity, u_opacity * (0.25 + 0.75 * score), u_suitabilityMix);
-
-    fragColor = vec4(rgb * shade, alpha);
+    vec3 base = texture(u_colour, v_uv).rgb;
+    // Relief is baked into the texture at elevation resolution; this only adds the
+    // perspective form of the mesh, gently, so it does not double the shading.
+    float lambert = max(dot(normalize(v_normal), normalize(u_lightDir)), 0.0);
+    vec3 rgb = base * (0.80 + 0.22 * lambert);
+    float haze = smoothstep(u_haze.x, u_haze.y, v_depth) * 0.6;
+    fragColor = vec4(mix(rgb, u_hazeColour, haze), 1.0);
 }
 """
 
@@ -109,43 +67,8 @@ void main() {
     const val LOC_POSITION = 0
     const val LOC_NORMAL = 1
     const val LOC_ELEVATION = 2
-    const val LOC_SUITABILITY = 3
+    const val LOC_UV = 3
 
-    /**
-     * Custom Prospecting Shading Pipeline (Glassbox_Labs / GinsengTerra)
-     * Direct GPU analysis shader calculating micro-topography conditions (northern and eastern faces)
-     * and damp slope aspect alpha blended with high suitability marker.
-     */
-    const val PROSPECTING_CORE_FRAGMENT = """#version 300 es
-precision highp float;
-in vec3 v_normal;
-in float v_elevNorm;
-in float v_suitability;
-in float v_elevation;
-
-uniform float u_opacity;
-uniform vec3 u_solarVector; // Real-time solar position matching target regional coordinates
-
-out vec4 fragColor;
-
-void main() {
-    vec3 normal = normalize(v_normal);
-    vec3 solarDirection = normalize(u_solarVector);
-
-    // Compute base diffuse hillshading matrix
-    float LambertianComponent = max(dot(normal, solarDirection), 0.15);
-
-    // Filter for micro-topography conditions: Northern and Eastern faces (Ginseng micro-climates)
-    float dampSlopeAspectAlpha = smoothstep(0.20, 0.80, (normal.y * -1.0) + (normal.x * 0.35));
-
-    // Dynamic color composition matching premium visual direction
-    vec3 illuminatedTerrain = vec3(0.08, 0.35, 0.18) * (LambertianComponent + 0.25);
-
-    // Overlay clear structural indicator tracks onto potential target zones (#1FE057 / #00E5FF)
-    vec3 highSuitabilityMarker = vec3(0.12, 0.78, 0.34);
-    vec3 processedOutput = mix(illuminatedTerrain, highSuitabilityMarker, dampSlopeAspectAlpha * 0.40);
-
-    fragColor = vec4(processedOutput, u_opacity);
-}
-"""
+    /** Sky and haze: a dark slate that sits with the app's colours. */
+    val HAZE_RGB = floatArrayOf(0.055f, 0.098f, 0.118f)
 }

@@ -1,15 +1,14 @@
 package com.ginsengo.steward.terrain3d
 
 import com.ginsengo.steward.terrain.DemTileStore
-import com.ginsengo.steward.terrain.GinsengSuitability
-import com.ginsengo.steward.terrain.TerrainAnalysis
 import com.ginsengo.steward.terrain.TerrainMath
-import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /**
- * Builds a terrain mesh from a DEM mosaic: positions, normals, elevation and per-vertex
- * ginseng suitability, ready to upload as one interleaved vertex buffer.
+ * Builds a terrain mesh from a DEM mosaic: positions, normals, elevation and texture
+ * coordinates, ready to upload as one interleaved vertex buffer. Colour comes from the
+ * texture [TerrainTextures] bakes over the same interior (Phase 8): the first version tinted
+ * each vertex from its own suitability, every ~60 m, and the heatmap did not survive it.
  *
  * Pure Kotlin and fully unit-tested. That is deliberate — everything that can be wrong
  * about a terrain mesh *except* the GL calls themselves lives here, so the part that cannot
@@ -27,14 +26,14 @@ import kotlin.math.sqrt
  */
 object TerrainMesh {
 
-    /** Floats per vertex: position(3) + normal(3) + elevation(1) + suitability(1). */
-    const val FLOATS_PER_VERTEX = 8
+    /** Floats per vertex: position(3) + normal(3) + elevation(1) + texture uv(2). */
+    const val FLOATS_PER_VERTEX = 9
     const val STRIDE_BYTES = FLOATS_PER_VERTEX * 4
 
     const val OFF_POSITION = 0
     const val OFF_NORMAL = 3
     const val OFF_ELEVATION = 6
-    const val OFF_SUITABILITY = 7
+    const val OFF_UV = 7
 
     class Mesh(
         val vertices: FloatArray,
@@ -69,42 +68,40 @@ object TerrainMesh {
      * @param mosaic     elevation, halo included (the halo is sampled, never displayed)
      * @param camera     supplies the world-pixel scale and altitude scale
      * @param gridN      vertices per edge
-     * @param tpiRadiusM neighbourhood radius for the suitability surface, in metres
      * @param exaggeration vertical multiplier; 1.0 is true scale
+     *
+     * Vertex (i, j) sits at fraction (i, j) / (gridN - 1) of the interior, edge to edge, with
+     * texture coordinate equal to that fraction and elevation sampled where [TerrainTextures]
+     * samples the same fraction, so colour and geometry agree to the cell.
      */
     fun build(
         mosaic: DemTileStore.Mosaic,
         camera: MapCamera,
         gridN: Int,
-        tpiRadiusM: Double,
         exaggeration: Float = 1.0f,
-        withSuitability: Boolean = true,
-        weights: DoubleArray = GinsengSuitability.PRIOR_WEIGHTS,
     ): Mesh {
         val g = mosaic.grid
         val halo = mosaic.haloPx
         val iw = g.w - 2 * halo
         val ih = g.h - 2 * halo
 
-        val tpiRadiusCells = (tpiRadiusM / g.cellSizeM).roundToInt().coerceIn(1, 60)
-        // Cached per mosaic: flow accumulation and the summed-area table are the expensive
-        // parts and neither depends on the camera, so a pan that stays on the same elevation
-        // tiles reuses them instead of paying ~224 ms again.
-        val analysis = TerrainAnalysis.of(mosaic, withWetness = withSuitability)
-
-        // Geographic bounds of the displayed (halo-cropped) region.
+        // Geographic bounds of the displayed (halo-cropped) region. Rows are linear in
+        // Mercator y, so positions are interpolated in world pixels, not in latitude.
         val north = mosaic.northLat + (mosaic.southLat - mosaic.northLat) * (halo.toDouble() / g.h)
         val south = mosaic.northLat + (mosaic.southLat - mosaic.northLat) * ((halo + ih).toDouble() / g.h)
         val west = mosaic.westLon + (mosaic.eastLon - mosaic.westLon) * (halo.toDouble() / g.w)
         val east = mosaic.westLon + (mosaic.eastLon - mosaic.westLon) * ((halo + iw).toDouble() / g.w)
+        val nY = camera.worldY(mosaic.northLat); val sY = camera.worldY(mosaic.southLat)
+        val topY = nY + (sY - nY) * (halo.toDouble() / g.h)
+        val bottomY = nY + (sY - nY) * ((halo + ih).toDouble() / g.h)
 
         val originX = camera.worldX((west + east) / 2.0)
-        val originY = camera.worldY((north + south) / 2.0)
+        val originY = (topY + bottomY) / 2.0
 
         val n = gridN
         val interior = n * n
-        // Skirt: one extra ring of vertices dropped below the surface, so the seam between
-        // adjacent mesh loads shows no see-through crack when they disagree by a metre.
+        // Skirt: one extra ring of vertices dropped below the surface, so the edge of the
+        // model reads as a solid block instead of a paper-thin sheet.
         val skirtCount = 4 * n
         val total = interior + skirtCount
 
@@ -112,73 +109,42 @@ object TerrainMesh {
         var minE = Float.MAX_VALUE
         var maxE = -Float.MAX_VALUE
 
-        // Sample the DEM on the vertex lattice.
-        val elev = FloatArray(interior)
-        val suit = FloatArray(interior)
         for (j in 0 until n) {
             val fy = j.toDouble() / (n - 1)
-            val gy = halo + fy * (ih - 1)
+            val gy = halo + fy * ih - 0.5
+            val wy = topY + (bottomY - topY) * fy - originY
             for (i in 0 until n) {
                 val fx = i.toDouble() / (n - 1)
-                val gx = halo + fx * (iw - 1)
-                val xi = gx.toInt().coerceIn(1, g.w - 2)
-                val yi = gy.toInt().coerceIn(1, g.h - 2)
-                val e = bilinear(g, gx, gy)
-                elev[j * n + i] = e.toFloat()
-                if (e < minE) minE = e.toFloat()
-                if (e > maxE) maxE = e.toFloat()
-
-                suit[j * n + i] = if (!withSuitability) 0f else {
-                    val (slopeDeg, aspectDeg) = TerrainMath.slopeAspect(g, xi, yi)
-                    GinsengSuitability.weighted(
-                        GinsengSuitability.factorValues(
-                            heatLoadRaw = TerrainMath.heatLoadIndex(
-                                mosaic.latAtRow(yi), slopeDeg, aspectDeg
-                            ),
-                            tpiMeters = analysis.tpi(xi, yi, tpiRadiusCells),
-                            twi = analysis.twiAt(xi, yi),
-                            slopeDeg = slopeDeg,
-                            curvature = TerrainMath.profileCurvature(g, xi, yi),
-                            elevationM = e,
-                        ),
-                        weights,
-                    ).toFloat()
-                }
-            }
-        }
-
-        // Positions, relative to the local origin.
-        for (j in 0 until n) {
-            val fy = j.toDouble() / (n - 1)
-            val lat = north + (south - north) * fy
-            val wy = camera.worldY(lat) - originY
-            for (i in 0 until n) {
-                val fx = i.toDouble() / (n - 1)
-                val lng = west + (east - west) * fx
-                val wx = camera.worldX(lng) - originX
-                val e = elev[j * n + i]
+                val gx = halo + fx * iw - 0.5
+                val e = bilinear(g, gx, gy).toFloat()
+                if (e < minE) minE = e
+                if (e > maxE) maxE = e
+                val wx = camera.worldX(west + (east - west) * fx) - originX
                 val base = (j * n + i) * FLOATS_PER_VERTEX
                 verts[base + OFF_POSITION] = wx.toFloat()
                 verts[base + OFF_POSITION + 1] = wy.toFloat()
-                verts[base + OFF_POSITION + 2] =
-                    (e * camera.pixelsPerMeter * exaggeration).toFloat()
+                verts[base + OFF_POSITION + 2] = (e * camera.pixelsPerMeter * exaggeration).toFloat()
                 verts[base + OFF_ELEVATION] = e
-                verts[base + OFF_SUITABILITY] = suit[j * n + i]
+                verts[base + OFF_UV] = fx.toFloat()
+                verts[base + OFF_UV + 1] = fy.toFloat()
             }
         }
 
         computeNormals(verts, n)
 
         // Skirt vertices: copy the boundary ring, pushed down.
+        // A flat base below the lowest point, so the model reads as a solid block of ground.
         val relief = (maxE - minE).coerceAtLeast(1f)
-        val skirtDepth = (relief * camera.pixelsPerMeter * 0.5).toFloat().coerceAtLeast(1f)
+        val baseM = minE - maxOf(relief * 0.12f, 20f)
+        val baseZ = (baseM * camera.pixelsPerMeter * exaggeration).toFloat()
+        val skirtDepth = ((minE - baseM) * camera.pixelsPerMeter * exaggeration).toFloat()
         var s = interior
         val skirtIndexOf = HashMap<Int, Int>(skirtCount * 2)
         fun addSkirt(srcIdx: Int) {
             val src = srcIdx * FLOATS_PER_VERTEX
             val dst = s * FLOATS_PER_VERTEX
             System.arraycopy(verts, src, verts, dst, FLOATS_PER_VERTEX)
-            verts[dst + OFF_POSITION + 2] = verts[src + OFF_POSITION + 2] - skirtDepth
+            verts[dst + OFF_POSITION + 2] = baseZ
             skirtIndexOf[srcIdx] = s
             s++
         }

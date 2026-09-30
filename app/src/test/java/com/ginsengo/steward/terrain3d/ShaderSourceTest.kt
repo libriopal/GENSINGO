@@ -35,10 +35,7 @@ class ShaderSourceTest {
         assertEquals(
             "a_elevation location", TerrainShaders.LOC_ELEVATION, declaredLocation("a_elevation")
         )
-        assertEquals(
-            "a_suitability location",
-            TerrainShaders.LOC_SUITABILITY, declaredLocation("a_suitability"),
-        )
+        assertEquals("a_uv location", TerrainShaders.LOC_UV, declaredLocation("a_uv"))
     }
 
     @Test
@@ -47,24 +44,23 @@ class ShaderSourceTest {
             TerrainShaders.LOC_POSITION,
             TerrainShaders.LOC_NORMAL,
             TerrainShaders.LOC_ELEVATION,
-            TerrainShaders.LOC_SUITABILITY,
+            TerrainShaders.LOC_UV,
         )
         assertEquals("attribute locations must be unique", locs.size, locs.toSet().size)
     }
 
     /**
      * The interleaved layout the renderer binds must match what the mesh writes. Position
-     * and normal are vec3, elevation and suitability are scalars: eight floats in that
-     * order.
+     * and normal are vec3, elevation a scalar, uv a vec2: nine floats in that order.
      */
     @Test
     fun vertexLayoutOffsetsAreContiguousAndCorrectlySized() {
         assertEquals(0, TerrainMesh.OFF_POSITION)
         assertEquals(3, TerrainMesh.OFF_NORMAL)
         assertEquals(6, TerrainMesh.OFF_ELEVATION)
-        assertEquals(7, TerrainMesh.OFF_SUITABILITY)
-        assertEquals(8, TerrainMesh.FLOATS_PER_VERTEX)
-        assertEquals(32, TerrainMesh.STRIDE_BYTES)
+        assertEquals(7, TerrainMesh.OFF_UV)
+        assertEquals(9, TerrainMesh.FLOATS_PER_VERTEX)
+        assertEquals(36, TerrainMesh.STRIDE_BYTES)
     }
 
     @Test
@@ -89,8 +85,7 @@ class ShaderSourceTest {
     fun rendererUniformsExistInTheShaders() {
         val src = TerrainShaders.VERTEX + TerrainShaders.FRAGMENT
         listOf(
-            "u_mvp", "u_opacity", "u_suitabilityMix",
-            "u_lightDir", "u_minScore", "u_elevationRange",
+            "u_mvp", "u_colour", "u_lightDir", "u_hazeColour", "u_haze",
         ).forEach {
             assertTrue("uniform $it is queried by the renderer but not declared", src.contains(it))
         }

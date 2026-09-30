@@ -49,33 +49,26 @@ class MeshBuildBudgetTest {
         return best
     }
 
+    /**
+     * The whole HD scene the 3D view builds (Phase 8): a zoom-15 area is 5 x 5 tiles with its
+     * halo, 1280 x 1280 cells. It is built once per ~1 km walked, off the main thread, while a
+     * status line says so; the budget keeps that under a few seconds on a phone.
+     */
     @Test
-    fun meshBuildStaysWithinAnInteractiveBudget() {
-        val mo = mosaic()
-        val cam = camera()
-        println("mesh build cost (256x256 DEM mosaic, JVM):")
-
-        // Tight TPI radius, no suitability: the cheapest useful configuration.
-        val plain = time("gridN=192, tpiRadius=15 cells, no suitability") {
-            TerrainMesh.build(mo, cam, 192, tpiRadiusM = 120.0, withSuitability = false)
+    fun theHdSceneBuildsWithinBudget() {
+        val src = com.ginsengo.steward.Fixtures.mosaic("scan_boone_z12.bin").grid
+        val n = 5 * DemTileStore.TILE
+        val z = FloatArray(n * n) { i -> src.z[((i / n) % src.h) * src.w + (i % n) % src.w] }
+        val mo = DemTileStore.Mosaic(TerrainMath.Grid(n, n, z, 3.9), 15, 8829, 12917, 5, 5, DemTileStore.TILE, 25, 25)
+        println("HD scene (1280x1280 cells, 768 interior, JVM):")
+        lateinit var scene: Terrain3D.Scene
+        val build = time("scores + hydrology + mesh", warmups = 1, runs = 2) { scene = Terrain3D.build(mo) }
+        val bake = time("texture ${scene.textureSize}^2", warmups = 1, runs = 2) {
+            Terrain3D.Scene(scene.mosaic, scene.ground, scene.mesh, scene.creekKm).texture(TerrainTextures.Mode.HABITAT)
         }
-
-        // With the forecast tint, which adds multiple-flow accumulation over the mosaic.
-        val tinted = time("gridN=192, tpiRadius=15 cells, with suitability") {
-            TerrainMesh.build(mo, cam, 192, tpiRadiusM = 120.0, withSuitability = true)
-        }
-
-        // The wide-radius case that a zoomed-out camera asks for.
-        val wide = time("gridN=128, tpiRadius=1500 m, with suitability") {
-            TerrainMesh.build(mo, cam, 128, tpiRadiusM = 1500.0, withSuitability = true)
-        }
-
-        // A rebuild happens off the main thread while the old mesh stays on screen, so it
-        // does not have to hit a frame budget — but it must finish inside a gesture, or the
-        // terrain visibly trails the map all the way through a pan.
-        assertTrue("plain build too slow for mid-gesture rebuild: $plain ms", plain < 400)
-        assertTrue("tinted build too slow for mid-gesture rebuild: $tinted ms", tinted < 600)
-        assertTrue("wide-radius build too slow for mid-gesture rebuild: $wide ms", wide < 600)
+        println("  mesh ${scene.mesh.gridN}^2 vertices, ${scene.mesh.triangleCount} triangles")
+        assertTrue("scene build $build ms", build < 5_000)
+        assertTrue("texture bake $bake ms", bake < 3_000)
     }
 
     /**

@@ -140,6 +140,7 @@ class DemTileStore(context: Context) {
         val w = nx * TILE
         val h = ny * TILE
         val z0 = FloatArray(w * h)
+        val loaded = BooleanArray(nx * ny)
         var got = 0
         for ((pos, job) in jobs) {
             val data = job.await() ?: continue
@@ -147,11 +148,17 @@ class DemTileStore(context: Context) {
             val (tx, ty) = pos
             val ox = (tx - x0) * TILE
             val oy = (ty - y0) * TILE
+            loaded[(ty - y0) * nx + (tx - x0)] = true
             for (row in 0 until TILE) {
                 System.arraycopy(data, row * TILE, z0, (oy + row) * w + ox, TILE)
             }
         }
         if (got == 0) return@coroutineScope null
+        fillMissing(z0, nx, ny, loaded)
+        var missingInterior = 0
+        for (ty in haloTiles until ny - haloTiles) for (tx in haloTiles until nx - haloTiles) {
+            if (!loaded[ty * nx + tx]) missingInterior++
+        }
 
         // Ground resolution at the mosaic's centre latitude.
         val centreLat = (north + south) / 2.0
@@ -164,6 +171,7 @@ class DemTileStore(context: Context) {
             tilesX = nx, tilesY = ny,
             haloPx = haloTiles * TILE,
             tilesLoaded = got, tilesRequested = jobs.size,
+            missingInterior = missingInterior,
         )
     }
 
@@ -174,6 +182,8 @@ class DemTileStore(context: Context) {
         val tilesX: Int, val tilesY: Int,
         val haloPx: Int,
         val tilesLoaded: Int, val tilesRequested: Int,
+        /** Tiles inside the halo that could not be loaded (edge-extended; see [fillMissing]). */
+        val missingInterior: Int = 0,
     ) {
         val northLat: Double get() = tileYToLat(tileY0, zoom)
         val southLat: Double get() = tileYToLat(tileY0 + tilesY, zoom)
@@ -188,6 +198,42 @@ class DemTileStore(context: Context) {
     }
 
     companion object {
+        /**
+         * Gives tiles that could not be loaded the elevation of the nearest loaded edge,
+         * instead of 0 m. A zero tile is a cliff hundreds of metres deep: it wrecks every
+         * neighbourhood measure near it (slope, position, wetness, the drainage it creates)
+         * and, in 3D, draws a pit. Edge extension is flat and wrong in its own way, so
+         * callers see [Mosaic.missingInterior] and decide whether to show the result.
+         * Rows of tiles are filled sideways from the nearest loaded tile in the same row;
+         * rows with none are then copied from the nearest filled row.
+         */
+        fun fillMissing(z: FloatArray, nx: Int, ny: Int, loaded: BooleanArray) {
+            val w = nx * TILE
+            val bandHasData = BooleanArray(ny)
+            for (ty in 0 until ny) {
+                val have = (0 until nx).filter { loaded[ty * nx + it] }
+                if (have.isEmpty()) continue
+                bandHasData[ty] = true
+                for (tx in 0 until nx) {
+                    if (loaded[ty * nx + tx]) continue
+                    val src = have.minBy { kotlin.math.abs(it - tx) }
+                    val srcCol = if (src < tx) (src + 1) * TILE - 1 else src * TILE
+                    for (r in ty * TILE until (ty + 1) * TILE) {
+                        val v = z[r * w + srcCol]
+                        java.util.Arrays.fill(z, r * w + tx * TILE, r * w + (tx + 1) * TILE, v)
+                    }
+                }
+            }
+            val bands = (0 until ny).filter { bandHasData[it] }
+            if (bands.isEmpty()) return
+            for (ty in 0 until ny) {
+                if (bandHasData[ty]) continue
+                val src = bands.minBy { kotlin.math.abs(it - ty) }
+                val srcRow = if (src < ty) (src + 1) * TILE - 1 else src * TILE
+                for (r in ty * TILE until (ty + 1) * TILE) System.arraycopy(z, srcRow * w, z, r * w, w)
+            }
+        }
+
         private const val TAG = "DemTileStore"
         const val TILE = 256
         const val MAX_DEM_ZOOM = 15

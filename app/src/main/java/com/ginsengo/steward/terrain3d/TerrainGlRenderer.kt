@@ -10,25 +10,27 @@ import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 
 /**
- * Draws the terrain mesh into a transparent GL surface layered over the map.
+ * Draws the terrain mesh with its baked colour texture.
  *
  * This is the part that cannot be tested without a device, so it is kept deliberately
- * thin: it compiles two shaders, uploads one interleaved buffer, and issues one draw call.
- * Every decision with arithmetic in it — the projection, the mesh, the normals, the
- * suitability — lives in [MapCamera], [TerrainMesh] and the terrain package, all of which
- * are pure Kotlin and covered by tests.
+ * thin: it compiles two shaders, uploads one interleaved buffer and one texture, and issues
+ * one draw call. Every decision with arithmetic in it (projection, mesh, colour) lives in
+ * [MapCamera], [TerrainMesh] and [TerrainTextures], which are pure Kotlin and tested.
  *
- * Shader compilation and link status are checked and logged rather than assumed. A GLES
- * program that fails to link silently renders nothing, which is indistinguishable from
- * "the overlay is off" unless somebody asks.
+ * CONTEXT LOSS (Phase 8). Android can destroy the GL context when the app is backgrounded;
+ * [onSurfaceCreated] then runs again with empty buffers. The first version only uploaded a
+ * mesh once, from a hand-off slot it had already emptied, so the view came back blank. The
+ * current mesh and texture are now kept and re-uploaded whenever a context is created.
  */
 class TerrainGlRenderer : GLSurfaceView.Renderer {
 
-    /** Set from any thread; consumed on the GL thread at the next frame. */
-    private val pendingMesh = AtomicReference<TerrainMesh.Mesh?>(null)
+    /** Latest mesh / texture, kept for re-upload after a context loss. */
+    private val mesh = AtomicReference<TerrainMesh.Mesh?>(null)
+    private val texture = AtomicReference<Texture?>(null)
     private val cameraState = AtomicReference<Frame?>(null)
+    @Volatile private var meshDirty = false
+    @Volatile private var textureDirty = false
 
-    /** Reported back so the UI can say why nothing is showing. */
     @Volatile var lastError: String? = null
         private set
     @Volatile var programReady: Boolean = false
@@ -36,13 +38,13 @@ class TerrainGlRenderer : GLSurfaceView.Renderer {
     @Volatile var trianglesDrawn: Int = 0
         private set
 
+    class Texture(val argb: IntArray, val size: Int)
+
     data class Frame(
         val mvp: FloatArray,
-        val opacity: Float,
-        val suitabilityMix: Float,
-        val minScore: Float,
-        val elevMin: Float,
-        val elevMax: Float,
+        /** Eye depth where haze begins and where it is full. */
+        val hazeStart: Float,
+        val hazeEnd: Float,
     ) {
         override fun equals(other: Any?) = this === other
         override fun hashCode() = System.identityHashCode(this)
@@ -52,26 +54,26 @@ class TerrainGlRenderer : GLSurfaceView.Renderer {
     private var vbo = 0
     private var ebo = 0
     private var vao = 0
+    private var tex = 0
     private var indexCount = 0
+    private var hasTexture = false
 
     private var uMvp = -1
-    private var uOpacity = -1
-    private var uSuitabilityMix = -1
+    private var uColour = -1
     private var uLightDir = -1
-    private var uMinScore = -1
-    private var uElevRange = -1
+    private var uHazeColour = -1
+    private var uHaze = -1
 
-    fun submitMesh(mesh: TerrainMesh.Mesh?) = pendingMesh.set(mesh)
+    fun submitMesh(m: TerrainMesh.Mesh?) { mesh.set(m); meshDirty = true }
+    fun submitTexture(t: Texture?) { texture.set(t); textureDirty = true }
     fun submitFrame(frame: Frame?) = cameraState.set(frame)
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
-        GLES30.glClearColor(0f, 0f, 0f, 0f)
+        val h = TerrainShaders.HAZE_RGB
+        GLES30.glClearColor(h[0], h[1], h[2], 1f)
         GLES30.glEnable(GLES30.GL_DEPTH_TEST)
         GLES30.glDepthFunc(GLES30.GL_LEQUAL)
-        GLES30.glEnable(GLES30.GL_BLEND)
-        GLES30.glBlendFunc(GLES30.GL_SRC_ALPHA, GLES30.GL_ONE_MINUS_SRC_ALPHA)
-        // Terrain is a height field viewed from above; back faces are never wanted, and
-        // culling them halves the fragment work on a 190k-triangle mesh.
+        // Terrain is a height field viewed from above; back faces are never wanted.
         GLES30.glEnable(GLES30.GL_CULL_FACE)
         GLES30.glCullFace(GLES30.GL_BACK)
 
@@ -80,16 +82,21 @@ class TerrainGlRenderer : GLSurfaceView.Renderer {
             return
         }
         uMvp = GLES30.glGetUniformLocation(program, "u_mvp")
-        uOpacity = GLES30.glGetUniformLocation(program, "u_opacity")
-        uSuitabilityMix = GLES30.glGetUniformLocation(program, "u_suitabilityMix")
+        uColour = GLES30.glGetUniformLocation(program, "u_colour")
         uLightDir = GLES30.glGetUniformLocation(program, "u_lightDir")
-        uMinScore = GLES30.glGetUniformLocation(program, "u_minScore")
-        uElevRange = GLES30.glGetUniformLocation(program, "u_elevationRange")
+        uHazeColour = GLES30.glGetUniformLocation(program, "u_hazeColour")
+        uHaze = GLES30.glGetUniformLocation(program, "u_haze")
 
         val buf = IntArray(1)
         GLES30.glGenVertexArrays(1, buf, 0); vao = buf[0]
         GLES30.glGenBuffers(1, buf, 0); vbo = buf[0]
         GLES30.glGenBuffers(1, buf, 0); ebo = buf[0]
+        GLES30.glGenTextures(1, buf, 0); tex = buf[0]
+        indexCount = 0
+        hasTexture = false
+        // A new context has nothing in it: whatever was last submitted goes up again.
+        meshDirty = mesh.get() != null
+        textureDirty = texture.get() != null
         programReady = true
         lastError = null
     }
@@ -102,20 +109,23 @@ class TerrainGlRenderer : GLSurfaceView.Renderer {
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT or GLES30.GL_DEPTH_BUFFER_BIT)
         if (!programReady) return
 
-        pendingMesh.getAndSet(null)?.let { upload(it) }
+        if (meshDirty) { meshDirty = false; mesh.get()?.let { uploadMesh(it) } }
+        if (textureDirty) { textureDirty = false; texture.get()?.let { uploadTexture(it) } }
 
         val frame = cameraState.get() ?: return
-        if (indexCount == 0) return
+        if (indexCount == 0 || !hasTexture) return
 
         GLES30.glUseProgram(program)
         GLES30.glUniformMatrix4fv(uMvp, 1, false, frame.mvp, 0)
-        GLES30.glUniform1f(uOpacity, frame.opacity)
-        GLES30.glUniform1f(uSuitabilityMix, frame.suitabilityMix)
-        GLES30.glUniform1f(uMinScore, frame.minScore)
-        GLES30.glUniform2f(uElevRange, frame.elevMin, frame.elevMax)
-        // Light from the north-west and well above, the convention topographic maps use;
-        // relief read under any other lighting inverts for most people.
+        // Light from the north-west and well above, the convention relief maps use; the
+        // baked hillshade uses the same direction.
         GLES30.glUniform3f(uLightDir, -0.5f, -0.5f, 0.7f)
+        val h = TerrainShaders.HAZE_RGB
+        GLES30.glUniform3f(uHazeColour, h[0], h[1], h[2])
+        GLES30.glUniform2f(uHaze, frame.hazeStart, frame.hazeEnd)
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, tex)
+        GLES30.glUniform1i(uColour, 0)
 
         GLES30.glBindVertexArray(vao)
         GLES30.glDrawElements(GLES30.GL_TRIANGLES, indexCount, GLES30.GL_UNSIGNED_INT, 0)
@@ -123,7 +133,7 @@ class TerrainGlRenderer : GLSurfaceView.Renderer {
         trianglesDrawn = indexCount / 3
     }
 
-    private fun upload(mesh: TerrainMesh.Mesh) {
+    private fun uploadMesh(mesh: TerrainMesh.Mesh) {
         val vb = ByteBuffer.allocateDirect(mesh.vertices.size * 4)
             .order(ByteOrder.nativeOrder()).asFloatBuffer()
         vb.put(mesh.vertices).position(0)
@@ -132,30 +142,64 @@ class TerrainGlRenderer : GLSurfaceView.Renderer {
         ib.put(mesh.indices).position(0)
 
         GLES30.glBindVertexArray(vao)
-
         GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbo)
-        GLES30.glBufferData(
-            GLES30.GL_ARRAY_BUFFER, mesh.vertices.size * 4, vb, GLES30.GL_DYNAMIC_DRAW
-        )
+        GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, mesh.vertices.size * 4, vb, GLES30.GL_STATIC_DRAW)
         GLES30.glBindBuffer(GLES30.GL_ELEMENT_ARRAY_BUFFER, ebo)
-        GLES30.glBufferData(
-            GLES30.GL_ELEMENT_ARRAY_BUFFER, mesh.indices.size * 4, ib, GLES30.GL_DYNAMIC_DRAW
-        )
+        GLES30.glBufferData(GLES30.GL_ELEMENT_ARRAY_BUFFER, mesh.indices.size * 4, ib, GLES30.GL_STATIC_DRAW)
 
         val stride = TerrainMesh.STRIDE_BYTES
         fun attrib(loc: Int, size: Int, offsetFloats: Int) {
             GLES30.glEnableVertexAttribArray(loc)
-            GLES30.glVertexAttribPointer(
-                loc, size, GLES30.GL_FLOAT, false, stride, offsetFloats * 4
-            )
+            GLES30.glVertexAttribPointer(loc, size, GLES30.GL_FLOAT, false, stride, offsetFloats * 4)
         }
         attrib(TerrainShaders.LOC_POSITION, 3, TerrainMesh.OFF_POSITION)
         attrib(TerrainShaders.LOC_NORMAL, 3, TerrainMesh.OFF_NORMAL)
         attrib(TerrainShaders.LOC_ELEVATION, 1, TerrainMesh.OFF_ELEVATION)
-        attrib(TerrainShaders.LOC_SUITABILITY, 1, TerrainMesh.OFF_SUITABILITY)
+        attrib(TerrainShaders.LOC_UV, 2, TerrainMesh.OFF_UV)
 
         GLES30.glBindVertexArray(0)
         indexCount = mesh.indices.size
+    }
+
+    /**
+     * Uploads with a full mip chain, trilinear filtering, and anisotropic filtering where the
+     * GPU offers it: the terrain is seen at a glancing angle, which is exactly where plain
+     * mipmapping blurs contours and creeks into mush.
+     */
+    private fun uploadTexture(t: Texture) {
+        val buf = ByteBuffer.allocateDirect(t.size * t.size * 4).order(ByteOrder.nativeOrder())
+        if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) {
+            // RGBA bytes in memory are the int 0xAABBGGRR: swap R and B of each ARGB pixel.
+            val ib = buf.asIntBuffer()
+            for (p in t.argb) ib.put((p and 0xFF00FF00.toInt()) or ((p shr 16) and 0xFF) or ((p and 0xFF) shl 16))
+        } else {
+            for (p in t.argb) {
+                buf.put((p shr 16).toByte()); buf.put((p shr 8).toByte()); buf.put(p.toByte()); buf.put((p ushr 24).toByte())
+            }
+        }
+        buf.position(0)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, tex)
+        GLES30.glPixelStorei(GLES30.GL_UNPACK_ALIGNMENT, 4)
+        GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA8, t.size, t.size, 0,
+            GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, buf)
+        GLES30.glGenerateMipmap(GLES30.GL_TEXTURE_2D)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR_MIPMAP_LINEAR)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
+        val ext = GLES30.glGetString(GLES30.GL_EXTENSIONS) ?: ""
+        if (ext.contains("GL_EXT_texture_filter_anisotropic")) {
+            val max = FloatArray(1)
+            GLES30.glGetFloatv(MAX_ANISOTROPY_EXT, max, 0)
+            GLES30.glTexParameterf(GLES30.GL_TEXTURE_2D, TEXTURE_MAX_ANISOTROPY_EXT, minOf(8f, max[0]).coerceAtLeast(1f))
+        }
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0)
+        val err = GLES30.glGetError()
+        if (err != GLES30.GL_NO_ERROR) {
+            lastError = "texture upload: GL error 0x%x".format(err)
+            Log.e(TAG, lastError!!)
+        }
+        hasTexture = err == GLES30.GL_NO_ERROR
     }
 
     private fun buildProgram(): Int? {
@@ -195,5 +239,7 @@ class TerrainGlRenderer : GLSurfaceView.Renderer {
 
     private companion object {
         const val TAG = "TerrainGlRenderer"
+        const val TEXTURE_MAX_ANISOTROPY_EXT = 0x84FE
+        const val MAX_ANISOTROPY_EXT = 0x84FF
     }
 }

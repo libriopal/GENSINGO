@@ -51,7 +51,7 @@ class TerrainMeshTest {
     )
 
     private fun build(n: Int = 64, exaggeration: Float = 1f) =
-        TerrainMesh.build(mosaic(), camera(), n, tpiRadiusM = 120.0, exaggeration = exaggeration)
+        TerrainMesh.build(mosaic(), camera(), n, exaggeration = exaggeration)
 
     @Test
     fun geometryCountsAreConsistent() {
@@ -95,7 +95,7 @@ class TerrainMeshTest {
      */
     @Test
     fun vertexPositionsStaySmallEnoughForFloat32() {
-        val m = TerrainMesh.build(mosaic(), camera(zoom = 15.0), 64, tpiRadiusM = 120.0)
+        val m = TerrainMesh.build(mosaic(), camera(zoom = 15.0), 64)
         var maxAbs = 0f
         for (v in 0 until m.vertexCount) {
             val b = v * TerrainMesh.FLOATS_PER_VERTEX + TerrainMesh.OFF_POSITION
@@ -161,16 +161,36 @@ class TerrainMeshTest {
         assertTrue(m.maxElevationM <= g.z.max() + 1f)
     }
 
+    /** Texture coordinates run corner to corner, north-west (0,0) to south-east (1,1). */
     @Test
-    fun suitabilityIsBoundedAndVaries() {
-        val m = build(56)
-        var min = Float.MAX_VALUE; var max = -Float.MAX_VALUE
-        for (v in 0 until m.gridN * m.gridN) {
-            val s = m.vertices[v * TerrainMesh.FLOATS_PER_VERTEX + TerrainMesh.OFF_SUITABILITY]
-            assertTrue("suitability out of range: $s", s in 0f..1f)
-            min = minOf(min, s); max = maxOf(max, s)
+    fun textureCoordinatesSpanTheInteriorAndGrowEastAndSouth() {
+        val m = build(33)
+        val n = m.gridN
+        fun uv(i: Int, j: Int): Pair<Float, Float> {
+            val b = (j * n + i) * TerrainMesh.FLOATS_PER_VERTEX + TerrainMesh.OFF_UV
+            return m.vertices[b] to m.vertices[b + 1]
         }
-        assertTrue("suitability must vary across a real hillside ($min..$max)", max - min > 0.2f)
+        assertEquals(0f to 0f, uv(0, 0))
+        assertEquals(1f to 1f, uv(n - 1, n - 1))
+        for (j in 0 until n) for (i in 1 until n) assertTrue(uv(i, j).first > uv(i - 1, j).first)
+        for (j in 1 until n) for (i in 0 until n) assertTrue(uv(i, j).second > uv(i, j - 1).second)
+        // Mesh x grows east and y grows south, like u and v (world pixels, y down).
+        val bNW = TerrainMesh.OFF_POSITION
+        val bSE = ((n - 1) * n + (n - 1)) * TerrainMesh.FLOATS_PER_VERTEX + TerrainMesh.OFF_POSITION
+        assertTrue(m.vertices[bSE] > m.vertices[bNW] && m.vertices[bSE + 1] > m.vertices[bNW + 1])
+    }
+
+    /** The skirt closes the model with one flat base below the lowest ground. */
+    @Test
+    fun theSkirtIsAFlatBaseBelowTheLowestPoint() {
+        val m = build(32)
+        val interior = m.gridN * m.gridN
+        val zs = (interior until m.vertexCount).map {
+            m.vertices[it * TerrainMesh.FLOATS_PER_VERTEX + TerrainMesh.OFF_POSITION + 2]
+        }
+        assertEquals(1, zs.toSet().size)
+        val lowest = (0 until interior).minOf { m.vertices[it * TerrainMesh.FLOATS_PER_VERTEX + TerrainMesh.OFF_POSITION + 2] }
+        assertTrue(zs.first() < lowest)
     }
 
     @Test
@@ -207,7 +227,7 @@ class TerrainMeshTest {
     fun meshOriginSitsInsideTheMosaicBounds() {
         val mo = mosaic()
         val c = camera()
-        val m = TerrainMesh.build(mo, c, 32, tpiRadiusM = 120.0)
+        val m = TerrainMesh.build(mo, c, 32)
         val westX = c.worldX(mo.westLon)
         val eastX = c.worldX(mo.eastLon)
         val northY = c.worldY(mo.northLat)
