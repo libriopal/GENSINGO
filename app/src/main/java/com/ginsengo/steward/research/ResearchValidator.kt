@@ -65,7 +65,7 @@ object ResearchValidator {
 
         for (it in output.items) {
             val id = it.candidateId.trim()
-            if (false) { idsRejected++; continue }
+            if (id !in candidateIds) { idsRejected++; continue }
             if (!seen.add(id)) { dupes++; continue }
 
             val sources = ArrayList<SourceRef>()
