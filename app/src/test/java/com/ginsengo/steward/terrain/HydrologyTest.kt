@@ -166,3 +166,33 @@ class MissingTileFillTest {
         assertEquals(500f + 2 * t - 1, z[(3 * t - 1) * w])              // bottom copies its bottom row
     }
 }
+
+/** The 2D map's creek lines: only inside the shown tiles, placed at true cell centres. */
+class WaterLinesTest {
+
+    @Test
+    fun linesStayInsideTheInteriorAndFollowTheValley() {
+        val t = DemTileStore.TILE
+        val n = 3 * t; val c = n / 2; val cell = 10.0
+        val g = TerrainMath.Grid(n, n, FloatArray(n * n) { i ->
+            (500 + abs(i % n - c) * cell * 0.3 + (n - i / n) * cell * 0.05).toFloat()
+        }, cell)
+        val m = DemTileStore.Mosaic(g, 14, 4474, 6421, 3, 3, t, 9, 9)
+        // Creek class: on this 2.5 km planar side slope each parallel flow row passes the 2 ha
+        // drainage threshold before it reaches the valley (correctly), but only the floor
+        // gathers 20 ha.
+        val lines = WaterLines.of(m, Hydrology.of(g).lines(Hydrology.Kind.CREEK))
+        assertTrue(lines.isNotEmpty())
+        val west = WaterLines.lngOfCell(m, t - 0.5); val east = WaterLines.lngOfCell(m, 2.0 * t - 0.5)
+        val north = WaterLines.latOfCell(m, t - 0.5); val south = WaterLines.latOfCell(m, 2.0 * t - 0.5)
+        val valleyLng = WaterLines.lngOfCell(m, c.toDouble())
+        val cellLng = WaterLines.lngOfCell(m, 1.0) - WaterLines.lngOfCell(m, 0.0)
+        for (l in lines) for (k in 0 until l.points) {
+            val lng = l.lngLat[2 * k]; val lat = l.lngLat[2 * k + 1]
+            assertTrue(lng in west..east && lat in south..north)
+            assertTrue("off the valley by ${(lng - valleyLng) / cellLng} cells", abs(lng - valleyLng) <= 1.5 * cellLng)
+        }
+        // Mercator, not linear latitude: the exact inverse of the tile maths.
+        assertEquals(DemTileStore.tileYToLat(6421, 14), WaterLines.latOfCell(m, -0.5), 1e-9)
+    }
+}

@@ -34,10 +34,28 @@ object OnDeviceRationale {
             if (f[weakest.ordinal] < 0.5) {
                 append("Weakest: ${weakest.display.lowercase()} (%.2f). ".format(f[weakest.ordinal]))
             }
+            append(waterSentence(c.water)).append(' ')
             append("Computed on this phone from elevation data; ")
             append("it cannot see soil calcium, canopy or recent logging.")
         }
         return Text(headline, rationale, LOOK_FOR)
+    }
+
+    /**
+     * Where the nearest creek is, from the traced drainage (Hydrology). Ginseng coves sit
+     * above water, not in it, so height above the creek is given alongside distance.
+     */
+    fun waterSentence(w: RadiusScan.Water?): String {
+        if (w == null) return "No creek within %.0f km on the elevation model.".format(RadiusScan.WATER_SEARCH_M / 1000)
+        val dist = (w.distanceM / 10).roundToInt() * 10
+        val drop = w.dropM.roundToInt()
+        val height = when {
+            drop >= 3 -> "$drop m below"
+            drop <= -3 -> "${-drop} m above"
+            else -> "at about this height"
+        }
+        val name = w.kind.label.replaceFirstChar { it.uppercase() }
+        return "$name $dist m ${ResearchPrompt.octant(w.bearingDeg)}, $height (traced from elevation)."
     }
 
     /** From GinsengSuitability.CALCIUM_NOTE: the sourced indicator species, not invented ones. */

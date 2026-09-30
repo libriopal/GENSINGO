@@ -1,6 +1,7 @@
 package com.ginsengo.steward.research
 
 import com.ginsengo.steward.terrain.GinsengSuitability
+import kotlin.math.roundToInt
 
 /**
  * The prompt, built only from what the device computed and what the app's sourced data says.
@@ -44,6 +45,22 @@ Rules:
 - Finish by calling the $TOOL_NAME tool exactly once.
 """.trim()
 
+    /**
+     * The nearest creek as the model sees it: 50 m and 10 m steps and a compass octant, so
+     * it adds context without adding a way to locate the candidate.
+     */
+    fun creekFor(w: RadiusScan.Water?): String {
+        if (w == null) return "none within %.0f km".format(RadiusScan.WATER_SEARCH_M / 1000)
+        val dist = ((w.distanceM / 50).roundToInt() * 50).coerceAtLeast(50)
+        val drop = (w.dropM / 10).roundToInt() * 10
+        val height = when {
+            drop > 0 -> "$drop m below"
+            drop < 0 -> "${-drop} m above"
+            else -> "level"
+        }
+        return "${w.kind.label} $dist m ${octant(w.bearingDeg)}, $height"
+    }
+
     fun user(r: ResearchRequest): String = buildString {
         appendLine("Date: ${r.dateIso}")
         appendLine("Region: ${r.coarseRegion}${r.stateName?.let { ", $it" } ?: ""}. This is the centre of a roughly 11 km cell; the candidates lie within 16 km of the steward.")
@@ -58,12 +75,13 @@ Rules:
         appendLine(r.memory)
         appendLine()
         appendLine("Candidates (computed on the phone, best terrain score first):")
-        appendLine("id | distance | elevation m | slope deg | faces | terrain score | heat position wetness steepness cove elevation")
+        appendLine("id | distance | elevation m | slope deg | faces | terrain score | heat position wetness steepness cove elevation | nearest creek (traced from elevation)")
         for (c in r.candidates) {
             appendLine(
                 "${c.id} | ${c.distanceBand} | ${c.elevationM} | ${c.slopeDeg} | ${c.aspect} | " +
                         "%.2f | ".format(c.terrainScore) +
-                        c.factors.joinToString(" ") { "%.2f".format(it) }
+                        c.factors.joinToString(" ") { "%.2f".format(it) } +
+                        " | ${c.nearestCreek}"
             )
         }
     }

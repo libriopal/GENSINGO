@@ -55,4 +55,6 @@ data class PromptCandidate(
     val aspect: String,
     val terrainScore: Double,
     val factors: DoubleArray,
+    /** Coarse: "creek 250 m NW, 40 m below" (50 m and 10 m steps), never a position. */
+    val nearestCreek: String = "none within 2 km",
 )

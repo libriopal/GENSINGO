@@ -4,6 +4,7 @@ import com.ginsengo.steward.learn.FindLearner
 import com.ginsengo.steward.prospect.Prospects
 import com.ginsengo.steward.terrain.DemTileStore
 import com.ginsengo.steward.terrain.GinsengSuitability
+import com.ginsengo.steward.terrain.Hydrology
 import com.ginsengo.steward.terrain.TerrainMath
 import kotlin.math.PI
 import kotlin.math.atan
@@ -57,7 +58,41 @@ class RadiusScan private constructor(
         val elevationM: Double,
         val slopeDeg: Double,
         val aspectDeg: Double,
+        /** Nearest creek (20 ha or more drains through it) within [WATER_SEARCH_M], or null. */
+        val water: Water? = null,
     )
+
+    /** Where the nearest creek is from a candidate, traced from the same elevation. */
+    data class Water(
+        val distanceM: Double,
+        /** From the candidate towards the creek, degrees true. */
+        val bearingDeg: Double,
+        /** Candidate elevation minus the creek's: positive means the creek is below. */
+        val dropM: Double,
+        val kind: Hydrology.Kind,
+    )
+
+    /**
+     * Channel class per cell over the whole scan, traced once (Hydrology) and kept as one byte
+     * per cell; the full analysis is ~38 MB while it runs and is dropped straight after.
+     */
+    private val channels: ByteArray by lazy { Hydrology.of(grid).kindMap() }
+
+    fun waterAt(x: Int, y: Int): Water? {
+        val minClass = (Hydrology.Kind.CREEK.ordinal + 1).toByte()
+        val maxR = (WATER_SEARCH_M / cellSizeM).toInt()
+        val i = Hydrology.nearest(grid.w, grid.h, x, y, maxR) { channels[it] >= minClass }
+        if (i < 0) return null
+        val cx = i % grid.w; val cy = i / grid.w
+        val lat = latOfRow(y.toDouble()); val lng = lngOfCol(x.toDouble())
+        val wLat = latOfRow(cy.toDouble()); val wLng = lngOfCol(cx.toDouble())
+        return Water(
+            distanceM = Prospects.distanceMetres(lat, lng, wLat, wLng),
+            bearingDeg = Prospects.bearingTrue(lat, lng, wLat, wLng),
+            dropM = (grid[x, y] - grid[cx, cy]).toDouble(),
+            kind = Hydrology.Kind.entries[channels[i] - 1],
+        )
+    }
 
     private val worldPx: Double = DemTileStore.TILE.toDouble() * (1 shl zoom)
 
@@ -168,6 +203,7 @@ class RadiusScan private constructor(
                 factors = factorsAtCell(x, y),
                 elevationM = grid[x, y].toDouble(),
                 slopeDeg = slope, aspectDeg = aspect,
+                water = waterAt(x, y),
             )
         }
         return picked
@@ -254,6 +290,8 @@ class RadiusScan private constructor(
         const val RADIUS_M = 16_093.44   // 10 statute miles
         /** Position-on-slope scale for a landscape scan, matching the heatmap at this zoom. */
         const val TPI_RADIUS_M = 700.0
+        /** How far to look for a creek from a candidate. */
+        const val WATER_SEARCH_M = 2_000.0
         const val LAG_STEP_M = 100.0
         const val MIN_BLOCK_M = 200.0
         const val MAX_BLOCK_M = 3_000.0

@@ -161,6 +161,12 @@ MUTATIONS = [
     ("H9", "the heatmap memo reuses the wrong cell's score", M + "terrain/SuitabilityRasterizer.kt",
      "(gx.toInt().coerceIn(1, g.w - 2) - ix0)", "(gx.toInt().coerceIn(1, g.w - 2) - ix0) / 2 * 2",
      [T + "terrain.DrawnSurfaceTest"]),
+    ("R4", "a suggestion's 'nearest creek' is any small drainage", M + "research/RadiusScan.kt",
+     "val minClass = (Hydrology.Kind.CREEK.ordinal + 1).toByte()", "val minClass = 1.toByte()",
+     [T + "research.WaterContextTest"]),
+    ("R5", "the model is told the creek's exact distance", M + "research/ResearchPrompt.kt",
+     "val dist = ((w.distanceM / 50).roundToInt() * 50).coerceAtLeast(50)", "val dist = w.distanceM.roundToInt()",
+     [T + "research.WaterContextTest"]),
     ("D3", "imported patches are demoted to LEGACY", M + "data/db/AppDatabase.kt",
      "0, 'VERIFIED', `id` ", "0, 'LEGACY', `id` ", [T + "data.MigrationTest"]),
 ]

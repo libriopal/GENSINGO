@@ -19,7 +19,9 @@ import com.ginsengo.steward.data.db.TrackPoint
 import com.ginsengo.steward.field.FieldLocation
 import com.ginsengo.steward.research.RadiusScan
 import com.ginsengo.steward.terrain.DemTileStore
+import com.ginsengo.steward.terrain.Hydrology
 import com.ginsengo.steward.terrain.SuitabilityRasterizer
+import com.ginsengo.steward.terrain.WaterLines
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.maplibre.android.MapLibre
@@ -74,6 +76,7 @@ private const val SRC_TRACK = "g-track"
 private const val SRC_SUGGEST = "g-suggest"
 private const val SRC_RING = "g-ring"
 private const val SRC_ME = "g-me"
+private const val SRC_WATER = "g-water"
 
 /**
  * The map: 2.5D by default (50 degree pitch over GPU hillshade), with the three heat
@@ -144,7 +147,9 @@ fun FieldMap(
 
     fun refreshHabitat(map: MapLibreMap, force: Boolean) {
         val style = st.style ?: return
-        if (!curLayers.value.habitat) return
+        val wantHabitat = curLayers.value.habitat
+        val wantWater = curLayers.value.water
+        if (!wantHabitat && !wantWater) return
         val cam = map.cameraPosition
         val region = runCatching { map.projection.visibleRegion.latLngBounds }.getOrNull() ?: return
         val z = DemTileStore.zoomFitting(
@@ -160,7 +165,7 @@ fun FieldMap(
             DemTileStore.latToTileY(region.latitudeNorth, z), DemTileStore.latToTileY(region.latitudeSouth, z),
             DemTileStore.rasterSizeFor(cam.zoom), DemTileStore.tpiRadiusMetresFor(cam.zoom),
             weights.joinToString { "%.3f".format(it) },
-        )
+        ) + ":h=$wantHabitat:w=$wantWater"
         if (!force) {
             if (key == st.habitatKey && st.habitatComplete) return                // drawn; nothing new can arrive
             if (key == st.pendingHabitatKey && st.heatJob?.isActive == true) return  // already computing it
@@ -179,30 +184,51 @@ fun FieldMap(
             // Offline with gaps: redraw only when more of the range has arrived.
             if (!force && key == st.habitatKey && mosaic.tilesLoaded == st.habitatTiles) return@launch
             Log.i(TAG, "habitat: DEM zoom $z, ${mosaic.tilesLoaded}/${mosaic.tilesRequested} tiles")
-            val t0 = android.os.SystemClock.elapsedRealtime()
-            val r = SuitabilityRasterizer.rasterise(
-                mosaic, DemTileStore.rasterSizeFor(cam.zoom), DemTileStore.tpiRadiusMetresFor(cam.zoom),
-                weights = weights,
-            )
-            Log.i(TAG, "habitat: rasterised ${r.bitmap.width}x${r.bitmap.height} in ${android.os.SystemClock.elapsedRealtime() - t0} ms " +
-                "(terrain analysis ${r.analysisMs} ms, scoring ${r.scoreMs} ms)")
-            runCatching {
-                val src = style.getSourceAs<ImageSource>(SRC_HABITAT)
-                src?.setCoordinates(
-                    LatLngQuad(
-                        LatLng(r.north, r.west), LatLng(r.north, r.east),
-                        LatLng(r.south, r.east), LatLng(r.south, r.west),
-                    )
+            var uploaded = true
+            val status = "%.1f m cells · %d/%d tiles".format(mosaic.grid.cellSizeM, mosaic.tilesLoaded, mosaic.tilesRequested)
+            if (wantHabitat) {
+                val t0 = android.os.SystemClock.elapsedRealtime()
+                val r = SuitabilityRasterizer.rasterise(
+                    mosaic, DemTileStore.rasterSizeFor(cam.zoom), DemTileStore.tpiRadiusMetresFor(cam.zoom),
+                    weights = weights,
                 )
-                src?.setImage(r.bitmap)
-                    ?: Log.w(TAG, "habitat: image source missing from the style")
-                if (src != null) {
-                    st.habitatKey = key
-                    st.habitatTiles = mosaic.tilesLoaded
-                    st.habitatComplete = mosaic.tilesLoaded == mosaic.tilesRequested
+                Log.i(TAG, "habitat: rasterised ${r.bitmap.width}x${r.bitmap.height} in ${android.os.SystemClock.elapsedRealtime() - t0} ms " +
+                    "(terrain analysis ${r.analysisMs} ms, scoring ${r.scoreMs} ms)")
+                runCatching {
+                    val src = style.getSourceAs<ImageSource>(SRC_HABITAT)
+                    src?.setCoordinates(
+                        LatLngQuad(
+                            LatLng(r.north, r.west), LatLng(r.north, r.east),
+                            LatLng(r.south, r.east), LatLng(r.south, r.west),
+                        )
+                    )
+                    src?.setImage(r.bitmap)
+                        ?: Log.w(TAG, "habitat: image source missing from the style")
+                    if (src == null) uploaded = false
+                }.onFailure { uploaded = false; Log.w(TAG, "habitat: image upload failed", it) }
+            }
+            if (wantWater) {
+                // Creeks traced from the same elevation, off the main thread, clipped to the
+                // tiles in view (their drainage is truncated at the edge of the loaded halo).
+                val lines = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    val hy = Hydrology.of(mosaic.grid)
+                    WaterLines.of(mosaic, hy.lines(Hydrology.Kind.DRAINAGE))
                 }
-            }.onFailure { Log.w(TAG, "habitat: image upload failed", it) }
-            onHabitatStatus("%.1f m cells · %d/%d tiles".format(r.metresPerDemCell, r.tilesLoaded, r.tilesRequested))
+                runCatching {
+                    style.getSourceAs<GeoJsonSource>(SRC_WATER)?.setGeoJson(FeatureCollection.fromFeatures(lines.map { l ->
+                        Feature.fromGeometry(LineString.fromLngLats((0 until l.points).map {
+                            Point.fromLngLat(l.lngLat[2 * it], l.lngLat[2 * it + 1])
+                        })).apply { addStringProperty("k", l.kind.name) }
+                    })) ?: run { uploaded = false }
+                }.onFailure { uploaded = false; Log.w(TAG, "water: upload failed", it) }
+                Log.i(TAG, "water: ${lines.size} channel lines")
+            }
+            if (uploaded) {
+                st.habitatKey = key
+                st.habitatTiles = mosaic.tilesLoaded
+                st.habitatComplete = mosaic.tilesLoaded == mosaic.tilesRequested
+            }
+            onHabitatStatus(status)
         }
     }
 
@@ -382,6 +408,26 @@ private fun install(style: Style, basemap: Basemap?) {
         )
     )
 
+    // Creeks and drains traced from elevation (Hydrology): wider and bluer with more water.
+    // Small drainages fade in only when close enough to be read, or they would lace the
+    // whole map at low zoom.
+    style.addSource(GeoJsonSource(SRC_WATER, FeatureCollection.fromFeatures(emptyList())))
+    fun byKind(drainage: Float, creek: Float, stream: Float) = match(
+        get("k"), literal(stream), stop("DRAINAGE", drainage), stop("CREEK", creek),
+    )
+    style.addLayer(
+        LineLayer("g-water-layer", SRC_WATER).withProperties(
+            PropertyFactory.lineColor(match(get("k"), Expression.color(0xFF2A95F0.toInt()),
+                stop("DRAINAGE", Expression.color(0xFF7CCBF5.toInt())), stop("CREEK", Expression.color(0xFF3FB2F7.toInt())))),
+            PropertyFactory.lineWidth(interpolate(linear(), zoom(),
+                stop(10, byKind(0.4f, 1.0f, 1.8f)), stop(16, byKind(1.6f, 3.0f, 5.0f)))),
+            PropertyFactory.lineOpacity(interpolate(linear(), zoom(),
+                stop(11, byKind(0f, 0.75f, 0.9f)), stop(14, byKind(0.6f, 0.9f, 0.95f)))),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+            PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+        )
+    )
+
     // Where you've been: cool blue, so it never reads as the green habitat ramp.
     style.addSource(GeoJsonSource(SRC_VISITED, FeatureCollection.fromFeatures(emptyList())))
     style.addLayer(
@@ -469,6 +515,7 @@ private fun applyVisibility(style: Style, s: MapLayerState) = runCatching {
         style.getLayer(id)?.setProperties(PropertyFactory.visibility(if (on) Property.VISIBLE else Property.NONE))
     vis("g-hillshade", s.hillshade)
     vis("g-habitat-layer", s.habitat)
+    vis("g-water-layer", s.water)
     style.getLayer("g-habitat-layer")?.setProperties(PropertyFactory.rasterOpacity(s.heatmapOpacity))
     vis("g-visited-layer", s.visited)
     vis("g-track-layer", s.trackLine)

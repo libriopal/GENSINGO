@@ -269,6 +269,7 @@ class ResearchRepository(
                     aspect = ResearchPrompt.octant(c.aspectDeg),
                     terrainScore = c.score,
                     factors = c.factors,
+                    nearestCreek = ResearchPrompt.creekFor(c.water),
                 )
             },
         )

@@ -358,6 +358,7 @@ private fun LayersSheet(vm: FieldViewModel, verdict: FindLearner.Verdict?, onClo
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState())) {
             Text("Layers", style = MaterialTheme.typography.titleMedium)
             Toggle("Habitat heatmap (${if (verdict?.adopted == true) "learned weights" else "published weights"})", layers.habitat) { vm.setLayers(layers.copy(habitat = it)) }
+            Toggle("Creeks & streams (traced from elevation)", layers.water) { vm.setLayers(layers.copy(water = it)) }
             Toggle("Where I've been", layers.visited) { vm.setLayers(layers.copy(visited = it)) }
             Toggle("My finds", layers.finds) { vm.setLayers(layers.copy(finds = it)) }
             Toggle("Track line", layers.trackLine) { vm.setLayers(layers.copy(trackLine = it)) }
@@ -371,7 +372,8 @@ private fun LayersSheet(vm: FieldViewModel, verdict: FindLearner.Verdict?, onClo
             Text("Heat opacity", color = Gen.TextDim, fontSize = 12.sp)
             Slider(layers.heatmapOpacity, { vm.setLayers(layers.copy(heatmapOpacity = it)) }, valueRange = 0.2f..1f)
             Text("Green: terrain model (research-grade estimate; cannot see soil calcium or canopy). " +
-                    "Blue: where you've recorded a track. Amber: your finds.",
+                    "Blue lines: creeks and drains traced from elevation, not surveyed; small ones may be dry. " +
+                    "Blue glow: where you've recorded a track. Amber: your finds.",
                 color = Gen.TextDim, fontSize = 11.sp)
 
             Spacer(Modifier.height(14.dp))

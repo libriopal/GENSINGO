@@ -30,8 +30,9 @@ enum class Basemap(val label: String, val attribution: String) {
  *  - [visited]: where you have been, a GPU heatmap of stored track points.
  *  - [finds]: your finds, a GPU heatmap; every find at full weight (UserFinds).
  *
- * plus the track line and the suggestion markers. Everything defaults on except the track
- * line, which the visited heatmap already summarises.
+ * plus [water] (creeks and drains traced from elevation), the track line and the suggestion
+ * markers. Everything defaults on except the track line, which the visited heatmap already
+ * summarises.
  */
 data class MapLayerState(
     val basemap: Basemap = Basemap.DARK,
@@ -40,6 +41,7 @@ data class MapLayerState(
     val finds: Boolean = true,
     val trackLine: Boolean = false,
     val suggestions: Boolean = true,
+    val water: Boolean = true,
     val hillshade: Boolean = true,
     val heatmapOpacity: Float = 0.7f,
 )

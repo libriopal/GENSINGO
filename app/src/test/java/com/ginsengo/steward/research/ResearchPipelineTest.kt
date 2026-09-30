@@ -230,3 +230,40 @@ class PromptPrivacyTest {
         assertEquals(false, items["additionalProperties"])
     }
 }
+
+/** Water context on suggestions (Phase 8): traced from the same elevation, coarse in the prompt. */
+class WaterContextTest {
+
+    private val mosaic = Fixtures.mosaic("scan_boone_z12.bin")
+    private val scan = RadiusScan.of(mosaic, (mosaic.northLat + mosaic.southLat) / 2, (mosaic.westLon + mosaic.eastLon) / 2, 6_000.0)
+    private val cands = scan.candidates(GinsengSuitability.PRIOR_WEIGHTS, count = 6)
+
+    @Test
+    fun candidatesCarryTheirNearestCreekFromTheTracedDrainage() {
+        val hy = com.ginsengo.steward.terrain.Hydrology.of(mosaic.grid)
+        assertTrue(cands.isNotEmpty())
+        for (c in cands) {
+            val w = c.water
+            assertTrue("no creek within 2 km of ${c.key} on real Appalachian terrain", w != null)
+            w!!
+            assertTrue(w.distanceM in 0.0..RadiusScan.WATER_SEARCH_M * 1.01)
+            assertTrue(w.kind >= com.ginsengo.steward.terrain.Hydrology.Kind.CREEK)
+            // The reported creek cell really is a creek, at the reported distance and height.
+            val (x, y) = c.key.split(":").let { it[1].toInt() - mosaic.tileX0 * 256 to it[2].toInt() - mosaic.tileY0 * 256 }
+            val i = hy.nearestChannel(x, y, com.ginsengo.steward.terrain.Hydrology.Kind.CREEK, (RadiusScan.WATER_SEARCH_M / mosaic.grid.cellSizeM).toInt())
+            val d = kotlin.math.hypot((i % mosaic.grid.w - x).toDouble(), (i / mosaic.grid.w - y).toDouble()) * mosaic.grid.cellSizeM
+            assertEquals(d, w.distanceM, mosaic.grid.cellSizeM * 1.5)
+            assertEquals((mosaic.grid.z[y * mosaic.grid.w + x] - mosaic.grid.z[i]).toDouble(), w.dropM, 0.01)
+        }
+    }
+
+    @Test
+    fun theRationaleNamesTheCreekAndThePromptKeepsItCoarse() {
+        val w = RadiusScan.Water(distanceM = 243.0, bearingDeg = 315.0, dropM = 37.4, kind = com.ginsengo.steward.terrain.Hydrology.Kind.CREEK)
+        assertEquals("Creek 240 m north-west, 37 m below (traced from elevation).", OnDeviceRationale.waterSentence(w))
+        assertEquals("creek 250 m north-west, 40 m below", ResearchPrompt.creekFor(w))
+        assertEquals("none within 2 km", ResearchPrompt.creekFor(null))
+        val text = OnDeviceRationale.describe(cands.first()).rationale
+        assertTrue(text, text.contains("(traced from elevation)"))
+    }
+}
