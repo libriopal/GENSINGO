@@ -1390,6 +1390,13 @@ power — about 4 in 10 for a moderate signal in 8 separate spots — stated bel
 - Wrote an unused helper three times; removed each time.
 - Importing an old fixture script ran its download at import time; the new script is
   self-contained.
+- **Committed a live mutant.** I ran `git add -A` while `tools/mutate.py` had V1 applied
+  (unknown candidate IDs accepted), so commit `9ca899f` pushed a validator that let the model
+  add places. Seen in the next `git status`, reverted in the following commit; the APK sent
+  to the user was built before it. Rule since: no commit while the harness runs.
+- Timed the heatmap on the emulator twice with a 10-mile scan running alongside, once because
+  the emulator's boot-time default fix (California) made my North Carolina fix look like a
+  3,500 km move. Contended emulator timings were reported as such, not as results.
 
 ## Open — unfixed, and stated as open
 
