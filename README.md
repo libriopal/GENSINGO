@@ -23,8 +23,8 @@ track, or where any find is (`docs/PLAY_DATA_SAFETY.md`).
 | **Suggest** | Places worth walking inside 10 miles. Always computed on the phone; annotated by Claude or Gemini (web-searched, sources kept only if retrieved in that call) when you allow it. Refreshes itself after you move 3 km. |
 | **Layers** | Heatmaps, basemap, the learner's verdict, "Save 10 miles around me" for offline use, and research-model settings. |
 
-Plus a **3D** toggle (a real terrain mesh around you, coloured by the habitat surface) and
-recentre.
+Plus a **3D** toggle (about 3 km square of ground in high definition, with the habitat
+heatmap, creeks and contours draped on it) and recentre.
 
 ### Heatmaps, in real time
 
@@ -33,6 +33,7 @@ recentre.
 | **Habitat** (green) | The published six-factor terrain model below, computed on the phone for the elevation tiles in view and redrawn when those tiles change. Switches to learned weights only after they beat the published ones on held-out finds. |
 | **Where I've been** (blue) | GPU heatmap of your recorded track. |
 | **My finds** (amber) | GPU heatmap of your finds, including patches logged in the older app, all at full weight. |
+| **Creeks & streams** (blue lines) | Traced from the same elevation: pits filled, water routed downhill, and a line drawn where enough ground drains through (2 ha: small drainage; 20 ha: creek; 200 ha: stream). Works offline. Not surveyed: small ones may be dry, and a river flowing in from outside the loaded tiles is drawn smaller than it is. |
 
 ### Suggestions that cannot invent places
 
@@ -78,11 +79,24 @@ one pixel covers many cells, interpolate when one cell covers many pixels.
 
 ### The 3D view
 
-A triangle mesh built from the elevation tiles around you, drawn in its own GL surface and
-coloured by the habitat surface (or by elevation), with your position, finds and suggestions
-projected onto it. It is a separate screen rather than a layer over the map: a GL surface
-over the map's TextureView blacked out the screen (Phase 5). It renders only when a gesture
-moves the camera.
+About 3 km square around you at the best elevation the tiles offer: zoom 15, **3.9 m
+cells**, falling back to zoom 14 or 13 where those are not cached. The whole budget goes on
+that one square:
+
+- a 385 × 385 vertex mesh (about 300,000 triangles) standing on a solid base;
+- a draped colour texture of up to 2048² texels (two per elevation cell), mipmapped with
+  anisotropic filtering, so contours and creeks stay sharp at a glancing angle;
+- **the habitat heatmap**: the exact scoring function and colour ramp of the 2D map, over a
+  neutral relief (the first 3D view tinted each vertex every ~60 m and faded weak ground to
+  black, which is why its heatmap did not show);
+- relief shading lit from the north-west, contour lines (every 5-100 m, chosen from the
+  relief; dark on light ground, light on dark), and creeks traced from the elevation;
+- numbered suggestion markers, your finds, "You", a compass that faces north and refits the
+  view when tapped, and a legend. **H** switches between habitat and elevation colouring.
+
+It is a separate screen rather than a layer over the map: a GL surface over the map's
+TextureView blacked out the screen (Phase 5). It renders only when a gesture moves the camera,
+is built once per ~1 km you walk, and survives the app going to the background.
 
 **What it cannot see:** soil calcium — among the strongest published predictors of ginseng
 ground (Burkhart: ~3,360 kg/ha marks promising sites) and not derivable from elevation. The
@@ -137,7 +151,8 @@ from rather than typed in beside it.
 | State outlines | VERIFIED | Public-domain generalised US state boundaries |
 | Elevation grid | VERIFIED | NASA SRTM 90 m, sampled once at build time to a 0.1° grid |
 | Protected-area boundaries | **APPROXIMATE** | Bounding polygons. They over-cover and may warn outside the real unit. |
-| Habitat suitability score | RESEARCH-GRADE ESTIMATE | 235-byte linear baseline graph |
+| Habitat suitability score | RESEARCH-GRADE ESTIMATE | Six-factor terrain model, computed on the phone |
+| Creeks and streams | RESEARCH-GRADE ESTIMATE | Traced on the phone from the elevation tiles; not surveyed hydrography |
 | Your finds, patches and readings | VERIFIED (by you) | Entered by you and treated as true and accurate: learned from and drawn at full weight |
 
 **State season closing dates.** FWS publishes only that harvest season *starts* in September
