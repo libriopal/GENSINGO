@@ -13,9 +13,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -154,10 +154,14 @@ fun Terrain3DView(
     if (s != null && w > 0 && zoom.isNaN()) zoom = fitZoomFor(s, w).toFloat()
     val cam = if (w > 0 && h > 0 && cLat != null && cLng != null && !zoom.isNaN())
         MapCamera(cLat, cLng, zoom.toDouble(), bearing.toDouble(), pitch.toDouble(), w, h) else null
+    // The ground under the user is the camera's target plane (see mvpForMeshBuiltAt).
+    val groundM = if (s == null || cLat == null || cLng == null) 0.0
+    else elevationAt(s.mosaic, cLat, cLng) ?: ((s.mesh.minElevationM + s.mesh.maxElevationM) / 2.0)
     if (cam != null && s != null) {
         renderer.submitFrame(
             TerrainGlRenderer.Frame(
-                mvp = cam.mvpForMeshBuiltAt(Terrain3D.BUILD_ZOOM, s.mesh.originWorldX, s.mesh.originWorldY),
+                mvp = cam.mvpForMeshBuiltAt(Terrain3D.BUILD_ZOOM, s.mesh.originWorldX, s.mesh.originWorldY,
+                    groundZ = groundM * s.mesh.pixelsPerMeter * Terrain3D.EXAGGERATION),
                 hazeStart = (cam.cameraToCenterDistance * 1.1).toFloat(),
                 hazeEnd = (cam.cameraToCenterDistance * 3.6).toFloat(),
             )
@@ -197,7 +201,7 @@ fun Terrain3DView(
             if (cam == null || s == null) return@Canvas
             fun at(lat: Double, lng: Double): Offset? {
                 val e = elevationAt(s.mosaic, lat, lng) ?: return null
-                val p = cam.project(lat, lng, e * Terrain3D.EXAGGERATION) ?: return null
+                val p = cam.project(lat, lng, (e - groundM) * Terrain3D.EXAGGERATION) ?: return null
                 return Offset(p[0], p[1])
             }
             val dark = Color(0xE6061008)
@@ -230,7 +234,8 @@ fun Terrain3DView(
                 s?.let { zoom = fitZoomFor(it, size.first).toFloat() }
             },
             containerColor = Gen.SurfaceHigh, contentColor = Gen.Text,
-            modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(10.dp)
+            // Above the screen's side buttons, clear of the status chips.
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp).offset(y = (-100).dp)
                 .semantics { contentDescription = "Face north and reset the view" },
         ) { Icon(Icons.Filled.Navigation, null, modifier = Modifier.rotate(-bearing)) }
 

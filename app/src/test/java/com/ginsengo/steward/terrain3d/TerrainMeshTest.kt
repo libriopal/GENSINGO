@@ -189,6 +189,11 @@ class TerrainMeshTest {
             m.vertices[it * TerrainMesh.FLOATS_PER_VERTEX + TerrainMesh.OFF_POSITION + 2]
         }
         assertEquals(1, zs.toSet().size)
+        // Walls are flagged so the shader paints them earth instead of stretching edge texels.
+        for (v in 0 until m.vertexCount) {
+            val wall = m.vertices[v * TerrainMesh.FLOATS_PER_VERTEX + TerrainMesh.OFF_WALL]
+            assertEquals(if (v < interior) 0f else 1f, wall)
+        }
         val lowest = (0 until interior).minOf { m.vertices[it * TerrainMesh.FLOATS_PER_VERTEX + TerrainMesh.OFF_POSITION + 2] }
         assertTrue(zs.first() < lowest)
     }

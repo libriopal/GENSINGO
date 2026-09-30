@@ -155,7 +155,7 @@ class MapCamera(
      * pinch-zoom without rebuilding the mesh on every frame. [originX]/[originY] are in
      * BUILD-zoom world pixels, as [TerrainMesh.Mesh] stores them.
      */
-    fun mvpForMeshBuiltAt(buildZoom: Double, originX: Double, originY: Double): FloatArray {
+    fun mvpForMeshBuiltAt(buildZoom: Double, originX: Double, originY: Double, groundZ: Double = 0.0): FloatArray {
         val k = Math.pow(2.0, zoom - buildZoom)
         var m = perspective(FOV, viewportWidth.toDouble() / viewportHeight, nearZ, farZ)
         m = m * scale(1.0, -1.0, 1.0)
@@ -164,6 +164,10 @@ class MapCamera(
         m = m * rotateZ(angle)
         m = m * translate(originX * k - centerX, originY * k - centerY, 0.0)
         m = m * scale(k, k, k)
+        // [groundZ] (build-zoom pixels) is lowered to the camera's target plane, so the camera
+        // looks at the ground under the user rather than at sea level beneath it: with ~1 km
+        // of exaggerated elevation in between, the model floated in the top half of the screen.
+        m = m * translate(0.0, 0.0, -groundZ)
         return FloatArray(16) { m[it].toFloat() }
     }
 

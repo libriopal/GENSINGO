@@ -23,16 +23,19 @@ layout(location = 0) in vec3 a_position;    // world pixels, relative to the mes
 layout(location = 1) in vec3 a_normal;
 layout(location = 2) in float a_elevation;  // metres (kept for completeness; colour is baked)
 layout(location = 3) in vec2 a_uv;          // 0..1 over the interior, north-west origin
+layout(location = 4) in float a_wall;       // 0 on the surface, 1 at the foot of the side walls
 
 uniform mat4 u_mvp;
 
 out vec3 v_normal;
 out vec2 v_uv;
 out float v_depth;
+out float v_wall;
 
 void main() {
     v_normal = normalize(a_normal);
     v_uv = a_uv;
+    v_wall = a_wall;
     gl_Position = u_mvp * vec4(a_position, 1.0);
     v_depth = gl_Position.w;
 }
@@ -44,6 +47,7 @@ precision highp float;
 in vec3 v_normal;
 in vec2 v_uv;
 in float v_depth;
+in float v_wall;
 
 uniform sampler2D u_colour;
 uniform vec3 u_lightDir;     // normalised, pointing towards the light
@@ -58,6 +62,10 @@ void main() {
     // perspective form of the mesh, gently, so it does not double the shading.
     float lambert = max(dot(normalize(v_normal), normalize(u_lightDir)), 0.0);
     vec3 rgb = base * (0.80 + 0.22 * lambert);
+    // The model's side walls: earth, darker toward the base. Sampling the texture there
+    // stretched the edge texels into vertical stripes (seen on the Phase 8 device run).
+    vec3 wall = mix(vec3(0.22, 0.20, 0.17), vec3(0.07, 0.065, 0.06), v_wall);
+    rgb = mix(rgb, wall, step(0.002, v_wall));
     float haze = smoothstep(u_haze.x, u_haze.y, v_depth) * 0.6;
     fragColor = vec4(mix(rgb, u_hazeColour, haze), 1.0);
 }
@@ -68,6 +76,7 @@ void main() {
     const val LOC_NORMAL = 1
     const val LOC_ELEVATION = 2
     const val LOC_UV = 3
+    const val LOC_WALL = 4
 
     /** Sky and haze: a dark slate that sits with the app's colours. */
     val HAZE_RGB = floatArrayOf(0.055f, 0.098f, 0.118f)

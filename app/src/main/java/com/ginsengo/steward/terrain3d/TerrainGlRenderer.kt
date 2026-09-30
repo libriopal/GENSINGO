@@ -156,6 +156,7 @@ class TerrainGlRenderer : GLSurfaceView.Renderer {
         attrib(TerrainShaders.LOC_NORMAL, 3, TerrainMesh.OFF_NORMAL)
         attrib(TerrainShaders.LOC_ELEVATION, 1, TerrainMesh.OFF_ELEVATION)
         attrib(TerrainShaders.LOC_UV, 2, TerrainMesh.OFF_UV)
+        attrib(TerrainShaders.LOC_WALL, 1, TerrainMesh.OFF_WALL)
 
         GLES30.glBindVertexArray(0)
         indexCount = mesh.indices.size

@@ -36,6 +36,7 @@ class ShaderSourceTest {
             "a_elevation location", TerrainShaders.LOC_ELEVATION, declaredLocation("a_elevation")
         )
         assertEquals("a_uv location", TerrainShaders.LOC_UV, declaredLocation("a_uv"))
+        assertEquals("a_wall location", TerrainShaders.LOC_WALL, declaredLocation("a_wall"))
     }
 
     @Test
@@ -45,13 +46,14 @@ class ShaderSourceTest {
             TerrainShaders.LOC_NORMAL,
             TerrainShaders.LOC_ELEVATION,
             TerrainShaders.LOC_UV,
+            TerrainShaders.LOC_WALL,
         )
         assertEquals("attribute locations must be unique", locs.size, locs.toSet().size)
     }
 
     /**
      * The interleaved layout the renderer binds must match what the mesh writes. Position
-     * and normal are vec3, elevation a scalar, uv a vec2: nine floats in that order.
+     * and normal are vec3, elevation a scalar, uv a vec2, wall a scalar: ten floats in that order.
      */
     @Test
     fun vertexLayoutOffsetsAreContiguousAndCorrectlySized() {
@@ -59,8 +61,9 @@ class ShaderSourceTest {
         assertEquals(3, TerrainMesh.OFF_NORMAL)
         assertEquals(6, TerrainMesh.OFF_ELEVATION)
         assertEquals(7, TerrainMesh.OFF_UV)
-        assertEquals(9, TerrainMesh.FLOATS_PER_VERTEX)
-        assertEquals(36, TerrainMesh.STRIDE_BYTES)
+        assertEquals(9, TerrainMesh.OFF_WALL)
+        assertEquals(10, TerrainMesh.FLOATS_PER_VERTEX)
+        assertEquals(40, TerrainMesh.STRIDE_BYTES)
     }
 
     @Test

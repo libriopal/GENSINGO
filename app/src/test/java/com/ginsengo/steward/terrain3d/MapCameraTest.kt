@@ -368,3 +368,28 @@ class AlignmentCheckTest {
         assertEquals(0, r.samples)
     }
 }
+
+/** The 3D view's camera looks at the ground under the user, not at sea level (Phase 8 device run). */
+class GroundedCameraTest {
+    @Test
+    fun aPointAtGroundHeightUnderTheTargetIsAtTheScreenCentre() {
+        val build = 14.0
+        val cam = MapCamera(35.56, -83.0, 14.6, 30.0, 55.0, 1080, 2400)
+        val b = MapCamera(35.56, -83.0, build, 0.0, 0.0, 1000, 1000)
+        val originX = b.worldX(-83.01); val originY = b.worldY(35.57)
+        val groundZ = 950.0 * b.pixelsPerMeter * 1.5
+        val m = cam.mvpForMeshBuiltAt(build, originX, originY, groundZ)
+        // The target, in the mesh's origin-relative build-zoom coordinates, at ground height.
+        val x = b.worldX(-83.0) - originX; val y = b.worldY(35.56) - originY; val z = groundZ
+        val cx = m[0] * x + m[4] * y + m[8] * z + m[12]
+        val cy = m[1] * x + m[5] * y + m[9] * z + m[13]
+        val cw = m[3] * x + m[7] * y + m[11] * z + m[15]
+        org.junit.Assert.assertEquals(0.0, cx / cw, 1e-3)
+        org.junit.Assert.assertEquals(0.0, cy / cw, 1e-3)
+        // Without the ground offset the same point sits well above the centre: the bug.
+        val raw = cam.mvpForMeshBuiltAt(build, originX, originY)
+        val ry = (raw[1] * x + raw[5] * y + raw[9] * z + raw[13]) / (raw[3] * x + raw[7] * y + raw[11] * z + raw[15])
+        org.junit.Assert.assertTrue("ungrounded ndc y $ry", ry > 0.2)
+    }
+}
+

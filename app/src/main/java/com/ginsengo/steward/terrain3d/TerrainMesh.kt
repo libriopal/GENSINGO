@@ -26,14 +26,16 @@ import kotlin.math.sqrt
  */
 object TerrainMesh {
 
-    /** Floats per vertex: position(3) + normal(3) + elevation(1) + texture uv(2). */
-    const val FLOATS_PER_VERTEX = 9
+    /** Floats per vertex: position(3) + normal(3) + elevation(1) + texture uv(2) + wall(1). */
+    const val FLOATS_PER_VERTEX = 10
     const val STRIDE_BYTES = FLOATS_PER_VERTEX * 4
 
     const val OFF_POSITION = 0
     const val OFF_NORMAL = 3
     const val OFF_ELEVATION = 6
     const val OFF_UV = 7
+    /** 0 on the surface, 1 on the base of the skirt: walls get an earth colour, not stretched texels. */
+    const val OFF_WALL = 9
 
     class Mesh(
         val vertices: FloatArray,
@@ -145,6 +147,7 @@ object TerrainMesh {
             val dst = s * FLOATS_PER_VERTEX
             System.arraycopy(verts, src, verts, dst, FLOATS_PER_VERTEX)
             verts[dst + OFF_POSITION + 2] = baseZ
+            verts[dst + OFF_WALL] = 1f
             skirtIndexOf[srcIdx] = s
             s++
         }
