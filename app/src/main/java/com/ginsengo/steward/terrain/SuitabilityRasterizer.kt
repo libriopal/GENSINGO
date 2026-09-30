@@ -27,6 +27,8 @@ object SuitabilityRasterizer {
         val tpiRadiusCells: Int,
         val superSample: Int,
         val tilesLoaded: Int, val tilesRequested: Int,
+        /** Where the time went: whole-mosaic terrain analysis (cached per mosaic) vs scoring. */
+        val analysisMs: Long = 0, val scoreMs: Long = 0,
     ) {
         val coverage: Double
             get() = if (tilesRequested == 0) 0.0 else tilesLoaded.toDouble() / tilesRequested
@@ -62,7 +64,9 @@ object SuitabilityRasterizer {
         // Wetness and the summed-area table are whole-mosaic operators and neither depends
         // on the camera, so they are cached against the mosaic rather than recomputed for
         // every viewport the user pans through.
+        val t0 = System.nanoTime()
         val analysis = TerrainAnalysis.of(mosaic, withWetness = true)
+        val t1 = System.nanoTime()
 
         // ---- ADAPTIVE ANTIALIASING -------------------------------------------------
         // The ratio between one output pixel and one DEM cell decides which artefact is
@@ -85,6 +89,7 @@ object SuitabilityRasterizer {
         val scores = scorePixels(g, analysis, mosaic, ix0, iy0, iw, ih, outSize, superSample, tpiRadiusCells, weights) {
             ensureActive()
         }
+        val t2 = System.nanoTime()
         val px = IntArray(outSize * outSize) { colourFor(scores[it], minScore) }
 
         val bmp = Bitmap.createBitmap(outSize, outSize, Bitmap.Config.ARGB_8888)
@@ -102,6 +107,7 @@ object SuitabilityRasterizer {
             superSample = superSample,
             tilesLoaded = mosaic.tilesLoaded,
             tilesRequested = mosaic.tilesRequested,
+            analysisMs = (t1 - t0) / 1_000_000, scoreMs = (t2 - t1) / 1_000_000,
         )
     }
 
@@ -169,9 +175,15 @@ object SuitabilityRasterizer {
                             scoreAt(g, analysis, gx, gy, mosaic, tpiRadiusCells, superSample == 1, weights)
                         } else {
                             // The same clamped cell scoreAt reads; always inside the interior.
+                            // Primitive on purpose: a nullable Double here boxes on every sample,
+                            // which ART does not optimise away (Phase 7 device timing).
                             val cell = (gy.toInt().coerceIn(1, g.h - 2) - iy0) * iw + (gx.toInt().coerceIn(1, g.w - 2) - ix0)
-                            memo[cell].takeUnless { it.isNaN() }
-                                ?: scoreAt(g, analysis, gx, gy, mosaic, tpiRadiusCells, false, weights).also { memo[cell] = it }
+                            var v = memo[cell]
+                            if (v.isNaN()) {
+                                v = scoreAt(g, analysis, gx, gy, mosaic, tpiRadiusCells, false, weights)
+                                memo[cell] = v
+                            }
+                            v
                         }
                         n++
                     }

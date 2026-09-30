@@ -184,7 +184,8 @@ fun FieldMap(
                 mosaic, DemTileStore.rasterSizeFor(cam.zoom), DemTileStore.tpiRadiusMetresFor(cam.zoom),
                 weights = weights,
             )
-            Log.i(TAG, "habitat: rasterised ${r.bitmap.width}x${r.bitmap.height} in ${android.os.SystemClock.elapsedRealtime() - t0} ms")
+            Log.i(TAG, "habitat: rasterised ${r.bitmap.width}x${r.bitmap.height} in ${android.os.SystemClock.elapsedRealtime() - t0} ms " +
+                "(terrain analysis ${r.analysisMs} ms, scoring ${r.scoreMs} ms)")
             runCatching {
                 val src = style.getSourceAs<ImageSource>(SRC_HABITAT)
                 src?.setCoordinates(
