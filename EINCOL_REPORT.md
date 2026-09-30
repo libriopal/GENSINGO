@@ -1363,7 +1363,15 @@ power — about 4 in 10 for a moderate signal in 8 separate spots — stated bel
     absent because it was slow, not because it was invisible: the old code took 445 s on this
     interpreted CPU, which a completion log measured. The new code took 611 s, which does
     **not** show the desktop speed-up. That run shared the CPU with a full 10-mile research
-    scan ("Ranking places…" on screen), which the old run did not. An uncontended re-run is pending.
+    scan ("Ranking places…" on screen), which the old run did not. Uncontended: **375 s**; then,
+    after removing a `Double` the memo boxed on every sample (the desktop JVM removes that
+    allocation, ART does not), **348 s: 153 s whole-mosaic terrain analysis, 193 s scoring**.
+    So on this interpreted CPU the scoring speed-up is about 1.5× (≈292 → 193 s), not the
+    desktop's 6×. Pans inside the same tile set now cost nothing on any CPU.
+  - **The new Find sheet on the device:** no checklist and no "unverified" warning, just
+    *"Saved as your find. The map and the learner treat it as true."* The save itself was cut
+    off by a container restart that took the emulator down; it is covered on the JVM through
+    the real Room database (`noFindTheUserEntersIsSavedAsLess`, `everyFindTheUserEnteredReachesTheLearner`).
 
 ### What the evaluators caught that I did not
 
@@ -1380,7 +1388,8 @@ power — about 4 in 10 for a moderate signal in 8 separate spots — stated bel
 7. My own tally of the idea pool (all four numbers wrong).
 8. The habitat heatmap was **far too slow to be live**: 7.4 minutes on the emulator, 4.8 s
    per camera move on a desktop JVM, recomputed on every pan (device, then timed on the JVM).
-   Fixed as above.
+   Faster, not solved everywhere: 3× for a first render on the desktop and free for pans within
+   a tile set; 445 → 348 s on the emulator; unmeasured on a phone (Open 11).
 
 ### My errors along the way, recorded because the protocol says the first version is evidence
 
@@ -1431,6 +1440,9 @@ power — about 4 in 10 for a moderate signal in 8 separate spots — stated bel
 9. The 3D terrain view has compiled and its matrices are unit-tested, but it has not been
    seen rendering on a device in this phase.
 10. `FindLearner.MIN_FINDS` is redundant with `MIN_CLUSTERS` (mutant L4); kept for its message.
-11. Emulator timings are not comparable run to run (interpreted CPU, contention with the
-    research scan and Android's own system process, which raised "isn't responding" dialogs).
-    The heatmap speed-up is measured on a desktop JVM; on a phone it is unmeasured.
+11. **Heatmap speed on a phone is unmeasured.** Desktop JVM, first render of a tile set: 5.9 s →
+    1.9 s (terrain analysis 1.1 s + scoring 0.78 s). Emulator: 445 s → 348 s. Scoring still
+    allocates a boxed `Pair` and a `DoubleArray` per cell, which ART pays for and HotSpot does
+    not; removing them is the next step if a handset shows the first render is slow. Emulator
+    timings are not comparable run to run (interpreted CPU; contention with the research scan
+    and with Android's own system process, which raised "isn't responding" dialogs).

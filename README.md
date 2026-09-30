@@ -30,7 +30,7 @@ recentre.
 
 | Layer | What it is |
 |---|---|
-| **Habitat** (green) | The published six-factor terrain model below, computed per viewport on the phone. Switches to learned weights only after they beat the published ones on held-out finds. |
+| **Habitat** (green) | The published six-factor terrain model below, computed on the phone for the elevation tiles in view and redrawn when those tiles change. Switches to learned weights only after they beat the published ones on held-out finds. |
 | **Where I've been** (blue) | GPU heatmap of your recorded track. |
 | **My finds** (amber) | GPU heatmap of your finds, including patches logged in the older app, all at full weight. |
 
