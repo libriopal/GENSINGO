@@ -39,7 +39,16 @@ released, offline-capable version; otherwise row one.
 
 ## C. Reuse (researcher's report)
 
-*Pending: the researcher sub-agent is running (iteration 1, step C).*
+Researcher sub-agent, 2026-10-01 (sources linked in its report; unverified items marked):
+
+| Candidate | Finding | Decision |
+|---|---|---|
+| MapLibre native 3D terrain | **Not released** in any MapLibre Native Android version. Draft, unmerged [PR #4190](https://github.com/maplibre/maplibre-native/pull/4190) (`style.terrain.Terrain`, `setTerrain`) with known gaps (symbols and lines at the wrong altitude). MapTiler's mobile SDK has terrain but needs a key and is online-only; the `maplibreplus-native` fork has no artifact | **Not used.** Distribution row 2 is closed; row 1 stands |
+| `MapSnapshotter` (MapLibre 13.6.1, BSD-2) | `@UiThread`, render on a background thread, callbacks on the calling thread; same `FileSource` as the map's cache and offline regions (offline on a device UNVERIFIED); `withRegion`, `withPixelRatio(1)`, `withLogo(false)`, `withAttribution(false)` (then the app owes attribution); `start()` once per instance; `cancel()` in `onStop`; open bugs: sprite decode [#2962](https://github.com/maplibre/maplibre-native/issues/2962), offline raster tiles [#633](https://github.com/maplibre/maplibre-native/issues/633) | **Used** for the 3D basemap (WP-A), at ≤ 2048², pixel ratio 1; attribution shown in the 3D legend; failure falls back to the neutral relief |
+| maplibre-contour `isolines.ts` (BSD-3, 321 lines TS, from d3-contour, ISC; v0.1.1 2026-09-17, maintained) | Marching-squares isolines from a DEM grid, already used with Terrarium tiles | **Ported to Kotlin** (WP-C), with both notices in `THIRD_PARTY_NOTICES.md`, so the 2D map shows the same contours as the 3D texture |
+| Martini RTIN (ISC, 164 lines JS, inactive since 2020; no Java/Kotlin port) | Adaptive terrain mesh, fewer triangles for the same error | **Not now**: no measured need (the 298k-triangle mesh's speed on a phone is unmeasured). Open list |
+| Snapshot draped on a GLES mesh, Android example | None found | Built here (WP-A), on the existing renderer |
+| udel marching squares | GPL | **Avoided** (licence) |
 
 ## D. Design
 
@@ -129,11 +138,40 @@ Negative control: ignore bearing in pan -> test 1 at bearing 90 must fail; rever
 Report back: files changed, test results, the negative control's failing output, open issues.
 ```
 
+### WP-C — Contour lines for the 2D map, ported from maplibre-contour (contractor C)
+
+```
+Purpose: the 2D map shows the same contour lines the 3D texture bakes, by porting proven code.
+Files you may create or change:
+  app/src/main/java/com/ginsengo/steward/terrain/Isolines.kt             (new; the port)
+  app/src/test/java/com/ginsengo/steward/terrain/IsolinesTest.kt        (new)
+  THIRD_PARTY_NOTICES.md                                                (new)
+Files you must not touch: everything else.
+Deliverable:
+  - A Kotlin port of maplibre-contour's src/isolines.ts (BSD-3-Clause, onthegomap; adapted from
+    d3-contour, ISC): fun isolines(z: FloatArray, w: Int, h: Int, intervalM: Double): Map<Int, List<FloatArray>>
+    keyed by elevation level, each line a flat [x0, y0, x1, y1, ...] in grid-cell coordinates, lines
+    stitched into continuous polylines as the original does. Keep the original's algorithm and its
+    structure recognisable; put the source URL, version/commit and both licence notices in the file
+    header and in THIRD_PARTY_NOTICES.md.
+Reuse: https://github.com/onthegomap/maplibre-contour/blob/main/src/isolines.ts (BSD-3-Clause) and its
+  d3-contour (ISC) notice. Fetch the source from the web; do not use GitHub MCP tools on other repos.
+Acceptance tests (IsolinesTest, written first):
+  1. A cone z = 1000 - r: the 900 m isoline is one closed ring whose points are all at r = 100 +/- 1 cell.
+  2. A plane rising east (z = x): each level L is one line at x = L +/- 0.5, spanning the full height.
+  3. Every vertex of every level-L line, bilinearly sampled, equals L within 0.05 m (interpolation is right).
+  4. A flat grid yields no lines.
+Negative control: drop the linear interpolation (place vertices at cell centres) -> test 3 must fail; revert.
+Report back: files changed, test results, the negative control's failing output, any deviation from
+  the original algorithm and why.
+```
+
 ### Integration (architect)
 
 `ui/Terrain3DView.kt`, `ui/MainScreen.kt`: shared camera, gestures via `CameraMath`, recentre in
 3D, rebuild when the centre leaves the square, snapshot drape via `MapDrape`, layer toggles via
-`TerrainTextures.Layers`, track line projected, **H** removed, one 2D/3D control.
+`TerrainTextures.Layers`, track line projected, **H** removed, one 2D/3D control; a contour layer on
+the 2D map from WP-C, at the same interval the 3D texture uses; attribution for the draped basemap.
 
 ## F. Load-bearing claims (for the auditor)
 
@@ -153,4 +191,4 @@ Report back: files changed, test results, the negative control's failing output,
 
 ## H. Log
 
-- Iteration 1, step A–B done; research and audit pending.
+- Iteration 1: A-B done; C done (researcher); WP-C added from the reuse findings; audit pending.
