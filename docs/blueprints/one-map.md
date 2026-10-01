@@ -91,9 +91,17 @@ Deliverable:
     contours if layers.contours; creeks if layers.water. Existing modes keep their exact output when
     called with default Layers (existing Terrain3DTest must pass unchanged).
   - MapDrape.render(context, styleUri: String, north, west, south, east, sizePx, timeoutMs): IntArray?
-    using org.maplibre.android.snapshotter.MapSnapshotter (pixel ratio 1, logo off, attribution off),
-    on the main thread as the API requires, returning size x size ARGB pixels or null on failure or
-    timeout. No coordinates in logs.
+    using org.maplibre.android.snapshotter.MapSnapshotter with the SCREEN's pixel ratio
+    (context.resources.displayMetrics.density) and logical size sizePx / density, logo and
+    attribution off, created and started on the main thread as the API requires (@UiThread),
+    cancelled on timeout; returns exactly sizePx x sizePx ARGB pixels (scale if the bitmap differs
+    by rounding) or null on failure or timeout. start() once per instance. No coordinates in logs.
+  - Pure, JVM-testable: MapDrape.logicalSize(sizePx, density, widthM, lat, maxZoom = 14.0): Int and
+    MapDrape.snapshotZoom(logicalPx, widthM, lat): Double — the logical size is reduced, if needed,
+    so the snapshot's zoom never exceeds maxZoom (the saved offline region's top zoom).
+  - Debug builds only (BuildConfig.DEBUG): MapDrape.installRequestCounter() sets an OkHttp client on
+    org.maplibre.android.module.http.HttpRequestUtil whose interceptor counts requests by kind
+    (style, sprite, glyphs, tile, other) and logs only the counts after each snapshot.
 Reuse: MapLibre MapSnapshotter (already linked; BSD-2-Clause MapLibre licence).
 Acceptance tests (write first, in MapDrapeCompositeTest):
   1. MAP mode, flat ground, layers all off, random opaque basemap -> output equals basemap (opaque).
@@ -101,6 +109,8 @@ Acceptance tests (write first, in MapDrapeCompositeTest):
   3. Valley ground: water on draws blue along the floor; water off draws none.
   4. basemap = null in MAP mode -> identical to HABITAT mode output for the same ground and layers.
   5. Default Layers reproduce the previous HABITAT and ELEVATION outputs exactly (regression).
+  6. logicalSize/snapshotZoom: a 3 km square at 1536 px and density 2.625 gives a zoom <= 14; a
+     density of 1 (logical 1536) would exceed 14, and logicalSize reduces it to keep zoom <= 14.
 Negative control: make MAP ignore the basemap (use the neutral ramp) -> test 1 must fail; revert.
 Budget: bake of 1536^2 stays under 1 s on the JVM.
 Report back: files changed, test results, the negative control's failing output, open issues.
@@ -115,12 +125,18 @@ Files you may create or change:
   app/src/test/java/com/ginsengo/steward/terrain3d/CameraMathTest.kt   (new)
   app/src/main/java/com/ginsengo/steward/ui/FieldViewModel.kt
   app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt
+  app/src/main/java/com/ginsengo/steward/terrain3d/MapCamera.kt          (add unproject only)
 Files you must not touch: everything else (MainScreen and Terrain3DView are integrated by the architect).
 Deliverable:
   - data class ViewCamera(lat, lng, zoom, bearing, pitch) in CameraMath.kt.
-  - CameraMath.pan(cam, dxPx, dyPx, viewportW, viewportH): ViewCamera — the ground point under the
-    finger's start ends under the finger's end (content moves with the finger), for any bearing,
-    and for pitch up to 60 within the tolerance below.
+  - MapCamera.unproject(screenX, screenY, heightM): DoubleArray? (lat, lng) — the inverse of
+    project() onto the horizontal plane at heightM (same height convention as project's elevationM);
+    null when the ray misses the plane (above the horizon).
+  - CameraMath.pan(cam, fromX, fromY, toX, toY, viewportW, viewportH, heightAt: (lat, lng) -> Double):
+    ViewCamera — finds the TERRAIN point under (fromX, fromY) by iterating unproject at the height
+    heightAt returns (start at heightAt(centre), 4 iterations), then returns the camera (same zoom,
+    bearing, pitch; new centre) that projects that point, at its height, to (toX, toY). heightAt uses
+    the same convention as MapCamera.project's elevationM (the 3D view passes (e - ground) * exaggeration).
   - CameraMath.clampCentre(cam, north, west, south, east): ViewCamera.
   - CameraMath.to3d(cam2d, minZoom, maxZoom) / to2d(cam3d): keep centre and bearing; zoom clamped;
     pitch max(cam.pitch, 45) into 3D, min(cam.pitch, 60) back to 2D.
@@ -129,12 +145,18 @@ Deliverable:
     listener) and jumpTo: ViewCamera? with a tick, so the map can be placed at a camera when
     returning from 3D (moveCamera, never an interrupted animation).
 Acceptance tests (CameraMathTest), using MapCamera.project as the independent witness:
-  1. Pitch 0, bearings 0/90/200: after pan(dx, dy), projecting the OLD centre with the NEW camera
-     lands at viewport centre + (dx, dy) within 1 px.
-  2. Pitch 55: same, within 3% of the drag length.
-  3. clampCentre keeps the centre inside the bounds and leaves an inside centre unchanged.
-  4. to3d/to2d keep centre and bearing exactly; zoom and pitch clamped as specified.
-Negative control: ignore bearing in pan -> test 1 at bearing 90 must fail; revert.
+  1. Flat ground (heightAt = 0), pitch 0, bearings 0/90/200: after pan(from -> to), projecting the
+     ground point that was under `from` with the NEW camera lands at `to` within 1 px.
+  2. Flat ground, pitch 55: same, within 2 px.
+  3. Sloped terrain (heightAt rising 0.3 m per m east, up to ~600 m over the area), pitch 55, zoom 15:
+     the TERRAIN point under `from` (found by the test with its own fine search along the ray, not by
+     calling the code under test) lands at `to` within 3 px; the camera-only version (heightAt ignored)
+     misses by more than 10 px in the same case (the auditor's runner-up, measured).
+  4. unproject(project(p, h), h) returns p within 1e-7 degrees.
+  5. clampCentre keeps the centre inside the bounds and leaves an inside centre unchanged.
+  6. to3d/to2d keep centre and bearing exactly; zoom and pitch clamped as specified.
+Negative controls: (a) ignore bearing in pan -> test 1 at bearing 90 fails; (b) skip the height
+  iteration -> test 3 fails. Show both failing, then revert.
 Report back: files changed, test results, the negative control's failing output, open issues.
 ```
 
@@ -187,8 +209,27 @@ the 2D map from WP-C, at the same interval the 3D texture uses; attribution for 
 
 ## G. Audit
 
-*Pending: the independent auditor sub-agent is running (iteration 1, step E).*
+Independent auditor sub-agent (fresh context, given only §D's design and §F's claims), 2026-10-01.
+
+**Strongest objection — claim 2 is probably false.** The snapshot does not request what the 2D map
+fetched: a different tile zoom (3 km in 1536 px is ~z14-15, the map may have only seen z11-12), a
+different pixel ratio (the snapshotter defaults to 1; the map uses the screen's ~2.6, so its `@2x`
+sprites are cached and the `@1x` ones are not), and different label glyphs. In still mode MapLibre
+fails the whole render on the first resource error (`Map::Impl::onResourceError`), so one missing
+sprite loses the entire basemap, exactly in the field conditions where the 2D map still looks fine.
+**Cheaper instrument:** an OkHttp hook via `HttpRequestUtil.setOkHttpClient` that records every request
+the snapshot makes after viewing the area in 2D; any request that reaches the network is a cache miss
+that will fail offline. **Runner-up — claim 4:** panning from the camera alone has an error that grows
+as relief over camera height, large when zoomed in over steep ground.
+
+**Investigated, and the response** (both versions kept, per EINCOL step 4):
+
+| Claim | First version | Corrected version | What changed |
+|---|---|---|---|
+| 2 | The snapshot works offline whenever the 2D map shows tiles there | It works offline **where the area was saved** ("Save 10 miles": region zoom 8-14 at the screen's pixel ratio, measured in `OfflineArea.downloadBasemap`), **if** it requests that pixel ratio and zoom ≤ 14; elsewhere it may fail whole | WP-A renders at the screen's pixel ratio with logical size = texture / density, checks its zoom is ≤ 14 (pure, tested), skips the snapshot when the 2D map is on its offline fallback style, times out, and falls back to terrain-only with a status that says so. A debug-build request counter (the auditor's instrument, counts by kind only, never URLs: tile URLs encode location) is added for the device gate |
+| 4 | CPU panning from the camera alone keeps the ground under the finger closely enough | Keep the **terrain** point under the finger: unproject the touch onto the plane at the target's ground height, sample the elevation there, unproject again at that height, iterate, then solve for the camera that puts that 3D point under the finger's new position | WP-B adds `MapCamera.unproject` and a terrain-aware `CameraMath.pan(..., heightAt)`; its witness test uses a sloped synthetic terrain |
+| 1, 3, 5 | — | Not attacked; kept, and checked at the device gate | — |
 
 ## H. Log
 
-- Iteration 1: A-B done; C done (researcher); WP-C added from the reuse findings; audit pending.
+- Iteration 1: A-B done; C done (researcher); WP-C added from the reuse findings; E done (auditor): claims 2 and 4 corrected, WP-A and WP-B revised. G3 passes; contractors start.
