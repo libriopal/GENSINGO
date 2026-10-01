@@ -22,13 +22,28 @@ import kotlin.math.sqrt
  * the elevation data's own resolution, composited over a neutral relief so weak ground reads
  * as bare terrain instead of black.
  *
- * Layers, bottom to top: base (neutral relief + habitat, or hypsometric elevation), baked
- * hillshade (light from the north-west, the convention relief maps use), contour lines, and
- * channels traced by [Hydrology].
+ * Layers, bottom to top: base (neutral relief + habitat, the basemap + habitat, or
+ * hypsometric elevation), baked hillshade (light from the north-west, the convention relief
+ * maps use), contour lines, and channels traced by [Hydrology].
+ *
+ * WHY THE BASEMAP IS BAKED IN (one-map blueprint, WP-A). MapLibre 13.6.1 has no terrain API,
+ * so the 3D view cannot ask the map to drape itself. A MapSnapshotter render of the 2D map's
+ * own style for the same north-up Web Mercator square lines up with this texture texel for
+ * texel, so it becomes the base the app's layers are drawn over, and the 3D view shows the
+ * roads and names the 2D map shows. Labels lie flat on the ground and may stretch on steep
+ * slopes: better than none.
  */
 object TerrainTextures {
 
-    enum class Mode { HABITAT, ELEVATION }
+    enum class Mode { HABITAT, ELEVATION, MAP }
+
+    /**
+     * Which of the app's own layers are baked in; the Layers sheet drives these, so the 3D view
+     * shows what the 2D map shows. The defaults are what the bake always drew before the toggles
+     * existed, so a caller that passes none gets the old picture exactly. [habitat] has no
+     * effect in [Mode.ELEVATION], whose base is the elevation tint.
+     */
+    data class Layers(val habitat: Boolean = true, val water: Boolean = true, val contours: Boolean = true)
 
     /** Everything the baker needs about the ground; produced once per 3D build. */
     class Ground(
@@ -38,6 +53,12 @@ object TerrainTextures {
         val scoreSize: Int,
         val lines: List<Hydrology.Line>,
         val exaggeration: Double,
+        /**
+         * The basemap over exactly the interior, for [Mode.MAP]: ARGB, north up, texture size
+         * squared (what MapDrape.render returns). Null when there is no snapshot (no cached
+         * tiles, offline fallback style, timeout): the view then shows the neutral relief.
+         */
+        val basemap: IntArray? = null,
     )
 
     const val MAX_SIZE = 2048
@@ -52,8 +73,15 @@ object TerrainTextures {
     fun contourInterval(reliefM: Double): Double =
         doubleArrayOf(5.0, 10.0, 20.0, 25.0, 50.0, 100.0).firstOrNull { reliefM / it <= 40.0 } ?: 200.0
 
-    /** ARGB pixels, row-major, north up, covering the mosaic interior. */
-    fun bake(ground: Ground, mode: Mode, size: Int = sizeFor(ground.mosaic)): IntArray {
+    /**
+     * ARGB pixels, row-major, north up, covering the mosaic interior.
+     *
+     * [Mode.MAP] uses the basemap texel where the snapshot has one and it is opaque, else the
+     * neutral relief, so with no usable snapshot it is exactly [Mode.HABITAT]. A basemap made
+     * for another texture size is not used at all: reading it would put the map in the wrong
+     * place, or past the end of the array.
+     */
+    fun bake(ground: Ground, mode: Mode, size: Int = sizeFor(ground.mosaic), layers: Layers = Layers()): IntArray {
         val m = ground.mosaic
         val g = m.grid
         val halo = m.haloPx
@@ -61,6 +89,7 @@ object TerrainTextures {
         val ih = g.h - 2 * halo
         val out = IntArray(size * size)
         val elev = FloatArray(size * size)
+        val map = ground.basemap?.takeIf { mode == Mode.MAP && it.size == size * size }
 
         // Elevation at every texel centre, and the relief it spans.
         var lo = Float.MAX_VALUE; var hi = -Float.MAX_VALUE
@@ -84,10 +113,13 @@ object TerrainTextures {
                 val t = ((e - lo) / span).toDouble()
                 var rgb = when (mode) {
                     Mode.ELEVATION -> ramp(ELEVATION_RAMP, t)
-                    Mode.HABITAT -> {
-                        val base = ramp(NEUTRAL_RAMP, t)
+                    Mode.HABITAT, Mode.MAP -> {
+                        // A translucent snapshot texel is where the style drew nothing solid;
+                        // the relief there keeps the ground readable instead of guessing a colour.
+                        val base = if (map != null && (map[i] ushr 24) == 0xFF) map[i] and 0xFFFFFF
+                        else ramp(NEUTRAL_RAMP, t)
                         val s = ground.scores
-                        if (s == null) base else {
+                        if (s == null || !layers.habitat) base else {
                             val score = bilinear(s, ground.scoreSize, ground.scoreSize,
                                 (tx + 0.5) / size * ground.scoreSize - 0.5,
                                 (ty + 0.5) / size * ground.scoreSize - 0.5).toDouble()
@@ -109,8 +141,8 @@ object TerrainTextures {
             }
         }
 
-        drawContours(out, elev, size, contourInterval((hi - lo).toDouble()))
-        drawChannels(out, ground, size)
+        if (layers.contours) drawContours(out, elev, size, contourInterval((hi - lo).toDouble()))
+        if (layers.water) drawChannels(out, ground, size)
         return out
     }
 
