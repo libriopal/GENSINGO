@@ -1,5 +1,7 @@
 package com.ginsengo.steward.terrain3d
 
+import kotlin.math.abs
+
 /**
  * One camera for both views: the 2D map writes it when its camera settles, the 3D view starts
  * from it and writes it back as it moves. Same numbers on both sides: MapLibre's zoom (512 px
@@ -53,14 +55,17 @@ object CameraMath {
      *
      * The iteration converges while the terrain's slope along the ray is gentler than the
      * ray's own dip below the horizon. Near the top of a steeply pitched screen, looking
-     * along a steep slope, it does not converge in 4 steps, and the ground there drifts
-     * under the finger.
+     * along a steep slope, it does not (contractor B measured 5-107 px misses), so when it has
+     * not settled and [heightRange] bounds the terrain, the ray is marched from the top of
+     * that range down to the first point below the ground and the crossing bisected: the
+     * first crossing is the surface the user sees.
      */
     fun pan(
         cam: ViewCamera,
         fromX: Double, fromY: Double, toX: Double, toY: Double,
         viewportW: Int, viewportH: Int,
         heightAt: (lat: Double, lng: Double) -> Double,
+        heightRange: ClosedFloatingPointRange<Double>? = null,
     ): ViewCamera {
         val mc = mapCamera(cam, viewportW, viewportH)
         var h = heightAt(cam.lat, cam.lng)
@@ -68,6 +73,8 @@ object CameraMath {
             val p = mc.unproject(fromX, fromY, h) ?: return cam
             h = heightAt(p[0], p[1])
         }
+        val settled = mc.unproject(fromX, fromY, h)?.let { abs(heightAt(it[0], it[1]) - h) <= SETTLED_M } ?: false
+        if (!settled && heightRange != null) marchRay(mc, fromX, fromY, heightAt, heightRange)?.let { h = it }
         val touched = mc.unproject(fromX, fromY, h) ?: return cam
         val target = mc.unproject(toX, toY, h) ?: return cam
         val x = mc.centerX + mc.worldX(touched[1]) - mc.worldX(target[1])
@@ -76,6 +83,40 @@ object CameraMath {
             lat = MapCamera.latFromMercatorY(y / mc.worldSize),
             lng = MapCamera.lngFromMercatorX(x / mc.worldSize),
         )
+    }
+
+    /** The iteration counts as settled when the ray point is within this of the ground. */
+    const val SETTLED_M = 0.5
+    private const val MARCH_STEPS = 256
+    private const val BISECT_STEPS = 40
+
+    /**
+     * The height at which the ray through ([sx], [sy]) first meets the terrain, marching down
+     * from the top of [range]; null if it never does within it.
+     */
+    private fun marchRay(
+        mc: MapCamera, sx: Double, sy: Double,
+        heightAt: (Double, Double) -> Double, range: ClosedFloatingPointRange<Double>,
+    ): Double? {
+        fun gap(h: Double): Double? = mc.unproject(sx, sy, h)?.let { heightAt(it[0], it[1]) - h }
+        val step = (range.endInclusive - range.start) / MARCH_STEPS
+        var above = range.endInclusive
+        if ((gap(above) ?: return null) >= 0) return null      // starts under the ground: no visible crossing
+        var h = above
+        while (h > range.start) {
+            h -= step
+            val g = gap(h) ?: continue
+            if (g >= 0) {
+                var lo = h; var hi = above
+                repeat(BISECT_STEPS) {
+                    val m = 0.5 * (lo + hi)
+                    if ((gap(m) ?: -1.0) >= 0) lo = m else hi = m
+                }
+                return 0.5 * (lo + hi)
+            }
+            above = h
+        }
+        return null
     }
 
     /** Keeps the centre inside the box; an inside centre comes back unchanged. */

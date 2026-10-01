@@ -205,6 +205,33 @@ class CameraMathTest {
         }
     }
 
+    /**
+     * Upper-screen touches looking ALONG the slope (bearing 90 faces east, up the ramp): the ray
+     * dips less steeply than the ground rises, the case contractor B measured the fixed 4-step
+     * iteration missing by 5-107 px. With the height range supplied, the pan must fall back to
+     * marching the ray and still keep the terrain under the finger.
+     */
+    @Test
+    fun upperScreenTouchesAlongASteepSlopeStillKeepTheTerrain() {
+        val high = listOf(
+            doubleArrayOf(540.0, 600.0, 540.0, 900.0),
+            doubleArrayOf(300.0, 700.0, 600.0, 1000.0),
+            doubleArrayOf(800.0, 520.0, 500.0, 820.0),
+        )
+        for (offset in listOf(0.0, 300.0)) {
+            val heightAt = ramp(offset)
+            val cam = ViewCamera(LAT, LNG, 15.0, 90.0, 55.0)
+            val old = mapCam(cam)
+            val range = (offset - 800.0)..(offset + 800.0)
+            for (d in high) {
+                val (fx, fy, tx, ty) = d.toList()
+                val p = terrainUnder(old, fx, fy, heightAt)
+                val m = miss(CameraMath.pan(cam, fx, fy, tx, ty, W, H, heightAt, range), p, tx, ty)
+                assertTrue("offset $offset drag ($fx,$fy)->($tx,$ty): lands %.3f px from the finger".format(m), m <= 3.0)
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ 4. unproject
 
     @Test
