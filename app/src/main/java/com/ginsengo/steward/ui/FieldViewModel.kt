@@ -16,6 +16,7 @@ import com.ginsengo.steward.field.TrackService
 import com.ginsengo.steward.learn.FindLearner
 import com.ginsengo.steward.research.Provider
 import com.ginsengo.steward.research.ResearchTrigger
+import com.ginsengo.steward.terrain3d.ViewCamera
 import com.ginsengo.steward.ui.map.MapLayerState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -79,6 +80,11 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
     private val _view3d = MutableStateFlow(false)
     val view3d: StateFlow<Boolean> = _view3d.asStateFlow()
     fun setView3d(on: Boolean) { _view3d.value = on }
+
+    private val _camera = MutableStateFlow<ViewCamera?>(null)
+    /** The one camera both views share: the 2D map writes it when it settles, the 3D view as it moves. */
+    val camera: StateFlow<ViewCamera?> = _camera.asStateFlow()
+    fun setCamera(c: ViewCamera) { _camera.value = c }
 
     private val _focus = MutableStateFlow<Suggestion?>(null)
     /** The suggestion the camera should fly to. */

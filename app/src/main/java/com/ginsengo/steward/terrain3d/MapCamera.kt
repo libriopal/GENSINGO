@@ -1,6 +1,7 @@
 package com.ginsengo.steward.terrain3d
 
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.ln
 import kotlin.math.sin
@@ -195,6 +196,50 @@ class MapCamera(
             ((ndcX * 0.5 + 0.5) * viewportWidth).toFloat(),
             ((0.5 - ndcY * 0.5) * viewportHeight).toFloat(),
         )
+    }
+
+    /**
+     * The inverse of [project] onto the horizontal plane at [heightM] (the same convention as
+     * project's `elevationM`): the (lat, lng) that this camera shows at screen pixel
+     * ([screenX], [screenY]) at that height, or null when the ray misses the plane (above
+     * the horizon, or a plane above the camera).
+     *
+     * The ray is built by undoing each factor of [vpMatrixDouble] in reverse order,
+     * analytically and relative to the centre, and the centre is added back last. Inverting
+     * the absolute 4x4 matrix numerically would mix the ~10^7 world-pixel translation into
+     * every term (the precision trap described there). A hit is accepted under the same rule
+     * project uses: clip w > 1e-6, i.e. in front of the camera.
+     */
+    fun unproject(screenX: Double, screenY: Double, heightM: Double = 0.0): DoubleArray? {
+        // Screen -> NDC -> eye-space ray direction (eye at the origin, looking down -z).
+        val ndcX = 2.0 * screenX / viewportWidth - 1.0
+        val ndcY = 1.0 - 2.0 * screenY / viewportHeight
+        val f = 1.0 / tan(FOV / 2.0)
+        val aspect = viewportWidth.toDouble() / viewportHeight
+        val ex = ndcX * aspect / f
+        val ey = -(ndcY / f)          // undo scale(1, -1, 1)
+        val ez = -1.0
+        // Undo translate(0, 0, -cameraToCenterDistance): the eye sits at (0, 0, d).
+        val d = cameraToCenterDistance
+        // Undo rotateX(pitch).
+        val cp = cos(pitch); val sp = sin(pitch)
+        val eyeY1 = sp * d; val eyeZ1 = cp * d
+        val rx1 = ex
+        val ry1 = cp * ey + sp * ez
+        val rz1 = -sp * ey + cp * ez
+        // Undo rotateZ(angle).
+        val ca = cos(angle); val sa = sin(angle)
+        val eyeX0 = sa * eyeY1; val eyeY0 = ca * eyeY1
+        val rx0 = ca * rx1 + sa * ry1
+        val ry0 = -sa * rx1 + ca * ry1
+        // Intersect with the plane z = heightM * pixelsPerMeter (centre-relative world pixels).
+        if (abs(rz1) < 1e-12) return null
+        val t = (heightM * pixelsPerMeter - eyeZ1) / rz1
+        // Clip w equals t here, because the eye-space direction has z = -1.
+        if (t <= 1e-6) return null
+        val x = centerX + eyeX0 + t * rx0
+        val y = centerY + eyeY0 + t * ry0
+        return doubleArrayOf(latFromMercatorY(y / worldSize), lngFromMercatorX(x / worldSize))
     }
 
     companion object {
