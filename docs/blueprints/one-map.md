@@ -195,6 +195,37 @@ Report back: files changed, test results, the negative control's failing output,
 `TerrainTextures.Layers`, track line projected, **H** removed, one 2D/3D control; a contour layer on
 the 2D map from WP-C, at the same interval the 3D texture uses; attribution for the draped basemap.
 
+**As built** (architect, after the three merges):
+
+| Piece | Built as | Witness |
+|---|---|---|
+| One camera | `FieldViewModel.camera`; the 2D map writes it on camera idle, the 3D view on gesture end, recentre, focus and compass; the 2D/3D switch hands it back with `CameraMath.to2d` and `FieldMap(jumpTo, jumpTick)` | `CameraMathTest.switchingViews…` (WP-B) |
+| 3D gestures | One finger: `CameraMath.pan` with the scene's elevation and its height range; two fingers: pinch zoom, twist bearing, vertical slide pitch | `CameraMathTest` (WP-B + the architect's ray-march fix) |
+| **Found in integration:** the target plane must follow the ground | The 3D camera looks at the plane through the ground under its centre. After a pan the centre is over other ground; re-basing the plane alone jumps the picture by the height difference (×1.5). Reuse search: MapLibre GL JS solves exactly this (`TransformHelper.recalculateZoomAndCenter`, BSD-3): keep the eye, move the target along the view ray to the terrain, recompute zoom. Ported as `CameraMath.reanchor`, run when a gesture ends | `ReanchorTest`: every terrain point stays on the same pixel (< 0.5 px) at 4 pitches × 3 bearings; mutant O1 |
+| Rebuild | When a gesture, recentre or "Show on map" leaves the centre outside the built square, the terrain is built around the new centre (3 × 3 zoom-15 tiles) | on device (G6) |
+| Exact square | `Scene.north/south/west/east` from exact Mercator row edges (the contractor-era linear guess was ~1e-5° off; the snapshot is matched texel for texel), `Scene.elevationAt` bilinear | `SceneGeometryTest`; mutants O2, O4 |
+| Drape | `MapDrape.render` for the exact square at the texture size once the terrain is built; MAP mode when it returns, else HABITAT, else ELEVATION with the habitat layer off. Only when the Dark style actually loaded on the 2D map (`FieldMap(onBasemap)`); never for Topo (built in code, not a style URL) | `MapDrapeCompositeTest` (WP-A); mutants A1, A2 |
+| Layers in 3D | `TerrainTextures.Layers(habitat, water, contours)` from the Layers sheet; finds and suggestions obey their toggles; the track line is drawn when "Track line" **or** "Where I've been" is on (the GPU heat is not in 3D), decimated to ≤ 3,000 points, projected with one matrix per frame (`MapCamera.projector`) | `ReanchorTest.theProjectorIsProject`; device |
+| Contours in 2D | `ContourLines.of` (the WP-C port over the mosaic interior, every 2nd vertex kept, index flag every 5th level) at `TerrainTextures.contourInterval(interior relief)`, a `LineLayer` under the creeks, brown on Topo and pale on Dark, interval in the status line; `MapLayerState.contours` + a Layers toggle | `ContourLinesTest`; mutant O3 |
+| Notices in the app | `copyThirdPartyNotices` (Gradle `Copy` before `preBuild`) puts `THIRD_PARTY_NOTICES.md` in the APK's assets; Layers → Open-source notices shows it; the MapLibre GL JS notice was added for the port | the release check (G7) reads it from the APK |
+| **H** | Removed; colouring follows the layer toggles | — |
+
+**Inspection of the integration** (inspector sub-agent, fresh context, given this contract and
+the diff; the architect wrote the integration, so it could not certify it). Verdict
+*fix-then-merge*; every finding is either fixed or answered here:
+
+| # | Finding | Response |
+|---|---|---|
+| 1 | Switching to Topo while in 3D left the Dark drape (and its credit) on the ground | Fixed: no style ⇒ the drape is cleared |
+| 2 | 2D and 3D contours use the same **rule** on different footprints, so different **intervals**; the contract said "the same interval" | **Contract amended**, both versions kept. First: "the same interval the 3D texture uses". Corrected: "the same interval rule (`contourInterval` over what each view shows), with the interval printed on each view" (2D status line, 3D legend). Reason: one interval for a 10-mile view and a 3 km square is unreadable on one of them; a labelled interval is what a topo reader expects |
+| 3 | The zoom fit wrote camera state during composition | Fixed before the inspection returned (now an effect); re-checked |
+| 4 | A rebuild reset the ground plane and jumped the picture (re-anchoring cannot run while the centre is off the old square) | Fixed: after a rebuild the camera is settled on the new ground with the eye kept (`Terrain3D.settle`) |
+| 5 | New terrain was drawn with the old square's texture until its bake finished | Fixed: bake first, then mesh and texture together |
+| 6 | The notices folder relied on task ordering | Fixed: registered with `variant.sources.assets.addGeneratedSourceDirectory`; G7 reads the file from the APK |
+| 7 | Status line could stick on "Tracing creeks…"; a GL frame on every GPS fix; contours share the habitat key | First two fixed (explicit publish; a frame only when camera, ground, square or viewport change). The third is open: toggling contours recomputes the habitat raster |
+| 8 | The gesture-end step had no pure, tested function | Fixed: `Terrain3D.settle`, witnessed by `SceneGeometryTest.settlingPuts…` (mutant O5); its vacuous screen-centre asserts were removed from `ReanchorTest` |
+| — | Not caught by tests: dropping the cos(lat) term in `reanchor` | Triaged: about 0.1 px over a 1 km move, below the test's 0.5 px tolerance; kept for exactness (MapLibre GL JS has it) |
+
 ## F. Load-bearing claims (for the auditor)
 
 1. A `MapSnapshotter` render of the active style for the 3D square's bounds aligns with the
@@ -233,3 +264,12 @@ as relief over camera height, large when zoomed in over steep ground.
 ## H. Log
 
 - Iteration 1: A-B done; C done (researcher); WP-C added from the reuse findings; E done (auditor): claims 2 and 4 corrected, WP-A and WP-B revised. G3 passes; contractors start.
+- Contracts: WP-A, WP-B, WP-C delivered with their negative controls shown failing (G4). All three
+  started from `main`, not the working branch, and fast-forwarded themselves: the next brief says
+  "fast-forward to the working branch first". Contractor B's reported limit (no convergence for
+  upper-screen touches along steep slopes) fixed by the architect test-first (ray march).
+- Integration: built as tabled above; one design problem found while wiring (the ground plane
+  after a pan) and solved by porting MapLibre GL JS's method instead of inventing one.
+- Inspection: fix-then-merge, 8 findings, 7 fixed, 1 answered by a recorded contract amendment.
+- G5: 339 unit tests pass (1 skipped: the full-scan timing fixture); 11 new mutants (A1, A2,
+  B1-B3, I1, O1-O5), 11 killed; shaders compile. G6: below. G7: below.

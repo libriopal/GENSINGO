@@ -181,8 +181,19 @@ class MapCamera(
      * camera. Used by [AlignmentCheck] and by nothing else — the GPU does this for real
      * geometry.
      */
-    fun project(lat: Double, lng: Double, elevationM: Double = 0.0): FloatArray? {
+    fun project(lat: Double, lng: Double, elevationM: Double = 0.0): FloatArray? =
+        projectWith(vpMatrixDouble(), lat, lng, elevationM)
+
+    /**
+     * [project] for many points (the 3D view's track line): the matrix is built once, not
+     * once per point.
+     */
+    fun projector(): (lat: Double, lng: Double, elevationM: Double) -> FloatArray? {
         val m = vpMatrixDouble()
+        return { lat, lng, e -> projectWith(m, lat, lng, e) }
+    }
+
+    private fun projectWith(m: DoubleArray, lat: Double, lng: Double, elevationM: Double): FloatArray? {
         val x = worldX(lng)
         val y = worldY(lat)
         val z = elevationM * pixelsPerMeter

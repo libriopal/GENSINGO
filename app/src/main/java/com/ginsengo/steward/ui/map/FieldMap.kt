@@ -18,10 +18,12 @@ import com.ginsengo.steward.data.db.Suggestion
 import com.ginsengo.steward.data.db.TrackPoint
 import com.ginsengo.steward.field.FieldLocation
 import com.ginsengo.steward.research.RadiusScan
+import com.ginsengo.steward.terrain.ContourLines
 import com.ginsengo.steward.terrain.DemTileStore
 import com.ginsengo.steward.terrain.Hydrology
 import com.ginsengo.steward.terrain.SuitabilityRasterizer
 import com.ginsengo.steward.terrain.WaterLines
+import com.ginsengo.steward.terrain3d.TerrainTextures
 import com.ginsengo.steward.terrain3d.ViewCamera
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -78,6 +80,8 @@ private const val SRC_SUGGEST = "g-suggest"
 private const val SRC_RING = "g-ring"
 private const val SRC_ME = "g-me"
 private const val SRC_WATER = "g-water"
+private const val SRC_CONTOUR = "g-contour"
+private const val CONTOUR_MIN_ZOOM = 10.5
 
 /**
  * The map: 2.5D by default (50 degree pitch over GPU hillshade), with the three heat
@@ -111,6 +115,11 @@ fun FieldMap(
     /** A camera to place the map at (returning from 3D), applied once per change of [jumpTick]. */
     jumpTo: ViewCamera? = null,
     jumpTick: Int = 0,
+    /**
+     * Whether the Dark vector style is loaded (true) or the map is on Topo or its offline
+     * fallback (false): the 3D view drapes the style only when it actually loaded here.
+     */
+    onBasemap: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
@@ -129,6 +138,7 @@ fun FieldMap(
     val curJump = rememberUpdatedState(jumpTo)
     val curJumpTick = rememberUpdatedState(jumpTick)
     val curRecenter = rememberUpdatedState(recenterTick)
+    val curOnBasemap = rememberUpdatedState(onBasemap)
 
     val mapView = remember {
         MapView(context, MapLibreMapOptions.createFromAttributes(context).textureMode(true))
@@ -159,8 +169,11 @@ fun FieldMap(
         val style = st.style ?: return
         val wantHabitat = curLayers.value.habitat
         val wantWater = curLayers.value.water
-        if (!wantHabitat && !wantWater) return
         val cam = map.cameraPosition
+        // Contours fade in from zoom 11 (their layer's opacity): below that they would be
+        // computed, hundreds of thousands of vertices over steep country, and never seen.
+        val wantContours = curLayers.value.contours && cam.zoom >= CONTOUR_MIN_ZOOM
+        if (!wantHabitat && !wantWater && !wantContours) return
         val region = runCatching { map.projection.visibleRegion.latLngBounds }.getOrNull() ?: return
         val z = DemTileStore.zoomFitting(
             region.latitudeNorth, region.longitudeWest, region.latitudeSouth, region.longitudeEast,
@@ -175,7 +188,7 @@ fun FieldMap(
             DemTileStore.latToTileY(region.latitudeNorth, z), DemTileStore.latToTileY(region.latitudeSouth, z),
             DemTileStore.rasterSizeFor(cam.zoom), DemTileStore.tpiRadiusMetresFor(cam.zoom),
             weights.joinToString { "%.3f".format(it) },
-        ) + ":h=$wantHabitat:w=$wantWater"
+        ) + ":h=$wantHabitat:w=$wantWater:c=$wantContours"
         if (!force) {
             if (key == st.habitatKey && st.habitatComplete) return                // drawn; nothing new can arrive
             if (key == st.pendingHabitatKey && st.heatJob?.isActive == true) return  // already computing it
@@ -195,7 +208,7 @@ fun FieldMap(
             if (!force && key == st.habitatKey && mosaic.tilesLoaded == st.habitatTiles) return@launch
             Log.i(TAG, "habitat: DEM zoom $z, ${mosaic.tilesLoaded}/${mosaic.tilesRequested} tiles")
             var uploaded = true
-            val status = "%.1f m cells · %d/%d tiles".format(mosaic.grid.cellSizeM, mosaic.tilesLoaded, mosaic.tilesRequested)
+            var status = "%.1f m cells · %d/%d tiles".format(mosaic.grid.cellSizeM, mosaic.tilesLoaded, mosaic.tilesRequested)
             if (wantHabitat) {
                 val t0 = android.os.SystemClock.elapsedRealtime()
                 val r = SuitabilityRasterizer.rasterise(
@@ -232,6 +245,23 @@ fun FieldMap(
                     })) ?: run { uploaded = false }
                 }.onFailure { uploaded = false; Log.w(TAG, "water: upload failed", it) }
                 Log.i(TAG, "water: ${lines.size} channel lines")
+            }
+            if (wantContours) {
+                // The maplibre-contour port over the same tiles, at the interval rule the 3D
+                // texture uses; every fifth line is an index contour, drawn stronger.
+                val (interval, lines) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    val iv = TerrainTextures.contourInterval(ContourLines.interiorReliefM(mosaic))
+                    iv to ContourLines.of(mosaic, iv)
+                }
+                runCatching {
+                    style.getSourceAs<GeoJsonSource>(SRC_CONTOUR)?.setGeoJson(FeatureCollection.fromFeatures(lines.map { l ->
+                        Feature.fromGeometry(LineString.fromLngLats((0 until l.points).map {
+                            Point.fromLngLat(l.lngLat[2 * it], l.lngLat[2 * it + 1])
+                        })).apply { addBooleanProperty("i", l.index) }
+                    })) ?: run { uploaded = false }
+                }.onFailure { uploaded = false; Log.w(TAG, "contours: upload failed", it) }
+                Log.i(TAG, "contours: ${lines.size} lines")
+                status += " · contours %.0f m".format(interval)
             }
             if (uploaded) {
                 st.habitatKey = key
@@ -323,6 +353,7 @@ fun FieldMap(
                 mapView.addOnDidFailLoadingMapListener {
                     if (st.style == null && !st.fallback) {
                         st.fallback = true
+                        curOnBasemap.value(false)
                         Log.i(TAG, "basemap style failed; loading the offline fallback style")
                         onHabitatStatus("Basemap unavailable offline; your layers still work")
                         map.setStyle(Style.Builder().fromJson(RASTER_STYLE)) { style ->
@@ -337,7 +368,10 @@ fun FieldMap(
                         }
                     }
                 }
-                loadStyle(map, curLayers.value.basemap, st) { refreshHabitat(map, force = true); syncAll(map) }
+                loadStyle(map, curLayers.value.basemap, st) {
+                    curOnBasemap.value(st.basemap == Basemap.DARK)
+                    refreshHabitat(map, force = true); syncAll(map)
+                }
             }
             mapView
         },
@@ -348,7 +382,11 @@ fun FieldMap(
             if (st.basemap != layers.basemap) {
                 st.resetKeys()
                 st.fallback = false
-                loadStyle(map, layers.basemap, st) { refreshHabitat(map, force = true); syncAll(map) }
+                curOnBasemap.value(false)
+                loadStyle(map, layers.basemap, st) {
+                    curOnBasemap.value(st.basemap == Basemap.DARK)
+                    refreshHabitat(map, force = true); syncAll(map)
+                }
                 return@AndroidView
             }
             if (style == null) return@AndroidView
@@ -444,6 +482,23 @@ private fun install(style: Style, basemap: Basemap?) {
     style.addLayer(
         RasterLayer("g-habitat-layer", SRC_HABITAT).withProperties(
             PropertyFactory.rasterResampling(Property.RASTER_RESAMPLING_LINEAR),
+        )
+    )
+
+    // Contour lines (ContourLines): under the creeks, hairlines with stronger index contours,
+    // brown over the light Topo sheet and pale over the dark map. They fade in once close
+    // enough to read, as the small drainages do.
+    style.addSource(GeoJsonSource(SRC_CONTOUR, FeatureCollection.fromFeatures(emptyList())))
+    val contourColour = if (basemap == Basemap.TOPO) "#7A4B26" else "#D8E6DD"
+    // `match` labels may only be strings or numbers (style spec), so the boolean is a `case`.
+    fun index(yes: Float, no: Float) = Expression.switchCase(Expression.toBool(get("i")), literal(yes), literal(no))
+    style.addLayer(
+        LineLayer("g-contour-layer", SRC_CONTOUR).withProperties(
+            PropertyFactory.lineColor(contourColour),
+            PropertyFactory.lineWidth(index(1.3f, 0.6f)),
+            PropertyFactory.lineOpacity(interpolate(linear(), zoom(),
+                stop(11, 0f), stop(13, index(0.55f, 0.32f)))),
+            PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
         )
     )
 
@@ -555,6 +610,7 @@ private fun applyVisibility(style: Style, s: MapLayerState) = runCatching {
     vis("g-hillshade", s.hillshade)
     vis("g-habitat-layer", s.habitat)
     vis("g-water-layer", s.water)
+    vis("g-contour-layer", s.contours)
     style.getLayer("g-habitat-layer")?.setProperties(PropertyFactory.rasterOpacity(s.heatmapOpacity))
     vis("g-visited-layer", s.visited)
     vis("g-track-layer", s.trackLine)

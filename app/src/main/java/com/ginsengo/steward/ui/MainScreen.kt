@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -55,9 +57,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -71,7 +75,10 @@ import com.ginsengo.steward.research.Provider
 import com.ginsengo.steward.research.ResearchPrompt
 import com.ginsengo.steward.research.SuggestionAssembler
 import com.ginsengo.steward.terrain.GinsengSuitability
+import com.ginsengo.steward.terrain3d.CameraMath
+import com.ginsengo.steward.terrain3d.ViewCamera
 import com.ginsengo.steward.ui.map.Basemap
+import com.ginsengo.steward.ui.map.DARK_STYLE
 import com.ginsengo.steward.ui.map.FieldMap
 import kotlin.math.roundToInt
 
@@ -96,7 +103,11 @@ fun MainScreen(vm: FieldViewModel) {
     var sheet by remember { mutableStateOf(Sheet.NONE) }
     var habitatStatus by remember { mutableStateOf("") }
     var recenter by remember { mutableIntStateOf(0) }
-    var habitatTint3d by remember { mutableStateOf(true) }
+    // One map: the camera both views share, handed to the 2D map when 3D closes.
+    var jumpCam by remember { mutableStateOf<ViewCamera?>(null) }
+    var jumpTick by remember { mutableIntStateOf(0) }
+    // The 3D view drapes the 2D map's style only when that style actually loaded here.
+    var darkStyleLoaded by remember { mutableStateOf(false) }
     val weights = verdict?.active ?: GinsengSuitability.PRIOR_WEIGHTS
 
     LaunchedEffect(toast) {
@@ -106,8 +117,12 @@ fun MainScreen(vm: FieldViewModel) {
     Box(Modifier.fillMaxSize().background(Gen.Bg)) {
         if (view3d) {
             Terrain3DView(
-                center = me, finds = finds, suggestions = suggestions, weights = weights,
-                demStore = vm.container.demTiles, habitatTint = habitatTint3d,
+                me = me, camera = vm.camera.value, onCamera = { vm.setCamera(it) },
+                track = track, finds = finds, suggestions = suggestions,
+                layers = layers, weights = weights, demStore = vm.container.demTiles,
+                styleUri = if (darkStyleLoaded && layers.basemap == Basemap.DARK) DARK_STYLE else null,
+                recenterTick = recenter, focus = focus,
+                onFocusHandled = { vm.focusOn(null) },
                 onStatus = { habitatStatus = it }, modifier = Modifier.fillMaxSize(),
             )
         } else {
@@ -119,6 +134,9 @@ fun MainScreen(vm: FieldViewModel) {
                 onFocusHandled = { vm.focusOn(null) },
                 onHabitatStatus = { habitatStatus = it },
                 modifier = Modifier.fillMaxSize(),
+                onCameraIdle = { vm.setCamera(it) },
+                jumpTo = jumpCam, jumpTick = jumpTick,
+                onBasemap = { darkStyleLoaded = it },
             )
         }
 
@@ -144,24 +162,22 @@ fun MainScreen(vm: FieldViewModel) {
             Modifier.align(Alignment.CenterEnd).padding(end = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            // One switch between the two projections of the same map: the view goes with it.
             SmallFloatingActionButton(
-                onClick = { vm.setView3d(!view3d) },
+                onClick = {
+                    if (view3d) {
+                        vm.camera.value?.let { jumpCam = CameraMath.to2d(it); jumpTick++ }
+                        vm.setView3d(false)
+                    } else vm.setView3d(true)
+                },
                 containerColor = Gen.SurfaceHigh, contentColor = Gen.Text,
-                modifier = Modifier.semantics { contentDescription = if (view3d) "Show map" else "Show 3D terrain" },
+                modifier = Modifier.semantics { contentDescription = if (view3d) "Show flat map" else "Show in 3D" },
             ) { Icon(if (view3d) Icons.Filled.Map else Icons.Filled.Terrain, null) }
-            if (view3d) {
-                SmallFloatingActionButton(
-                    onClick = { habitatTint3d = !habitatTint3d },
-                    containerColor = Gen.SurfaceHigh, contentColor = if (habitatTint3d) Gen.Accent else Gen.TextDim,
-                    modifier = Modifier.semantics { contentDescription = "Toggle habitat colouring" },
-                ) { Text("H", fontWeight = FontWeight.Bold) }
-            } else {
-                SmallFloatingActionButton(
-                    onClick = { recenter++ },
-                    containerColor = Gen.SurfaceHigh, contentColor = Gen.Text,
-                    modifier = Modifier.semantics { contentDescription = "Centre on me" },
-                ) { Icon(Icons.Filled.MyLocation, null) }
-            }
+            SmallFloatingActionButton(
+                onClick = { recenter++ },
+                containerColor = Gen.SurfaceHigh, contentColor = Gen.Text,
+                modifier = Modifier.semantics { contentDescription = "Centre on me" },
+            ) { Icon(Icons.Filled.MyLocation, null) }
         }
 
         // ---- bottom bar
@@ -274,7 +290,7 @@ private fun SuggestSheet(
                             modifier = Modifier.padding(top = 2.dp).clickable { runCatching { uri.openUri(src.url) } })
                     }
                     Row {
-                        TextButton(onClick = { vm.focusOn(s); vm.setView3d(false); onClose() }) { Text("Show on map") }
+                        TextButton(onClick = { vm.focusOn(s); onClose() }) { Text("Show on map") }
                         if (s.status == Suggestion.STATUS_NEW || s.status == Suggestion.STATUS_VISITED) {
                             TextButton(onClick = { vm.markNotFound(s) }) { Text("Walked it, none", color = Gen.TextDim) }
                         }
@@ -353,6 +369,8 @@ private fun LayersSheet(vm: FieldViewModel, verdict: FindLearner.Verdict?, onClo
     val settings by vm.settings.collectAsState()
     var keyText by remember(settings.provider) { mutableStateOf("") }
     var modelText by remember(settings.provider) { mutableStateOf(settings.model) }
+    var notices by remember { mutableStateOf(false) }
+    if (notices) NoticesDialog { notices = false }
 
     ModalBottomSheet(onDismissRequest = onClose, containerColor = Gen.Surface) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState())) {
@@ -363,7 +381,8 @@ private fun LayersSheet(vm: FieldViewModel, verdict: FindLearner.Verdict?, onClo
             Toggle("My finds", layers.finds) { vm.setLayers(layers.copy(finds = it)) }
             Toggle("Track line", layers.trackLine) { vm.setLayers(layers.copy(trackLine = it)) }
             Toggle("Suggestions", layers.suggestions) { vm.setLayers(layers.copy(suggestions = it)) }
-            Toggle("Hillshade", layers.hillshade) { vm.setLayers(layers.copy(hillshade = it)) }
+            Toggle("Contour lines", layers.contours) { vm.setLayers(layers.copy(contours = it)) }
+            Toggle("Hillshade (flat map)", layers.hillshade) { vm.setLayers(layers.copy(hillshade = it)) }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Basemap.entries.forEach { b ->
                     FilterChip(selected = layers.basemap == b, onClick = { vm.setLayers(layers.copy(basemap = b)) }, label = { Text(b.label) })
@@ -415,9 +434,38 @@ private fun LayersSheet(vm: FieldViewModel, verdict: FindLearner.Verdict?, onClo
                     "Never your GPS fix, your track, or the location of any find.",
                 color = Gen.TextDim, fontSize = 11.sp)
             Toggle("Refresh automatically after moving 5 km", settings.auto) { vm.setAuto(it) }
+
+            Spacer(Modifier.height(14.dp))
+            TextButton(onClick = { notices = true }) { Text("Open-source notices") }
         }
     }
 }
+
+/**
+ * The licence notices of code ported into the app (THIRD_PARTY_NOTICES.md, packaged as an
+ * asset by the build): BSD-3 requires them in the documentation of a binary distribution.
+ */
+@Composable
+private fun NoticesDialog(onClose: () -> Unit) {
+    val context = LocalContext.current
+    val text = remember {
+        runCatching { context.assets.open(NOTICES_ASSET).bufferedReader().use { it.readText() } }
+            .getOrElse { "Notices unavailable in this build." }
+    }
+    AlertDialog(
+        onDismissRequest = onClose,
+        confirmButton = { TextButton(onClick = onClose) { Text("Close") } },
+        title = { Text("Open-source notices") },
+        text = {
+            Text(text, fontSize = 11.sp, fontFamily = FontFamily.Monospace,
+                modifier = Modifier.heightIn(max = 480.dp).verticalScroll(rememberScrollState()))
+        },
+        containerColor = Gen.Surface,
+    )
+}
+
+/** Copied into the APK's assets from the repository root by the build (app/build.gradle.kts). */
+const val NOTICES_ASSET = "THIRD_PARTY_NOTICES.md"
 
 @Composable
 private fun Toggle(label: String, value: Boolean, onChange: (Boolean) -> Unit) {

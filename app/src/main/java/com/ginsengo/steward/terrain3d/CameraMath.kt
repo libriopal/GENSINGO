@@ -68,13 +68,7 @@ object CameraMath {
         heightRange: ClosedFloatingPointRange<Double>? = null,
     ): ViewCamera {
         val mc = mapCamera(cam, viewportW, viewportH)
-        var h = heightAt(cam.lat, cam.lng)
-        repeat(HEIGHT_ITERATIONS) {
-            val p = mc.unproject(fromX, fromY, h) ?: return cam
-            h = heightAt(p[0], p[1])
-        }
-        val settled = mc.unproject(fromX, fromY, h)?.let { abs(heightAt(it[0], it[1]) - h) <= SETTLED_M } ?: false
-        if (!settled && heightRange != null) marchRay(mc, fromX, fromY, heightAt, heightRange)?.let { h = it }
+        val h = groundHeight(mc, cam, fromX, fromY, heightAt, heightRange) ?: return cam
         val touched = mc.unproject(fromX, fromY, h) ?: return cam
         val target = mc.unproject(toX, toY, h) ?: return cam
         val x = mc.centerX + mc.worldX(touched[1]) - mc.worldX(target[1])
@@ -84,6 +78,69 @@ object CameraMath {
             lng = MapCamera.lngFromMercatorX(x / mc.worldSize),
         )
     }
+
+    /**
+     * The height (heightAt's convention) at which the ray through screen ([sx], [sy]) meets the
+     * terrain: [HEIGHT_ITERATIONS] fixed-point steps, then the ray march when they have not
+     * settled and [heightRange] is known. Null when the ray misses the ground plane.
+     */
+    private fun groundHeight(
+        mc: MapCamera, cam: ViewCamera, sx: Double, sy: Double,
+        heightAt: (Double, Double) -> Double, heightRange: ClosedFloatingPointRange<Double>?,
+    ): Double? {
+        var h = heightAt(cam.lat, cam.lng)
+        repeat(HEIGHT_ITERATIONS) {
+            val p = mc.unproject(sx, sy, h) ?: return null
+            h = heightAt(p[0], p[1])
+        }
+        val settled = mc.unproject(sx, sy, h)?.let { abs(heightAt(it[0], it[1]) - h) <= SETTLED_M } ?: false
+        if (!settled && heightRange != null) marchRay(mc, sx, sy, heightAt, heightRange)?.let { h = it }
+        return h
+    }
+
+    /**
+     * After a gesture, puts the camera's target back on the ground under the screen centre
+     * WITHOUT moving the eye, so nothing on screen moves. Returns the new camera and the
+     * new target's height in [heightAt]'s convention (the caller adds it, divided by its
+     * exaggeration, to its ground reference), or null when no change is needed or possible.
+     *
+     * Why: the 3D view looks at the plane through the ground under the centre. Panning moves
+     * the centre over ground that is higher or lower, and re-basing that plane by itself would
+     * jump the picture up or down. Ported from MapLibre GL JS
+     * (`TransformHelper.recalculateZoomAndCenter`, BSD-3-Clause, see THIRD_PARTY_NOTICES.md):
+     * the new target is where the centre ray meets the terrain, and the zoom is the one whose
+     * camera distance keeps the eye where it was.
+     *
+     * Geometry: the eye sits [MapCamera.cameraToCenterDistance] world pixels from the target
+     * along the view ray, which rises at cos(pitch) per unit length. The terrain point on that
+     * ray at height h is h * pixelsPerMeter / cos(pitch) closer to the eye, so the new distance
+     * D' = D - that, and 2^zoom' = 2^zoom * (D / D') * cos(lat') / cos(lat): the same eye-to-
+     * target distance in metres, at the new target's latitude.
+     */
+    fun reanchor(
+        cam: ViewCamera,
+        viewportW: Int, viewportH: Int,
+        heightAt: (lat: Double, lng: Double) -> Double,
+        heightRange: ClosedFloatingPointRange<Double>? = null,
+    ): Pair<ViewCamera, Double>? {
+        val mc = mapCamera(cam, viewportW, viewportH)
+        val cx = viewportW / 2.0; val cy = viewportH / 2.0
+        val h = groundHeight(mc, cam, cx, cy, heightAt, heightRange) ?: return null
+        if (abs(h) < 1e-6) return null
+        val t = mc.unproject(cx, cy, h) ?: return null
+        val cosPitch = kotlin.math.cos(Math.toRadians(cam.pitch.coerceIn(0.0, 85.0)))
+        val d = mc.cameraToCenterDistance
+        val dNew = d - h * mc.pixelsPerMeter / cosPitch
+        if (dNew < d * MIN_DISTANCE_FRACTION) return null       // the ground would reach the eye
+        val zoom = cam.zoom + ln2(d / dNew) +
+            ln2(kotlin.math.cos(Math.toRadians(t[0])) / kotlin.math.cos(Math.toRadians(cam.lat)))
+        return cam.copy(lat = t[0], lng = t[1], zoom = zoom) to h
+    }
+
+    private fun ln2(x: Double) = kotlin.math.ln(x) / kotlin.math.ln(2.0)
+
+    /** A re-anchor that would leave the eye nearer than this share of its distance is refused. */
+    private const val MIN_DISTANCE_FRACTION = 0.05
 
     /** The iteration counts as settled when the ray point is within this of the ground. */
     const val SETTLED_M = 0.5

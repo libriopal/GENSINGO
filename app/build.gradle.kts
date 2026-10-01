@@ -131,6 +131,32 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+/**
+ * THIRD_PARTY_NOTICES.md ships inside the APK (the BSD-3 notices of ported code must travel
+ * with a binary; Layers -> Open-source notices shows it). Registered through the variant API
+ * so every variant's assets know which task produces the folder, rather than relying on
+ * task ordering.
+ */
+abstract class CopyNoticesTask : DefaultTask() {
+    @get:InputFile abstract val notices: RegularFileProperty
+    @get:OutputDirectory abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val out = outputDir.get().asFile
+        out.mkdirs()
+        notices.get().asFile.copyTo(out.resolve("THIRD_PARTY_NOTICES.md"), overwrite = true)
+    }
+}
+val copyThirdPartyNotices = tasks.register<CopyNoticesTask>("copyThirdPartyNotices") {
+    notices.set(rootProject.layout.projectDirectory.file("THIRD_PARTY_NOTICES.md"))
+}
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(copyThirdPartyNotices, CopyNoticesTask::outputDir)
+    }
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

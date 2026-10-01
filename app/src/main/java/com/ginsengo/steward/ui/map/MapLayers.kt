@@ -43,5 +43,7 @@ data class MapLayerState(
     val suggestions: Boolean = true,
     val water: Boolean = true,
     val hillshade: Boolean = true,
+    /** Contour lines from the elevation tiles, the same interval rule in 2D and in 3D. */
+    val contours: Boolean = true,
     val heatmapOpacity: Float = 0.7f,
 )

@@ -1,8 +1,8 @@
 # GENSINGO
 
-A minimal, offline-first field app for wild American ginseng stewards: one map, four
-buttons, a real 3D terrain view, and a research model that can only talk about places the
-phone itself computed.
+A minimal, offline-first field app for wild American ginseng stewards: one map, flat or in
+real 3D, four buttons, and a research model that can only talk about places the phone itself
+computed.
 
 Native Android — Kotlin + Jetpack Compose, package `com.ginsengo.steward`.
 
@@ -23,8 +23,8 @@ track, or where any find is (`docs/PLAY_DATA_SAFETY.md`).
 | **Suggest** | Places worth walking inside 10 miles. Always computed on the phone; annotated by Claude or Gemini (web-searched, sources kept only if retrieved in that call) when you allow it. Refreshes itself after you move 3 km. |
 | **Layers** | Heatmaps, basemap, the learner's verdict, "Save 10 miles around me" for offline use, and research-model settings. |
 
-Plus a **3D** toggle (about 3 km square of ground in high definition, with the habitat
-heatmap, creeks and contours draped on it) and recentre.
+Plus **one 2D/3D switch** (the same map, its camera, layers and basemap, on real terrain
+about 3 km square in high definition) and **recentre**, which works in both.
 
 ### Heatmaps, in real time
 
@@ -33,6 +33,7 @@ heatmap, creeks and contours draped on it) and recentre.
 | **Habitat** (green) | The published six-factor terrain model below, computed on the phone for the elevation tiles in view and redrawn when those tiles change. Switches to learned weights only after they beat the published ones on held-out finds. |
 | **Where I've been** (blue) | GPU heatmap of your recorded track. |
 | **My finds** (amber) | GPU heatmap of your finds, including patches logged in the older app, all at full weight. |
+| **Contour lines** | From the same elevation tiles (a Kotlin port of maplibre-contour's marching squares), every 5-100 m chosen from the relief, every fifth stronger; the interval is shown in the status line. The same rule draws them in 3D. |
 | **Creeks & streams** (blue lines) | Traced from the same elevation: pits filled, water routed downhill, and a line drawn where enough ground drains through (2 ha: small drainage; 20 ha: creek; 200 ha: stream). Works offline. Not surveyed: small ones may be dry, and a river flowing in from outside the loaded tiles is drawn smaller than it is. |
 
 ### Suggestions that cannot invent places
@@ -77,11 +78,25 @@ is pinned by tests that fail if anyone makes it monotonic again.
 Antialiasing adapts to the DEM-cell to output-pixel ratio: supersample and integrate when
 one pixel covers many cells, interpolate when one cell covers many pixels.
 
-### The 3D view
+### The map in 3D
 
-About 3 km square around you at the best elevation the tiles offer: zoom 15, **3.9 m
-cells**, falling back to zoom 14 or 13 where those are not cached. The whole budget goes on
-that one square:
+**One map, two projections** ([`docs/blueprints/one-map.md`](docs/blueprints/one-map.md)).
+The 3D switch shows the map you were looking at, from the same place, zoom and direction,
+and switching back lands the flat map on wherever 3D left off. In 3D:
+
+- **one finger drags the ground** (the point you touched stays under your finger, on the
+  terrain, not on a flat plane); **two fingers** pinch to zoom, twist to rotate, slide up or
+  down to tilt. When you let go the camera settles back onto the ground without the picture
+  moving (the method MapLibre GL JS uses); drag past the edge and the terrain is rebuilt there;
+- **the same layers**: the Layers sheet's habitat, creeks, contours, finds, suggestions and
+  your track (drawn as a line) apply to both views;
+- **the flat map's own basemap on the ground**: MapLibre renders the Dark map's roads and
+  names for the square and they are drawn on the terrain, under your layers. It works
+  offline where you used "Save 10 miles"; elsewhere the status line says so and the terrain
+  is coloured by habitat (or by elevation with the habitat layer off).
+
+About 3 km square at the best elevation the tiles offer: zoom 15, **3.9 m cells**, falling
+back to zoom 14 or 13 where those are not cached. The whole budget goes on that one square:
 
 - a 385 × 385 vertex mesh (about 300,000 triangles) standing on a solid base;
 - a draped colour texture of up to 2048² texels (two per elevation cell), mipmapped with
@@ -92,11 +107,15 @@ that one square:
 - relief shading lit from the north-west, contour lines (every 5-100 m, chosen from the
   relief; dark on light ground, light on dark), and creeks traced from the elevation;
 - numbered suggestion markers, your finds, "You", a compass that faces north and refits the
-  view when tapped, and a legend. **H** switches between habitat and elevation colouring.
+  view when tapped, and a legend (with the basemap's attribution when it is draped).
 
 It is a separate screen rather than a layer over the map: a GL surface over the map's
-TextureView blacked out the screen (Phase 5). It renders only when a gesture moves the camera,
-is built once per ~1 km you walk, and survives the app going to the background.
+TextureView blacked out the screen (Phase 5). It renders only when the camera moves or new
+colour arrives, builds terrain once per square, and survives the app going to the background.
+
+Code ported from other projects (maplibre-contour's isolines, MapLibre GL JS's camera
+re-anchoring) is listed with its licences in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md),
+which also ships inside the app (Layers → Open-source notices).
 
 **What it cannot see:** soil calcium — among the strongest published predictors of ginseng
 ground (Burkhart: ~3,360 kg/ha marks promising sites) and not derivable from elevation. The
