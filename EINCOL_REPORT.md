@@ -1558,3 +1558,172 @@ shown and described instead.
    Rivers entering from outside the loaded tiles are drawn with less area than they have.
 4. The 2D creek layer recomputes with each new tile set (about 0.3 s on the desktop, more on
    a phone). It is cached with the habitat raster, so pans within a tile set cost nothing.
+
+
+---
+
+# Phase 9 — ARCHITECT iteration 1: one map (2D and 3D combined)
+
+The owner: *"Create an iterative looping protocol that follows governance and an EINCOL-style
+directive, adapted into a self-prompting lead architect role … combine the 2D map with the 3D
+map, search for open-source code on GitHub to copy instead of reinventing the wheel; the lead
+architect must produce an independently audited blueprint that prompts sub-agents in contractor
+roles … a minimal tool for personal use by a couple of ginseng diggers and land prospectors.
+Run that protocol exhaustively until a new, untruncated APK update is generated."*
+
+## The protocol
+
+[`ARCHITECT.md`](ARCHITECT.md): roles split so that no role certifies its own work (owner, lead
+architect, researcher, independent auditor who sees claims and never the reasoning, contractors
+one contract each in an isolated worktree, inspector, release clerk); a loop A–J (survey,
+distribution, **reuse search before design**, blueprint, independent audit, contract build,
+inspection and integration, evaluator ladder, release, record); gates G0–G7 with an exit
+condition in which a waived gate is recorded as waived, never as passed; prompt templates for
+each role; the release checklist for an untruncated APK; this repository's product doctrine
+(find good ground → get there → record what you found); and the failure modes this repository
+has actually hit. [`EINCOL.md`](EINCOL.md), the protocol it adapts, is now in the repository.
+
+## Iteration 1, as run (blueprint: [`docs/blueprints/one-map.md`](docs/blueprints/one-map.md))
+
+| Step | Who | What happened |
+|---|---|---|
+| A Survey | architect | Measured: MapLibre Android 13.6.1 has **no terrain API** (`javap`), has `MapSnapshotter`; the 2D map and the 3D view shared nothing (no camera, no layers, no basemap in 3D, no pan in 3D) |
+| B Distribution | architect | 7 designs; the tail worked (fill-extrusion terraces, own renderer for 2D, `CustomLayer`, overlay: each rejected with its reason) |
+| C Reuse | researcher sub-agent | Native terrain: unreleased (draft PR #4190) → row closed. `MapSnapshotter`: used. maplibre-contour `isolines.ts` (BSD-3, from d3-contour ISC): **ported**. Martini RTIN: not now. A GPL marching-squares library avoided |
+| D Blueprint | architect | One map, two projections; three contracts (WP-A drape, WP-B camera maths, WP-C isolines port) with acceptance tests and negative controls written first |
+| E Audit | independent auditor (fresh context, claims only) | **Claim 2 probably false**: the snapshot would request a pixel ratio and zooms the offline region never stored, and in still mode one missing sprite fails the whole render. Runner-up, **claim 4**: camera-only panning drifts over relief. Both were right; both claims corrected (blueprint §G keeps both versions) |
+| F Contracts | three contractor sub-agents in parallel worktrees | Each delivered its tests and showed its negative control failing. Contractor B reported its own limit: upper-screen touches along a steep slope do not converge in 4 iterations (5–107 px) |
+| G Inspection, integration | architect + inspector sub-agent | Contractor B's limit fixed test-first (a ray march with bisection when the iteration does not settle: 7.55 px miss before, < 3 px after). Integration built the shared camera, gestures, re-anchoring, rebuild, drape, layer parity, 2D contours, the in-app notices. Inspector verdict *fix-then-merge*, 8 findings: 7 fixed, 1 answered by a recorded contract amendment (below) |
+
+## What was built
+
+| | Built as |
+|---|---|
+| One camera | `FieldViewModel.camera`, written by the 2D map when it settles and by the 3D view when a gesture ends; one 2D/3D switch hands it across both ways (`CameraMath.to2d`/`to3d`) |
+| 3D that moves like the map | One finger keeps the touched **terrain** point under the finger (`CameraMath.pan`, iteration plus ray march); two fingers pinch, twist, tilt; at gesture end `Terrain3D.settle` puts the camera back on the ground without moving the eye (MapLibre GL JS's `recalculateZoomAndCenter`, ported, BSD-3); leaving the square rebuilds it around the centre and settles onto the new ground the same way |
+| The basemap in 3D | `MapDrape`: MapLibre's `MapSnapshotter` renders the Dark style for the exact square (Mercator edges) at the screen's pixel ratio, zoom ≤ 14 (what "Save 10 miles" stores), baked under the app's layers; only when that style actually loaded on the 2D map; attribution in the legend; failure falls back to habitat or elevation colouring with a status line that says why |
+| Same layers | Habitat, creeks, contours (texture), finds, suggestions, and the track line (when "Track line" or "Where I've been" is on) obey the Layers sheet in 3D; **H** removed |
+| Contours on the 2D map | Kotlin port of maplibre-contour's `isolines.ts` (BSD-3, from d3-contour ISC) via `ContourLines`, under the creeks, index every fifth, interval in the status line; computed only from zoom 10.5 |
+| Notices in the app | `THIRD_PARTY_NOTICES.md` packaged as an asset through the variant API; Layers → Open-source notices |
+| Recentre, "Show on map" | Work in both views |
+
+## Step 5 — evaluators
+
+- **Unit tests: 339 pass**, 1 skipped (the full-scan timing fixture), 0 fail. New this
+  iteration: `MapDrapeCompositeTest` (9, contractor A), `CameraMathTest` (8, contractor B plus
+  the architect's steep-slope test), `IsolinesTest` (4, contractor C), and from integration
+  `ReanchorTest` (4: no terrain point moves more than 0.5 px when the camera is re-anchored, at
+  pitch 0-70 and three bearings; the new target is on the ground at the screen centre; a camera
+  already on the ground is left alone; the batched projector equals `project`),
+  `SceneGeometryTest` (3: the square's edges equal the tile edges to 1e-10°; elevation is exact
+  bilinear and absent in the halo; settling after a gesture or rebuild puts the camera on the
+  ground and moves no terrain point more than 0.5 px) and `ContourLinesTest` (2: on a plane every 2D contour vertex
+  sits within 5 cm of its level and inside the displayed square; every fifth level is an index).
+- **Mutation: 11 new mutants, 11 killed.** A1 the drape is ignored; A2 the snapshot asks for
+  zooms the saved region lacks; B1 pan ignores the terrain; B2 pan ignores the bearing; B3 the
+  ray march's answer is thrown away; I1 isolines at cell corners (no interpolation); O1
+  re-anchoring without the zoom change (the picture jumps); O2 linear-latitude square edges; O3
+  2D contours lose the halo offset; O4 elevation read half a cell off; O5 the ground plane moved
+  by the exaggerated height after a gesture. B3's first form
+  (`if (false && …)`) did not compile (it defeats Kotlin's smart cast) and was rewritten, not
+  counted. The full 58-mutant harness was not re-run: only this iteration's mutants, plus the
+  research mutant C1 that the duplicate ID ran by accident (killed).
+- **Shaders** compiled by `glslangValidator` (unchanged this iteration; re-checked).
+
+- **Device (G6): not passed**, see Open item 0.
+- **Release (G7):** built with `:app:assembleField` from committed HEAD `8e85ba3`, clean tree,
+  no harness running. arm64-v8a only. 20,912,411 bytes (19.94 MiB, under the 30 MiB delivery
+  limit). SHA-256 `a4e81a9cd6bff6b764f8a6fa33c588baa64ddd2df7a9b8b102e283d02dec7d99`.
+  `apksigner verify` passes: the Android debug certificate, the same as earlier field builds,
+  so it installs over them. `assets/THIRD_PARTY_NOTICES.md` is present. Five strings only this
+  iteration's code has ("map on the ground", "Open-source notices", "Show in 3D",
+  "contours %.0f m", "Save 10 miles to have it offline") were found in `classes2.dex`. The file
+  was delivered whole. The commits after `8e85ba3` change documentation and tools only.
+
+**Exit condition (ARCHITECT.md §3):** G0–G5 and G7 pass. G6 did not pass; every unseen item is
+on the open list below, so the iteration exits on that clause, and says so.
+
+### What the evaluators and sub-agents caught that the architect did not
+
+1. **The auditor:** the offline snapshot claim (pixel ratio, zoom cap, whole-render failure)
+   and camera-only pan drift. Without it the 3D basemap would have failed exactly in the woods.
+2. **Contractor B:** its own convergence limit on steep slopes, reported rather than hidden.
+3. **Integration, found while wiring:** re-basing the camera's ground plane after a pan would
+   jump the picture by the height difference. The reuse search found MapLibre GL JS's answer
+   (`recalculateZoomAndCenter`), ported as `CameraMath.reanchor` with a witness test.
+4. **The researcher's finding I would have got wrong:** I expected native terrain in a recent
+   MapLibre Android; it is not released.
+5. **The inspector** (on the architect's own integration): the Dark drape stayed on the ground
+   after switching to Topo; a rebuild jumped the picture (the exact defect re-anchoring was
+   added to remove, reintroduced one level up); new terrain briefly wore the old texture; the
+   status line could stick; a GL frame on every GPS fix; the notices folder relied on task
+   ordering; a vacuous assertion in my own test (any camera projects its centre to the middle
+   of the screen); and that 2D and 3D contours share a rule but not an interval, against my
+   own contract. That last one was answered by amending the contract in writing (one interval
+   cannot suit a 10-mile view and a 3 km square; each view prints its interval).
+
+### My errors, recorded
+
+- All three contractors were started from `main` instead of the working branch and had to
+  fast-forward themselves; the next contract brief says so.
+- The contractor-era linear interpolation of the 3D square's edges in latitude (~1e-5°, about a
+  metre) would have misplaced the basemap snapshot; replaced by exact Mercator edges with a test
+  (mutant O2).
+- **Mutant ID reuse, again**: the new isolines mutant was named C1, which already existed, so
+  `mutate.py C1` ran both. Renamed I1; duplicate IDs are now checked before adding.
+- **A diff captured a live mutant**: the inspector's diff was taken while the harness had
+  `MapDrape.kt` mutated. Caught before the agent saw it (the file was not in my edits);
+  rebuilt without it. The rule "nothing taken from the tree while the harness runs" now
+  covers diffs, not only commits.
+- The first contour layer computed lines at zooms where the layer is invisible (fades in at 11);
+  now skipped below 10.5.
+
+## Open
+
+0. **G6, the device gate, did not pass this iteration.** The emulator booted
+   (`sys.boot_completed=1`), but its package and activity services were gone when the APK was
+   installed (`cmd: Can't find service: package`; the emulator log shows swiftshader
+   `Failed to find ColorBuffer` errors), and the container then restarted and took the emulator
+   with it. **Nothing of this iteration has been seen on a screen**: the shared camera, the 3D
+   gestures, re-anchoring, the drape (and whether it works offline: the auditor's instrument,
+   the debug request counter, is in place for it), the 2D contours, the notices dialog. All are
+   covered by unit tests and mutants as listed, which test the maths, not the screen.
+1. TOPO in 3D: the Topo basemap is built in code, not a style URL, so it is not draped (the
+   3D view shows habitat or elevation colour under Topo).
+2. The visited-track heatmap is not in 3D; the track line stands in for it.
+3. Toggling contours on the 2D map recomputes the habitat raster (they share a cache key).
+4. A 3D build that failed (no tiles) is retried only on leaving and re-entering 3D.
+5. Adaptive mesh (Martini RTIN) not done: the 298k-triangle mesh is unmeasured on a phone.
+6. Library licences (MapLibre, AndroidX, the Anthropic SDK) are not listed in the app; the
+   notices cover only ported source. A generated licence screen is a candidate next iteration.
+
+## Next: SingNav, led from Base44
+
+The owner then asked for a directive the **Base44 Superagent** can follow exactly, so that it
+continues as lead architect. It is to:
+- integrate and copy the written code of the owner's Base44 app **SingNav**;
+- polish SingNav's web version inside Base44;
+- produce one zipped archive of the new SingNav web codebase and the updated GENSINGO codebase.
+
+That archive is gated only on the APK build, which Claude Code performs.
+
+[`base44.md`](base44.md) is that directive:
+- steps B0–B13, each with DO / PRODUCE / CHECK and a STOP rule;
+- the roles mapped onto what a Superagent can do, with the independent audit in a fresh
+  conversation that is given claims only;
+- the hard rules: code and schemas only, never data rows; no secrets; finds are true; terrain,
+  never legality; location stays on the device;
+- GENSINGO's facts;
+- the exact archive layout and `HANDOFF.json`;
+- Part 5, the APK step, for Claude Code.
+
+`tools/verify_handoff.py` checks an archive against exactly B12's rules. Its tests
+(`tools/test_verify_handoff.py`, 8) pass a well-formed archive and fail each rule broken alone.
+A realistic archive built from this repository's own tree passes with no false alarms.
+
+Checked while writing it:
+- The GitHub repository `libriopal/singnav2.0` holds only a stock Google AI Studio README, not
+  SingNav's code. The directive says so, and has the Superagent inventory SingNav inside Base44.
+- Base44's documented code export (ZIP or GitHub sync, Builder plan) and the Superagent's
+  documented abilities were read on 2026-10-01 and are restated in base44.md Part 3, to be
+  re-checked at B0.

@@ -49,8 +49,11 @@ about 3 km square in high definition) and **recentre**, which works in both.
    distance this terrain stops resembling itself (measured by the scan), with an exact
    sign-flip test. It needs finds in 5 separate spots before it can learn anything.
 
-How this was built and tested — mutation testing, an independent critic, and runs on
-Android — is in [`EINCOL_REPORT.md`](EINCOL_REPORT.md) Phase 7; the 314 candidate ideas it
+How this is built: [`ARCHITECT.md`](ARCHITECT.md) is the governed loop (lead architect,
+independent auditor, contractors, gates), and [`base44.md`](base44.md) hands that role to the
+Base44 Superagent for bringing in the SingNav web app, ending in an archive that only needs
+the APK build (`tools/verify_handoff.py` checks it). How it was tested — mutation testing, an
+independent critic, and runs on Android — is in [`EINCOL_REPORT.md`](EINCOL_REPORT.md) Phase 7; the 314 candidate ideas it
 started from are in [`docs/IDEA_CANDIDATES.md`](docs/IDEA_CANDIDATES.md).
 
 ### The habitat forecast

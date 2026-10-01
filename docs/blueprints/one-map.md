@@ -272,4 +272,10 @@ as relief over camera height, large when zoomed in over steep ground.
   after a pan) and solved by porting MapLibre GL JS's method instead of inventing one.
 - Inspection: fix-then-merge, 8 findings, 7 fixed, 1 answered by a recorded contract amendment.
 - G5: 339 unit tests pass (1 skipped: the full-scan timing fixture); 11 new mutants (A1, A2,
-  B1-B3, I1, O1-O5), 11 killed; shaders compile. G6: below. G7: below.
+  B1-B3, I1, O1-O5), 11 killed; shaders compile.
+- G6 **not passed**: the emulator booted but lost its package and activity services before
+  install (swiftshader ColorBuffer errors), then a container restart killed it. Every unseen item
+  is on the open list (EINCOL_REPORT.md Phase 9, Open 0).
+- G7 passed: `8e85ba3`, arm64-v8a, 19.94 MiB, SHA-256 `a4e81a9c…7d99`, signature verified,
+  notices asset and new-code strings present in the APK, delivered. Exit on "G6 or every unseen
+  item on the open list". Next iteration's question comes from that list, or from base44.md.
