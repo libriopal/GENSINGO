@@ -22,6 +22,7 @@ import com.ginsengo.steward.terrain.DemTileStore
 import com.ginsengo.steward.terrain.Hydrology
 import com.ginsengo.steward.terrain.SuitabilityRasterizer
 import com.ginsengo.steward.terrain.WaterLines
+import com.ginsengo.steward.terrain3d.ViewCamera
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.maplibre.android.MapLibre
@@ -105,6 +106,11 @@ fun FieldMap(
     onFocusHandled: () -> Unit,
     onHabitatStatus: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** The settled camera, each time the map's camera goes idle: it feeds the shared camera. */
+    onCameraIdle: (ViewCamera) -> Unit = {},
+    /** A camera to place the map at (returning from 3D), applied once per change of [jumpTick]. */
+    jumpTo: ViewCamera? = null,
+    jumpTick: Int = 0,
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
@@ -119,6 +125,10 @@ fun FieldMap(
     val curFinds = rememberUpdatedState(finds)
     val curSuggestions = rememberUpdatedState(suggestions)
     val curCenter = rememberUpdatedState(radiusCenter)
+    val curOnIdle = rememberUpdatedState(onCameraIdle)
+    val curJump = rememberUpdatedState(jumpTo)
+    val curJumpTick = rememberUpdatedState(jumpTick)
+    val curRecenter = rememberUpdatedState(recenterTick)
 
     val mapView = remember {
         MapView(context, MapLibreMapOptions.createFromAttributes(context).textureMode(true))
@@ -256,6 +266,28 @@ fun FieldMap(
         }
     }
 
+    /**
+     * Places the map at [jumpTo], once per [jumpTick]: moveCamera, never an animation (an
+     * interrupted animation strands the camera). Coming back from 3D this map is a new
+     * instance, so the jump also counts as the first-fix landing and consumes a recentre tick
+     * already handled, or either would pull the camera off the handed-over view.
+     */
+    fun applyJump(map: MapLibreMap) {
+        val cam = curJump.value ?: return
+        if (curJumpTick.value == st.jumpTick) return
+        st.jumpTick = curJumpTick.value
+        st.centred = true
+        st.recenterTick = curRecenter.value
+        runCatching {
+            map.moveCamera(
+                CameraUpdateFactory.newCameraPosition(
+                    CameraPosition.Builder().target(LatLng(cam.lat, cam.lng))
+                        .zoom(cam.zoom).bearing(cam.bearing).tilt(cam.pitch).build()
+                )
+            )
+        }.onFailure { Log.w(TAG, "camera jump failed", it) }
+    }
+
     AndroidView(
         modifier = modifier,
         factory = {
@@ -277,7 +309,12 @@ fun FieldMap(
                     .tilt(50.0)
                     .build()
                 if (me != null) st.centred = true
-                map.addOnCameraIdleListener { refreshHabitat(map, force = false) }
+                applyJump(map)
+                map.addOnCameraIdleListener {
+                    refreshHabitat(map, force = false)
+                    val p = map.cameraPosition
+                    p.target?.let { t -> curOnIdle.value(ViewCamera(t.latitude, t.longitude, p.zoom, p.bearing, p.tilt)) }
+                }
                 // OFFLINE FALLBACK. Measured on the emulator with no network: the remote style
                 // failed to load and, because every layer is installed in the style callback,
                 // the map stayed a blank grey rectangle - no heatmaps, no track, no suggestions,
@@ -306,6 +343,7 @@ fun FieldMap(
         },
         update = {
             val map = st.map ?: return@AndroidView
+            applyJump(map)   // before the style checks: a camera needs no style
             val style = st.style
             if (st.basemap != layers.basemap) {
                 st.resetKeys()
@@ -348,6 +386,7 @@ private class State {
     /** True once the offline fallback style has been loaded. */
     var fallback = false
     var recenterTick = 0
+    var jumpTick = 0
     var keyTrack = ""
     var keyFinds = ""
     var keySuggest = ""
