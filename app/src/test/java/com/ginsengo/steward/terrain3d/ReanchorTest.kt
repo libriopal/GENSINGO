@@ -32,12 +32,12 @@ class ReanchorTest {
     }
     private val range = 200.0..650.0
 
-    private fun mc(c: ViewCamera) = MapCamera(c.lat, c.lng, c.zoom, c.bearing, c.pitch, W, H)
+    private fun mc(c: CameraState) = MapCamera(c.lat, c.lng, c.zoom, c.bearing, c.pitch, W, H)
 
     @Test
     fun reanchoringMovesNothingOnScreen() {
         for (pitch in listOf(0.0, 35.0, 55.0, 70.0)) for (bearing in listOf(0.0, 40.0, 215.0)) {
-            val before = ViewCamera(LAT + 0.004, LNG - 0.003, 15.2, bearing, pitch)
+            val before = CameraState(LAT + 0.004, LNG - 0.003, 15.2, bearing, pitch)
             val (after, dh) = requireNotNull(CameraMath.reanchor(before, W, H, hills, range)) { "no re-anchor at pitch $pitch" }
             val m0 = mc(before); val m1 = mc(after)
             var worst = 0.0
@@ -55,7 +55,7 @@ class ReanchorTest {
 
     @Test
     fun theNewTargetIsOnTheGround() {
-        val before = ViewCamera(LAT, LNG, 15.0, 120.0, 55.0)
+        val before = CameraState(LAT, LNG, 15.0, 120.0, 55.0)
         val (after, dh) = CameraMath.reanchor(before, W, H, hills, range)!!
         assertEquals("the new centre is not on the terrain", hills(after.lat, after.lng), dh, 0.5)
         assertEquals("bearing and pitch are the user's, untouched", 120.0, after.bearing, 0.0)
@@ -65,7 +65,7 @@ class ReanchorTest {
 
     @Test
     fun aCameraAlreadyOnTheGroundIsLeftAlone() {
-        assertNull(CameraMath.reanchor(ViewCamera(LAT, LNG, 15.0, 0.0, 55.0), W, H, { _, _ -> 0.0 }))
+        assertNull(CameraMath.reanchor(CameraState(LAT, LNG, 15.0, 0.0, 55.0), W, H, { _, _ -> 0.0 }))
     }
 
     @Test

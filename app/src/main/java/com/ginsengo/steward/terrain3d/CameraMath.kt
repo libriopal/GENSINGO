@@ -3,20 +3,6 @@ package com.ginsengo.steward.terrain3d
 import kotlin.math.abs
 
 /**
- * One camera for both views: the 2D map writes it when its camera settles, the 3D view starts
- * from it and writes it back as it moves. Same numbers on both sides: MapLibre's zoom (512 px
- * world tiles), bearing (degrees clockwise from north) and pitch (degrees from vertical), which
- * [MapCamera] mirrors.
- */
-data class ViewCamera(
-    val lat: Double,
-    val lng: Double,
-    val zoom: Double,
-    val bearing: Double,
-    val pitch: Double,
-)
-
-/**
  * Camera maths shared by the 2D map and the 3D view (blueprint docs/blueprints/one-map.md, WP-B).
  * Pure JVM code: no Android, no MapLibre.
  */
@@ -35,7 +21,7 @@ object CameraMath {
     const val MAP_MIN_ZOOM = 0.0
     const val MAP_MAX_ZOOM = 25.5
 
-    fun mapCamera(cam: ViewCamera, viewportW: Int, viewportH: Int): MapCamera =
+    fun mapCamera(cam: CameraState, viewportW: Int, viewportH: Int): MapCamera =
         MapCamera(cam.lat, cam.lng, cam.zoom, cam.bearing, cam.pitch, viewportW, viewportH)
 
     /**
@@ -61,12 +47,12 @@ object CameraMath {
      * first crossing is the surface the user sees.
      */
     fun pan(
-        cam: ViewCamera,
+        cam: CameraState,
         fromX: Double, fromY: Double, toX: Double, toY: Double,
         viewportW: Int, viewportH: Int,
         heightAt: (lat: Double, lng: Double) -> Double,
         heightRange: ClosedFloatingPointRange<Double>? = null,
-    ): ViewCamera {
+    ): CameraState {
         val mc = mapCamera(cam, viewportW, viewportH)
         val h = groundHeight(mc, cam, fromX, fromY, heightAt, heightRange) ?: return cam
         val touched = mc.unproject(fromX, fromY, h) ?: return cam
@@ -85,7 +71,7 @@ object CameraMath {
      * settled and [heightRange] is known. Null when the ray misses the ground plane.
      */
     private fun groundHeight(
-        mc: MapCamera, cam: ViewCamera, sx: Double, sy: Double,
+        mc: MapCamera, cam: CameraState, sx: Double, sy: Double,
         heightAt: (Double, Double) -> Double, heightRange: ClosedFloatingPointRange<Double>?,
     ): Double? {
         var h = heightAt(cam.lat, cam.lng)
@@ -118,11 +104,11 @@ object CameraMath {
      * target distance in metres, at the new target's latitude.
      */
     fun reanchor(
-        cam: ViewCamera,
+        cam: CameraState,
         viewportW: Int, viewportH: Int,
         heightAt: (lat: Double, lng: Double) -> Double,
         heightRange: ClosedFloatingPointRange<Double>? = null,
-    ): Pair<ViewCamera, Double>? {
+    ): Pair<CameraState, Double>? {
         val mc = mapCamera(cam, viewportW, viewportH)
         val cx = viewportW / 2.0; val cy = viewportH / 2.0
         val h = groundHeight(mc, cam, cx, cy, heightAt, heightRange) ?: return null
@@ -177,17 +163,25 @@ object CameraMath {
     }
 
     /** Keeps the centre inside the box; an inside centre comes back unchanged. */
-    fun clampCentre(cam: ViewCamera, north: Double, west: Double, south: Double, east: Double): ViewCamera =
+    fun clampCentre(cam: CameraState, north: Double, west: Double, south: Double, east: Double): CameraState =
         cam.copy(lat = cam.lat.coerceIn(south, north), lng = cam.lng.coerceIn(west, east))
 
     /** Into 3D: same centre and bearing, zoom clamped to the 3D view's range, pitch at least 45. */
-    fun to3d(cam2d: ViewCamera, minZoom: Double, maxZoom: Double): ViewCamera = cam2d.copy(
+    fun to3d(cam2d: CameraState, minZoom: Double, maxZoom: Double): CameraState = cam2d.copy(
         zoom = cam2d.zoom.coerceIn(minZoom, maxZoom),
         pitch = maxOf(cam2d.pitch, MIN_3D_PITCH),
     )
 
+    /**
+     * The 2D/3D switch as a camera rule (exe.md A1): same place, same bearing; [to3d] raises a flat
+     * camera to [MIN_3D_PITCH] (the 3D view then fits its own zoom range), [to2d] brings pitch back
+     * within what MapLibre can draw.
+     */
+    fun forView(cam: CameraState, view3d: Boolean): CameraState =
+        if (view3d) to3d(cam, MAP_MIN_ZOOM, MAP_MAX_ZOOM) else to2d(cam)
+
     /** Back to 2D: same centre and bearing, zoom clamped to MapLibre's range, pitch at most 60. */
-    fun to2d(cam3d: ViewCamera): ViewCamera = cam3d.copy(
+    fun to2d(cam3d: CameraState): CameraState = cam3d.copy(
         zoom = cam3d.zoom.coerceIn(MAP_MIN_ZOOM, MAP_MAX_ZOOM),
         pitch = minOf(cam3d.pitch, MAX_2D_PITCH),
     )

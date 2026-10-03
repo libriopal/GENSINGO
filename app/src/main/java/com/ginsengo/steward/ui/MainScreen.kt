@@ -75,8 +75,6 @@ import com.ginsengo.steward.research.Provider
 import com.ginsengo.steward.research.ResearchPrompt
 import com.ginsengo.steward.research.SuggestionAssembler
 import com.ginsengo.steward.terrain.GinsengSuitability
-import com.ginsengo.steward.terrain3d.CameraMath
-import com.ginsengo.steward.terrain3d.ViewCamera
 import com.ginsengo.steward.ui.map.Basemap
 import com.ginsengo.steward.ui.map.DARK_STYLE
 import com.ginsengo.steward.ui.map.FieldMap
@@ -94,7 +92,6 @@ fun MainScreen(vm: FieldViewModel) {
     val run by vm.latestRun.collectAsState()
     val layers by vm.layers.collectAsState()
     val view3d by vm.view3d.collectAsState()
-    val focus by vm.focus.collectAsState()
     val busy by vm.busy.collectAsState()
     val verdict by vm.verdict.collectAsState()
     val toast by vm.toast.collectAsState()
@@ -102,10 +99,6 @@ fun MainScreen(vm: FieldViewModel) {
 
     var sheet by remember { mutableStateOf(Sheet.NONE) }
     var habitatStatus by remember { mutableStateOf("") }
-    var recenter by remember { mutableIntStateOf(0) }
-    // One map: the camera both views share, handed to the 2D map when 3D closes.
-    var jumpCam by remember { mutableStateOf<ViewCamera?>(null) }
-    var jumpTick by remember { mutableIntStateOf(0) }
     // The 3D view drapes the 2D map's style only when that style actually loaded here.
     var darkStyleLoaded by remember { mutableStateOf(false) }
     val weights = verdict?.active ?: GinsengSuitability.PRIOR_WEIGHTS
@@ -117,12 +110,10 @@ fun MainScreen(vm: FieldViewModel) {
     Box(Modifier.fillMaxSize().background(Gen.Bg)) {
         if (view3d) {
             Terrain3DView(
-                me = me, camera = vm.camera.value, onCamera = { vm.setCamera(it) },
+                me = me, camera = vm.camera,
                 track = track, finds = finds, suggestions = suggestions,
                 layers = layers, weights = weights, demStore = vm.container.demTiles,
                 styleUri = if (darkStyleLoaded && layers.basemap == Basemap.DARK) DARK_STYLE else null,
-                recenterTick = recenter, focus = focus,
-                onFocusHandled = { vm.focusOn(null) },
                 onStatus = { habitatStatus = it }, modifier = Modifier.fillMaxSize(),
             )
         } else {
@@ -130,12 +121,9 @@ fun MainScreen(vm: FieldViewModel) {
                 me = me, track = track, finds = finds, suggestions = suggestions,
                 radiusCenter = run?.let { it.centerLat to it.centerLng },
                 layers = layers, weights = weights, demStore = vm.container.demTiles,
-                focus = focus, recenterTick = recenter,
-                onFocusHandled = { vm.focusOn(null) },
+                camera = vm.camera,
                 onHabitatStatus = { habitatStatus = it },
                 modifier = Modifier.fillMaxSize(),
-                onCameraIdle = { vm.setCamera(it) },
-                jumpTo = jumpCam, jumpTick = jumpTick,
                 onBasemap = { darkStyleLoaded = it },
             )
         }
@@ -162,19 +150,15 @@ fun MainScreen(vm: FieldViewModel) {
             Modifier.align(Alignment.CenterEnd).padding(end = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // One switch between the two projections of the same map: the view goes with it.
+            // One switch between the two projections of the same map: the camera stays one
+            // camera (FieldViewModel.setView3d applies to3d/to2d to it).
             SmallFloatingActionButton(
-                onClick = {
-                    if (view3d) {
-                        vm.camera.value?.let { jumpCam = CameraMath.to2d(it); jumpTick++ }
-                        vm.setView3d(false)
-                    } else vm.setView3d(true)
-                },
+                onClick = { vm.setView3d(!view3d) },
                 containerColor = Gen.SurfaceHigh, contentColor = Gen.Text,
                 modifier = Modifier.semantics { contentDescription = if (view3d) "Show flat map" else "Show in 3D" },
             ) { Icon(if (view3d) Icons.Filled.Map else Icons.Filled.Terrain, null) }
             SmallFloatingActionButton(
-                onClick = { recenter++ },
+                onClick = { vm.recenter() },
                 containerColor = Gen.SurfaceHigh, contentColor = Gen.Text,
                 modifier = Modifier.semantics { contentDescription = "Centre on me" },
             ) { Icon(Icons.Filled.MyLocation, null) }

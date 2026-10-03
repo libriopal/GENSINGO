@@ -16,7 +16,10 @@ import com.ginsengo.steward.field.TrackService
 import com.ginsengo.steward.learn.FindLearner
 import com.ginsengo.steward.research.Provider
 import com.ginsengo.steward.research.ResearchTrigger
-import com.ginsengo.steward.terrain3d.ViewCamera
+import com.ginsengo.steward.terrain3d.CameraMath
+import com.ginsengo.steward.terrain3d.CameraState
+import com.ginsengo.steward.terrain3d.SharedCamera
+import com.ginsengo.steward.ui.map.CameraStart
 import com.ginsengo.steward.ui.map.MapLayerState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -79,17 +82,37 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _view3d = MutableStateFlow(false)
     val view3d: StateFlow<Boolean> = _view3d.asStateFlow()
-    fun setView3d(on: Boolean) { _view3d.value = on }
 
-    private val _camera = MutableStateFlow<ViewCamera?>(null)
-    /** The one camera both views share: the 2D map writes it when it settles, the 3D view as it moves. */
-    val camera: StateFlow<ViewCamera?> = _camera.asStateFlow()
-    fun setCamera(c: ViewCamera) { _camera.value = c }
+    /**
+     * The one camera (exe.md A1): both views mirror it under [SharedCamera]'s epoch rule; neither
+     * keeps its own. Seeded where [CameraStart] says the map opens, then moved only here (app
+     * actions) or by the view under the user's finger (gestures).
+     */
+    val camera = SharedCamera(
+        CameraStart.initial(null, null).let { CameraState(it.lat, it.lon, it.zoom, 0.0, CameraStart.START_TILT) }
+    )
+    private var cameraOnFix = false
 
-    private val _focus = MutableStateFlow<Suggestion?>(null)
-    /** The suggestion the camera should fly to. */
-    val focus: StateFlow<Suggestion?> = _focus.asStateFlow()
-    fun focusOn(s: Suggestion?) { _focus.value = s }
+    /** One switch, one camera: the view changes, the place does not ([CameraMath.to3d]/[to2d]). */
+    fun setView3d(on: Boolean) {
+        if (_view3d.value == on) return
+        camera.move(CameraMath.forView(camera.camera, on))
+        _view3d.value = on
+    }
+
+    /** "Centre on me", in whichever view is showing. */
+    fun recenter() {
+        val me = _location.value ?: return
+        camera.move(camera.camera.copy(lat = me.lat, lng = me.lng), animate = true)
+    }
+
+    /** "Show on map": fly to a suggestion, in whichever view is showing. */
+    fun focusOn(s: Suggestion) {
+        camera.move(
+            camera.camera.copy(lat = s.lat, lng = s.lng, zoom = CameraStart.FOCUS_ZOOM, pitch = CameraStart.FOCUS_TILT),
+            animate = true,
+        )
+    }
 
     private val _toast = MutableStateFlow<String?>(null)
     val toast: StateFlow<String?> = _toast.asStateFlow()
@@ -135,6 +158,11 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun onFix(loc: FieldLocation) {
         _location.value = loc
+        // The first fix JUMPS the camera (CameraStart: an animation can be interrupted, a jump cannot).
+        if (CameraStart.shouldJumpToFix(hasFix = true, alreadyCentred = cameraOnFix)) {
+            cameraOnFix = true
+            camera.move(camera.camera.copy(lat = loc.lat, lng = loc.lng, zoom = CameraStart.FIELD_ZOOM))
+        }
         burst?.add(loc)
         if (refreshJob?.isActive == true) return
         refreshJob = viewModelScope.launch {

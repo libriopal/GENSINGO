@@ -39,7 +39,7 @@ class CameraMathTest {
 
     // ------------------------------------------------------------------ witness helpers
 
-    private fun mapCam(c: ViewCamera) = MapCamera(c.lat, c.lng, c.zoom, c.bearing, c.pitch, W, H)
+    private fun mapCam(c: CameraState) = MapCamera(c.lat, c.lng, c.zoom, c.bearing, c.pitch, W, H)
 
     private fun latOf(c: MapCamera, wy: Double) = MapCamera.latFromMercatorY(wy / c.worldSize)
     private fun lngOf(c: MapCamera, wx: Double) = MapCamera.lngFromMercatorX(wx / c.worldSize)
@@ -117,7 +117,7 @@ class CameraMathTest {
     }
 
     /** Pixels between where [newCam] shows the 3D point and where the finger now is. */
-    private fun miss(newCam: ViewCamera, p: DoubleArray, toX: Double, toY: Double): Double {
+    private fun miss(newCam: CameraState, p: DoubleArray, toX: Double, toY: Double): Double {
         val q = mapCam(newCam).project(p[0], p[1], p[2])
             ?: return Double.POSITIVE_INFINITY
         return hypot(q[0] - toX, q[1] - toY)
@@ -125,7 +125,7 @@ class CameraMathTest {
 
     private fun assertFlatPanKeepsGround(pitch: Double, tolPx: Double) {
         for (bearing in listOf(0.0, 90.0, 200.0)) for (zoom in listOf(13.0, 15.0, 17.0)) {
-            val cam = ViewCamera(LAT, LNG, zoom, bearing, pitch)
+            val cam = CameraState(LAT, LNG, zoom, bearing, pitch)
             val old = mapCam(cam)
             for (d in DRAGS) {
                 val (fx, fy, tx, ty) = d.toList()
@@ -173,7 +173,7 @@ class CameraMathTest {
     fun slopedPanKeepsTheTerrainPointUnderTheFinger() {
         for (offset in listOf(0.0, 300.0)) for (bearing in listOf(0.0, 90.0, 200.0)) {
             val heightAt = ramp(offset)
-            val cam = ViewCamera(LAT, LNG, 15.0, bearing, 55.0)
+            val cam = CameraState(LAT, LNG, 15.0, bearing, 55.0)
             val old = mapCam(cam)
             val terrainAware = mutableListOf<Double>()
             val cameraOnly = mutableListOf<Double>()
@@ -220,7 +220,7 @@ class CameraMathTest {
         )
         for (offset in listOf(0.0, 300.0)) {
             val heightAt = ramp(offset)
-            val cam = ViewCamera(LAT, LNG, 15.0, 90.0, 55.0)
+            val cam = CameraState(LAT, LNG, 15.0, 90.0, 55.0)
             val old = mapCam(cam)
             val range = (offset - 800.0)..(offset + 800.0)
             for (d in high) {
@@ -270,12 +270,12 @@ class CameraMathTest {
     @Test
     fun clampCentreKeepsTheCentreInsideAndLeavesAnInsideCentreAlone() {
         val n = 35.60; val w = -83.05; val s = 35.52; val e = -82.95
-        val inside = ViewCamera(35.57, -83.01, 15.3, 41.0, 52.0)
+        val inside = CameraState(35.57, -83.01, 15.3, 41.0, 52.0)
         assertEquals("an inside centre is unchanged", inside, CameraMath.clampCentre(inside, n, w, s, e))
         for ((lat, lng) in listOf(
             36.0 to -83.0, 35.0 to -83.0, 35.56 to -84.0, 35.56 to -82.0, 37.0 to -81.0, 34.0 to -85.0,
         )) {
-            val out = ViewCamera(lat, lng, 14.2, 120.0, 48.0)
+            val out = CameraState(lat, lng, 14.2, 120.0, 48.0)
             val c = CameraMath.clampCentre(out, n, w, s, e)
             assertTrue("lat $lat clamped into [$s, $n], got ${c.lat}", c.lat in s..n)
             assertTrue("lng $lng clamped into [$w, $e], got ${c.lng}", c.lng in w..e)
@@ -289,7 +289,7 @@ class CameraMathTest {
 
     @Test
     fun switchingViewsKeepsCentreAndBearingAndClampsZoomAndPitch() {
-        val flat = ViewCamera(35.5612345678, -83.0012345678, 9.25, 213.7, 20.0)
+        val flat = CameraState(35.5612345678, -83.0012345678, 9.25, 213.7, 20.0)
         val a = CameraMath.to3d(flat, minZoom = 12.0, maxZoom = 17.0)
         assertEquals(flat.lat, a.lat, 0.0); assertEquals(flat.lng, a.lng, 0.0)
         assertEquals(flat.bearing, a.bearing, 0.0)
@@ -302,7 +302,7 @@ class CameraMathTest {
         assertEquals("a pitch above 45 is kept", 58.0, b.pitch, 0.0)
         assertEquals("an in-range zoom is kept", 14.4, CameraMath.to3d(flat.copy(zoom = 14.4), 12.0, 17.0).zoom, 0.0)
 
-        val tilted = ViewCamera(35.5698765432, -82.9987654321, 15.75, 301.25, 72.0)
+        val tilted = CameraState(35.5698765432, -82.9987654321, 15.75, 301.25, 72.0)
         val c = CameraMath.to2d(tilted)
         assertEquals(tilted.lat, c.lat, 0.0); assertEquals(tilted.lng, c.lng, 0.0)
         assertEquals(tilted.bearing, c.bearing, 0.0)

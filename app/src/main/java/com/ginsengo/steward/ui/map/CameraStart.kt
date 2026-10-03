@@ -27,6 +27,13 @@ object CameraStart {
     /** Where the habitat layers are actually computed. */
     const val FIELD_ZOOM = 14.0
 
+    /** The map opens tilted, so the hillshade reads as relief (2.5D). */
+    const val START_TILT = 50.0
+
+    /** "Show on map": close enough to read one cove, tilted to show its shape. */
+    const val FOCUS_ZOOM = 15.0
+    const val FOCUS_TILT = 55.0
+
     data class Start(val lat: Double, val lon: Double, val zoom: Double, val isRealFix: Boolean)
 
     fun initial(fixLat: Double?, fixLon: Double?): Start =

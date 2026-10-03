@@ -64,7 +64,7 @@ class SceneGeometryTest {
         val s = scene()
         val m = s.mosaic
         val w = 1080; val h = 2400
-        val cam = ViewCamera(WaterLines.latOfCell(m, 384.0), WaterLines.lngOfCell(m, 384.0), 14.6, 30.0, 55.0)
+        val cam = CameraState(WaterLines.latOfCell(m, 384.0), WaterLines.lngOfCell(m, 384.0), 14.6, 30.0, 55.0)
         val ground = s.elevationAt(cam.lat, cam.lng)!! - 200.0
         val (next, nextGround) = Terrain3D.settle(cam, w, h, s, ground)
         assertEquals("the new ground plane is the terrain under the new centre",

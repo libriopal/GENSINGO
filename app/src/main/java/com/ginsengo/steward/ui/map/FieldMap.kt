@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -24,7 +25,8 @@ import com.ginsengo.steward.terrain.Hydrology
 import com.ginsengo.steward.terrain.SuitabilityRasterizer
 import com.ginsengo.steward.terrain.WaterLines
 import com.ginsengo.steward.terrain3d.TerrainTextures
-import com.ginsengo.steward.terrain3d.ViewCamera
+import com.ginsengo.steward.terrain3d.CameraState
+import com.ginsengo.steward.terrain3d.SharedCamera
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.maplibre.android.MapLibre
@@ -81,6 +83,7 @@ private const val SRC_RING = "g-ring"
 private const val SRC_ME = "g-me"
 private const val SRC_WATER = "g-water"
 private const val SRC_CONTOUR = "g-contour"
+private const val FOLLOW_ANIMATION_MS = 900
 private const val CONTOUR_MIN_ZOOM = 10.5
 
 /**
@@ -105,16 +108,14 @@ fun FieldMap(
     layers: MapLayerState,
     weights: DoubleArray,
     demStore: DemTileStore,
-    focus: Suggestion?,
-    recenterTick: Int,
-    onFocusHandled: () -> Unit,
+    /**
+     * The one camera (exe.md A1, A3). This map is a mirror of it: it opens where the camera is,
+     * reports every move the user makes, and follows every app move once (the epoch rule).
+     * MapLibre keeps the camera it draws from, but that camera is never the source of truth.
+     */
+    camera: SharedCamera,
     onHabitatStatus: (String) -> Unit,
     modifier: Modifier = Modifier,
-    /** The settled camera, each time the map's camera goes idle: it feeds the shared camera. */
-    onCameraIdle: (ViewCamera) -> Unit = {},
-    /** A camera to place the map at (returning from 3D), applied once per change of [jumpTick]. */
-    jumpTo: ViewCamera? = null,
-    jumpTick: Int = 0,
     /**
      * Whether the Dark vector style is loaded (true) or the map is on Topo or its offline
      * fallback (false): the 3D view drapes the style only when it actually loaded here.
@@ -134,10 +135,6 @@ fun FieldMap(
     val curFinds = rememberUpdatedState(finds)
     val curSuggestions = rememberUpdatedState(suggestions)
     val curCenter = rememberUpdatedState(radiusCenter)
-    val curOnIdle = rememberUpdatedState(onCameraIdle)
-    val curJump = rememberUpdatedState(jumpTo)
-    val curJumpTick = rememberUpdatedState(jumpTick)
-    val curRecenter = rememberUpdatedState(recenterTick)
     val curOnBasemap = rememberUpdatedState(onBasemap)
 
     val mapView = remember {
@@ -273,49 +270,44 @@ fun FieldMap(
     }
 
     /**
-     * Pushes the current state into the current style and lands the camera on the first fix.
+     * Pushes the current state into the current style.
      *
      * Called from update() AND when a style finishes loading. Found on the Phase 7 device run:
      * update() only runs on recomposition, and a stationary phone produces one position
      * change (the GPS provider drops repeats under 2 m). That one change arrived while the
      * offline style was still loading, update() returned early, and nothing ran it again:
-     * the map never centred on the user and no layer was pushed until something moved.
+     * no layer was pushed until something moved. (Landing on the first fix is the shared
+     * camera's job now: FieldViewModel moves it, and this map follows like any app move.)
      */
     fun syncAll(map: MapLibreMap) {
         val style = st.style ?: return
         applyVisibility(style, curLayers.value)
         pushData(style, st, curMe.value, curTrack.value, curFinds.value, curSuggestions.value, curCenter.value)
         refreshHabitat(map, force = false)
-        val here = curMe.value
-        if (here != null && !st.centred) {
-            // First fix: jump, never animate; an interrupted animation strands the camera.
-            runCatching { map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(here.lat, here.lng), 14.0)) }
-                .onFailure { Log.w(TAG, "first-fix camera jump failed", it) }
-            st.centred = true
-            Log.i(TAG, "camera: jumped to the first fix at zoom 14")
-        }
     }
 
     /**
-     * Places the map at [jumpTo], once per [jumpTick]: moveCamera, never an animation (an
-     * interrupted animation strands the camera). Coming back from 3D this map is a new
-     * instance, so the jump also counts as the first-fix landing and consumes a recentre tick
-     * already handled, or either would pull the camera off the handed-over view.
+     * Follows an app move of the shared camera: a jump, never an animation, unless the move
+     * asked for one (recentre, "Show on map"). A jump cannot be interrupted, which is why the
+     * first fix and the 2D/3D switch always jump (CameraStart).
      */
-    fun applyJump(map: MapLibreMap) {
-        val cam = curJump.value ?: return
-        if (curJumpTick.value == st.jumpTick) return
-        st.jumpTick = curJumpTick.value
-        st.centred = true
-        st.recenterTick = curRecenter.value
-        runCatching {
-            map.moveCamera(
-                CameraUpdateFactory.newCameraPosition(
-                    CameraPosition.Builder().target(LatLng(cam.lat, cam.lng))
-                        .zoom(cam.zoom).bearing(cam.bearing).tilt(cam.pitch).build()
-                )
-            )
-        }.onFailure { Log.w(TAG, "camera jump failed", it) }
+    fun follow(map: MapLibreMap, s: SharedCamera.Snapshot) {
+        val c = s.camera
+        val update = CameraUpdateFactory.newCameraPosition(
+            CameraPosition.Builder().target(LatLng(c.lat, c.lng)).zoom(c.zoom).bearing(c.bearing).tilt(c.pitch).build()
+        )
+        runCatching { if (s.animate) map.animateCamera(update, FOLLOW_ANIMATION_MS) else map.moveCamera(update) }
+            .onFailure { Log.w(TAG, "camera follow failed", it) }
+    }
+
+    // App moves of the shared camera, applied once each. Collected here, not passed as a
+    // parameter: the camera changes on every frame of a gesture, and a recomposition per frame
+    // would re-run update() (layer visibility, data pushes) for nothing.
+    LaunchedEffect(camera) {
+        camera.state.collect { s ->
+            val map = st.map ?: return@collect
+            st.follower?.take(s)?.let { follow(map, it) }
+        }
     }
 
     AndroidView(
@@ -333,18 +325,21 @@ fun FieldMap(
                 // Cap the frame rate: the map is read, not played; 30 fps is smooth for pans
                 // and halves GPU work against the default 60 on most panels.
                 mapView.setMaximumFps(30)
+                // Open exactly where the shared camera is (the seed, the last 2D view, or where
+                // the 3D view left it), and from then on follow only app moves made after now.
+                val start = camera.state.value
                 map.cameraPosition = CameraPosition.Builder()
-                    .target(LatLng(me?.lat ?: 35.55, me?.lng ?: -82.95))
-                    .zoom(if (me != null) 14.0 else 9.0)
-                    .tilt(50.0)
+                    .target(LatLng(start.camera.lat, start.camera.lng))
+                    .zoom(start.camera.zoom).bearing(start.camera.bearing).tilt(start.camera.pitch)
                     .build()
-                if (me != null) st.centred = true
-                applyJump(map)
-                map.addOnCameraIdleListener {
-                    refreshHabitat(map, force = false)
+                st.follower = SharedCamera.Follower(start.epoch)
+                // Every move the user makes is reported, not only where it settles: the shared
+                // camera is the truth at every frame, so a switch mid-gesture loses nothing.
+                map.addOnCameraMoveListener {
                     val p = map.cameraPosition
-                    p.target?.let { t -> curOnIdle.value(ViewCamera(t.latitude, t.longitude, p.zoom, p.bearing, p.tilt)) }
+                    p.target?.let { t -> camera.report(CameraState(t.latitude, t.longitude, p.zoom, p.bearing, p.tilt)) }
                 }
+                map.addOnCameraIdleListener { refreshHabitat(map, force = false) }
                 // OFFLINE FALLBACK. Measured on the emulator with no network: the remote style
                 // failed to load and, because every layer is installed in the style callback,
                 // the map stayed a blank grey rectangle - no heatmaps, no track, no suggestions,
@@ -377,7 +372,6 @@ fun FieldMap(
         },
         update = {
             val map = st.map ?: return@AndroidView
-            applyJump(map)   // before the style checks: a camera needs no style
             val style = st.style
             if (st.basemap != layers.basemap) {
                 st.resetKeys()
@@ -391,21 +385,6 @@ fun FieldMap(
             }
             if (style == null) return@AndroidView
             syncAll(map)
-
-            if (recenterTick != st.recenterTick) {
-                st.recenterTick = recenterTick
-                me?.let { runCatching { map.animateCamera(CameraUpdateFactory.newLatLng(LatLng(it.lat, it.lng))) } }
-            }
-            if (focus != null) {
-                runCatching {
-                    map.animateCamera(
-                        CameraUpdateFactory.newCameraPosition(
-                            CameraPosition.Builder().target(LatLng(focus.lat, focus.lng)).zoom(15.0).tilt(55.0).build()
-                        ), 900
-                    )
-                }
-                onFocusHandled()
-            }
         },
     )
 }
@@ -420,11 +399,10 @@ private class State {
     var habitatTiles = -1
     var habitatComplete = false
     var pendingHabitatKey: String? = null // what is being computed
-    var centred = false
     /** True once the offline fallback style has been loaded. */
     var fallback = false
-    var recenterTick = 0
-    var jumpTick = 0
+    /** This map's side of the shared camera's epoch rule; set when the map is ready. */
+    var follower: SharedCamera.Follower? = null
     var keyTrack = ""
     var keyFinds = ""
     var keySuggest = ""

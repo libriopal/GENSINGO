@@ -31,9 +31,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -74,7 +74,7 @@ import com.ginsengo.steward.terrain3d.CameraMath
 import com.ginsengo.steward.terrain3d.Terrain3D
 import com.ginsengo.steward.terrain3d.TerrainGlRenderer
 import com.ginsengo.steward.terrain3d.TerrainTextures
-import com.ginsengo.steward.terrain3d.ViewCamera
+import com.ginsengo.steward.terrain3d.SharedCamera
 import com.ginsengo.steward.ui.map.Basemap
 import com.ginsengo.steward.ui.map.MapDrape
 import com.ginsengo.steward.ui.map.MapLayerState
@@ -112,8 +112,8 @@ import kotlin.math.roundToInt
 @Composable
 fun Terrain3DView(
     me: FieldLocation?,
-    camera: ViewCamera?,
-    onCamera: (ViewCamera) -> Unit,
+    /** The one camera (exe.md A1). This view mirrors it: gestures report, the app moves it. */
+    camera: SharedCamera,
     track: List<TrackPoint>,
     finds: List<Find>,
     suggestions: List<Suggestion>,
@@ -122,9 +122,6 @@ fun Terrain3DView(
     demStore: DemTileStore,
     /** The 2D map's style to drape, or null when there is none to drape (offline fallback, Topo). */
     styleUri: String?,
-    recenterTick: Int,
-    focus: Suggestion?,
-    onFocusHandled: () -> Unit,
     onStatus: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -132,24 +129,28 @@ fun Terrain3DView(
     val renderer = remember { TerrainGlRenderer() }
     val glRef = remember { arrayOfNulls<GLSurfaceView>(1) }
     val textMeasurer = rememberTextMeasurer()
-    val report by rememberUpdatedState(onCamera)
     val status by rememberUpdatedState(onStatus)
     val currentLayers by rememberUpdatedState(layers)
 
     var size by remember { mutableStateOf(0 to 0) }
-    // The shared camera as handed over; null until there is a camera or a fix to start from.
-    var cam by remember { mutableStateOf(camera) }
-    // Zoom and pitch are fitted to the 3D range once the square's size is known.
+    // The shared camera, as Compose state: every report or move redraws.
+    val snap by camera.state.collectAsState()
+    val cam = snap.camera
+    // This view's side of the epoch rule: app moves are applied once; its own reports never.
+    val follower = remember { SharedCamera.Follower(camera.state.value.epoch) }
+    // Zoom is fitted to the 3D range once the square's size is known.
     var fitted by remember { mutableStateOf(false) }
     var scene by remember { mutableStateOf<Terrain3D.Scene?>(null) }
-    var buildAt by remember { mutableStateOf(camera?.let { it.lat to it.lng }) }
+    var buildAt by remember { mutableStateOf(camera.camera.let { it.lat to it.lng }) }
+    // True when the user dragged the camera off the square (settle onto the new ground keeping
+    // the eye); false after an app move, which teleports (ground on the new centre instead).
+    var pannedOut by remember { mutableStateOf(false) }
     // The camera looks at the plane through the ground under its centre, in metres (see
     // MapCamera.mvpForMeshBuiltAt); fixed during a gesture, re-based when it ends.
     var anchorM by remember { mutableDoubleStateOf(Double.NaN) }
     var drape by remember { mutableStateOf<Pair<Terrain3D.Scene, IntArray>?>(null) }
     var sceneNote by remember { mutableStateOf("") }
     var drapeNote by remember { mutableStateOf("") }
-    var seenRecenter by remember { mutableIntStateOf(recenterTick) }
 
     // The GL thread must pause and resume with the screen, or it keeps a context (and a
     // battery) alive in the background; the renderer re-uploads after a context loss.
@@ -166,53 +167,25 @@ fun Terrain3DView(
         onDispose { lifecycle.removeObserver(obs) }
     }
 
-    // No camera handed over (the 2D map never settled): start over the user.
-    LaunchedEffect(me != null) {
-        if (cam == null && me != null) {
-            cam = ViewCamera(me.lat, me.lng, Double.NaN, 0.0, DEFAULT_PITCH.toDouble())
-            buildAt = me.lat to me.lng
-        }
-    }
-
     // Published on every change, even to the same text: "Tracing creeks…" must always be replaced.
     fun publish() { if (sceneNote.isNotEmpty()) status(sceneNote + drapeNote) }
 
-    /** Moves the camera's centre (recentre, a suggestion), rebuilding when it leaves the square. */
-    fun moveTo(lat: Double, lng: Double, zoom: Double? = null) {
-        val c = cam ?: return
-        val s = scene
-        val z = if (zoom != null && s != null && size.first > 0) {
-            val fit = fitZoomFor(s, size.first)
-            zoom.coerceIn(fit - 1.5, fit + 3.5)
-        } else c.zoom
-        val next = c.copy(lat = lat, lng = lng, zoom = z)
-        cam = next
-        s?.elevationAt(lat, lng)?.let { anchorM = it }
-        if (s == null || !s.contains(lat, lng)) buildAt = lat to lng
-        if (fitted) report(next)
-    }
-
-    // Recentre on me: the same button as on the 2D map.
-    LaunchedEffect(recenterTick) {
-        if (recenterTick == seenRecenter) return@LaunchedEffect
-        seenRecenter = recenterTick
-        me?.let { moveTo(it.lat, it.lng) }
-    }
-
-    // "Show on map" from the suggestions: fly there in 3D too.
-    LaunchedEffect(focus) {
-        val f = focus ?: return@LaunchedEffect
-        moveTo(f.lat, f.lng, zoom = FOCUS_ZOOM)
-        onFocusHandled()
+    // App moves of the shared camera (the first fix, recentre, "Show on map", the switch, this
+    // view's own fit and compass): ground the camera on its new centre, or build the square
+    // there when the centre is outside the one on screen.
+    LaunchedEffect(snap.epoch) {
+        val moved = follower.take(snap) ?: return@LaunchedEffect
+        val c = moved.camera
+        val sc = scene
+        pannedOut = false
+        sc?.elevationAt(c.lat, c.lng)?.let { anchorM = it }
+        if (sc == null || !sc.contains(c.lat, c.lng)) buildAt = c.lat to c.lng
     }
 
     // ---- terrain: built around the camera's centre, once per elevation tile (~1 km).
-    val bLat = buildAt?.first
-    val bLng = buildAt?.second
-    val buildKey = if (bLat == null || bLng == null) null
-    else "${DemTileStore.lonToTileX(bLng, 15)}:${DemTileStore.latToTileY(bLat, 15)}"
+    val (bLat, bLng) = buildAt
+    val buildKey = "${DemTileStore.lonToTileX(bLng, 15)}:${DemTileStore.latToTileY(bLat, 15)}"
     LaunchedEffect(buildKey, weights.contentHashCode()) {
-        if (bLat == null || bLng == null) { status("Waiting for a GPS fix"); return@LaunchedEffect }
         status("Loading elevation…")
         val area = loadArea(demStore, bLat, bLng)
         if (area == null) {
@@ -236,18 +209,18 @@ fun Terrain3DView(
         renderer.submitTexture(TerrainGlRenderer.Texture(px, s.textureSize))
         drape = null
         scene = s
-        val c = cam
+        val c = camera.camera
         val (vw, vh) = size
-        if (c != null && fitted && !anchorM.isNaN() && vw > 0 && vh > 0) {
-            // A camera already looking at the old square: put it on the new ground without
-            // moving the eye, as after a gesture (the camera left the old square, where the
-            // ground under it was unknown and re-anchoring could not run).
+        if (pannedOut && fitted && !anchorM.isNaN() && vw > 0 && vh > 0) {
+            // The user dragged off the old square: put the camera on the new ground without
+            // moving the eye, as after a gesture (off the old square the ground under it was
+            // unknown, so re-anchoring could not run when the gesture ended).
             val (next, ground) = Terrain3D.settle(c, vw, vh, s, anchorM)
-            cam = next; anchorM = ground
-            report(next)
+            camera.report(next); anchorM = ground
         } else {
-            anchorM = c?.let { s.elevationAt(it.lat, it.lng) } ?: ((s.mesh.minElevationM + s.mesh.maxElevationM) / 2.0)
+            anchorM = s.elevationAt(c.lat, c.lng) ?: ((s.mesh.minElevationM + s.mesh.maxElevationM) / 2.0)
         }
+        pannedOut = false
         sceneNote = s.describe() + area.second
         publish()
     }
@@ -285,19 +258,16 @@ fun Terrain3DView(
 
     // ---- camera: fitted once to the 3D range (in an effect: never written during
     // composition), then drawn every time it changes.
-    LaunchedEffect(scene, size.first, cam == null) {
+    LaunchedEffect(scene, size.first) {
         val s0 = scene ?: return@LaunchedEffect
-        val c0 = cam ?: return@LaunchedEffect
         if (fitted || size.first <= 0) return@LaunchedEffect
         val fit = fitZoomFor(s0, size.first)
-        val next = if (c0.zoom.isNaN()) c0.copy(zoom = fit) else CameraMath.to3d(c0, fit - 1.5, fit + 3.5)
-        cam = next
         fitted = true
-        report(next)
+        camera.move(CameraMath.to3d(camera.camera, fit - 1.5, fit + 3.5))
     }
     val (w, h) = size
     val s = scene
-    val view = cam?.takeIf { fitted && w > 0 && h > 0 && !anchorM.isNaN() && !it.zoom.isNaN() }
+    val view = cam.takeIf { fitted && w > 0 && h > 0 && !anchorM.isNaN() }
     val mc = view?.let { CameraMath.mapCamera(it, w, h) }
     // A GL frame only when what it draws changed: a GPS fix or a track point recomposes this
     // screen (the markers are on the Compose canvas), and must not redraw the terrain.
@@ -343,32 +313,34 @@ fun Terrain3DView(
                         var moved = false
                         do {
                             val event = awaitPointerEvent()
-                            val c0 = cam
+                            // The shared camera now (not the composition's snapshot): every
+                            // pointer event builds on the camera the last one reported.
+                            val c0 = camera.camera
                             val s0 = scene
                             val (vw, vh) = size
-                            if (c0 != null && s0 != null && fitted && vw > 0 && vh > 0 && !anchorM.isNaN()) {
+                            if (s0 != null && fitted && vw > 0 && vh > 0 && !anchorM.isNaN()) {
                                 val down = event.changes.filter { it.pressed && it.previousPressed }
                                 if (down.size == 1) {
                                     val p = down[0]
                                     if (p.position != p.previousPosition) {
-                                        cam = CameraMath.pan(
+                                        camera.report(CameraMath.pan(
                                             c0,
                                             p.previousPosition.x.toDouble(), p.previousPosition.y.toDouble(),
                                             p.position.x.toDouble(), p.position.y.toDouble(),
                                             vw, vh, Terrain3D.heightFn(s0, anchorM), Terrain3D.rangeFor(s0, anchorM),
-                                        )
+                                        ))
                                         moved = true
                                     }
                                 } else if (down.size >= 2) {
                                     val fit = fitZoomFor(s0, vw)
                                     val zoom = c0.zoom + ln(event.calculateZoom().toDouble()) / ln(2.0)
-                                    cam = c0.copy(
+                                    camera.report(c0.copy(
                                         // A re-anchored camera may sit past the pinch range; it is
                                         // kept, not snapped, and only pinching further is refused.
                                         zoom = zoom.coerceIn(min(fit - 1.5, c0.zoom), max(fit + 3.5, c0.zoom)),
                                         bearing = ((c0.bearing - event.calculateRotation()) % 360.0 + 360.0) % 360.0,
                                         pitch = (c0.pitch - event.calculatePan().y * 0.15).coerceIn(15.0, 80.0),
-                                    )
+                                    ))
                                     moved = true
                                 }
                             }
@@ -376,13 +348,12 @@ fun Terrain3DView(
                         } while (event.changes.any { it.pressed })
                         if (moved) {
                             val s1 = scene
-                            val c1 = cam
+                            val c1 = camera.camera
                             val (vw, vh) = size
-                            if (s1 != null && c1 != null && vw > 0 && vh > 0) {
+                            if (s1 != null && vw > 0 && vh > 0) {
                                 val (done, ground) = Terrain3D.settle(c1, vw, vh, s1, anchorM)
-                                cam = done; anchorM = ground
-                                report(done)
-                                if (!s1.contains(done.lat, done.lng)) buildAt = done.lat to done.lng
+                                camera.report(done); anchorM = ground
+                                if (!s1.contains(done.lat, done.lng)) { buildAt = done.lat to done.lng; pannedOut = true }
                             }
                         }
                     }
@@ -439,18 +410,16 @@ fun Terrain3DView(
         // Compass: shows where north is; tap to face north, reset the tilt and fit the square.
         SmallFloatingActionButton(
             onClick = {
-                val c0 = cam
                 val s0 = scene
-                if (c0 != null && s0 != null && size.first > 0) {
-                    cam = c0.copy(bearing = 0.0, pitch = DEFAULT_PITCH.toDouble(), zoom = fitZoomFor(s0, size.first))
-                    cam?.let { report(it) }
+                if (s0 != null && size.first > 0) {
+                    camera.move(camera.camera.copy(bearing = 0.0, pitch = DEFAULT_PITCH.toDouble(), zoom = fitZoomFor(s0, size.first)))
                 }
             },
             containerColor = Gen.SurfaceHigh, contentColor = Gen.Text,
             // Above the screen's side buttons, clear of the status chips.
             modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp).offset(y = (-100).dp)
                 .semantics { contentDescription = "Face north and reset the view" },
-        ) { Icon(Icons.Filled.Navigation, null, modifier = Modifier.rotate(-(cam?.bearing ?: 0.0).toFloat())) }
+        ) { Icon(Icons.Filled.Navigation, null, modifier = Modifier.rotate(-cam.bearing.toFloat())) }
 
         if (s != null) Legend(
             s, mode, layers, showTrack && trackLines.isNotEmpty(),
@@ -538,7 +507,6 @@ private fun trackSegments(track: List<TrackPoint>, s: Terrain3D.Scene): List<Dou
 
 private const val TAG = "Terrain3D"
 private const val DEFAULT_PITCH = 55f
-private const val FOCUS_ZOOM = 15.0
 private const val DRAPE_TIMEOUT_MS = 25_000L
 private const val MAX_TRACK_POINTS = 3_000
 
