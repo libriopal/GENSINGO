@@ -1,0 +1,81 @@
+Warning	RedundantLabel	app/src/main/AndroidManifest.xml	40	Redundant label can be removed
+Warning	AndroidGradlePluginVersion	gradle/wrapper/gradle-wrapper.properties	3	A newer version of Gradle than 8.13 is available: 8.14.5
+Warning	AndroidGradlePluginVersion	gradle/libs.versions.toml	2	A newer version of com.android.application than 8.11.2 is available: 9.4.1
+Warning	GradleDependency	gradle/libs.versions.toml	5	A newer version of androidx.core:core-ktx than 1.13.1 is available: 1.19.1
+Warning	GradleDependency	gradle/libs.versions.toml	6	A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.11.0
+Warning	GradleDependency	gradle/libs.versions.toml	6	A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.8.7 is available: 2.11.0
+Warning	GradleDependency	gradle/libs.versions.toml	6	A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.11.0
+Warning	GradleDependency	gradle/libs.versions.toml	7	A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0
+Warning	GradleDependency	gradle/libs.versions.toml	8	A newer version of androidx.compose:compose-bom than 2024.10.01 is available: 2026.09.00
+Warning	GradleDependency	gradle/libs.versions.toml	9	A newer version of androidx.room:room-compiler than 2.7.1 is available: 2.8.5
+Warning	GradleDependency	gradle/libs.versions.toml	9	A newer version of androidx.room:room-ktx than 2.7.1 is available: 2.8.5
+Warning	GradleDependency	gradle/libs.versions.toml	9	A newer version of androidx.room:room-runtime than 2.7.1 is available: 2.8.5
+Warning	GradleDependency	gradle/libs.versions.toml	12	A newer version of com.google.android.gms:play-services-location than 21.3.0 is available: 21.4.0
+Warning	GradleDependency	gradle/libs.versions.toml	22	A newer version of androidx.test.ext:junit than 1.2.1 is available: 1.3.0
+Warning	GradleDependency	gradle/libs.versions.toml	23	A newer version of androidx.test.espresso:espresso-core than 3.6.1 is available: 3.7.0
+Warning	GradleDependency	gradle/libs.versions.toml	60	A newer version of androidx.test:core than 1.6.1 is available: 1.7.0
+Warning	NewerVersionAvailable	gradle/libs.versions.toml	3	A newer version of org.jetbrains.kotlin.android than 2.2.10 is available: 2.4.20
+Warning	NewerVersionAvailable	gradle/libs.versions.toml	3	A newer version of org.jetbrains.kotlin.plugin.compose than 2.2.10 is available: 2.4.20
+Warning	NewerVersionAvailable	gradle/libs.versions.toml	3	A newer version of org.jetbrains.kotlin.plugin.serialization than 2.2.10 is available: 2.4.20
+Warning	NewerVersionAvailable	gradle/libs.versions.toml	10	A newer version of org.jetbrains.kotlinx:kotlinx-serialization-json than 1.7.3 is available: 1.11.0
+Warning	NewerVersionAvailable	gradle/libs.versions.toml	11	A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.9.0 is available: 1.11.0
+Warning	NewerVersionAvailable	gradle/libs.versions.toml	11	A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-test than 1.9.0 is available: 1.11.0
+Warning	NewerVersionAvailable	gradle/libs.versions.toml	18	A newer version of com.anthropic:anthropic-java than 2.65.0 is available: 2.68.0
+Warning	NewerVersionAvailable	gradle/libs.versions.toml	20	A newer version of com.squareup.okhttp3:mockwebserver than 4.12.0 is available: 5.5.0
+Error	StateFlowValueCalledInComposition	app/src/main/java/com/ginsengo/steward/ui/MainScreen.kt	120	StateFlow.value should not be called within composition
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/terrain/DemTileStore.kt	94	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	204	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	209	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	218	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	229	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	231	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	246	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	247	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	262	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	263	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	293	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	295	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	318	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	357	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	363	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	364	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	444	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	445	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	629	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	648	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/habitat/HabitatEngine.kt	60	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/habitat/HabitatEngine.kt	70	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/MapDrape.kt	117	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/MapDrape.kt	123	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/MapDrape.kt	145	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/MapDrape.kt	156	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/MapDrape.kt	161	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/MapDrape.kt	216	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/MapDrape.kt	219	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/map/MapDrape.kt	232	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/ui/Terrain3DView.kt	225	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/terrain3d/TerrainGlRenderer.kt	201	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/terrain3d/TerrainGlRenderer.kt	219	Using 'Log' instead of 'Timber'
+Warning	LogNotTimber	app/src/main/java/com/ginsengo/steward/terrain3d/TerrainGlRenderer.kt	234	Using 'Log' instead of 'Timber'
+Warning	ChromeOsAbiSupport	app/build.gradle.kts	76	Missing x86_64 ABI support for ChromeOS
+Warning	ObsoleteSdkInt	app/src/main/java/com/ginsengo/steward/field/TrackService.kt	222	Unnecessary; `SDK_INT` is never < 26
+Warning	ObsoleteSdkInt	app/src/main/res/mipmap-anydpi-v26		This folder configuration (`v26`) is unnecessary; `minSdkVersion` is 26. Merge all the resources in this folder into `mipmap-anydpi`.
+Warning	UnusedResources	app/src/main/res/values/colors.xml	5	The resource `R.color.surface_container` appears to be unused
+Warning	UnusedResources	app/src/main/res/values/colors.xml	6	The resource `R.color.primary_accent` appears to be unused
+Warning	UnusedResources	app/src/main/res/values/colors.xml	7	The resource `R.color.warning_accent` appears to be unused
+Warning	UnusedResources	app/src/main/res/values/colors.xml	8	The resource `R.color.alert_accent` appears to be unused
+Warning	UnusedResources	app/src/main/res/values/colors.xml	9	The resource `R.color.text_primary` appears to be unused
+Warning	UnusedResources	app/src/main/res/values/colors.xml	10	The resource `R.color.text_secondary` appears to be unused
+Warning	UnusedResources	app/src/main/res/values/colors.xml	11	The resource `R.color.hairline_border` appears to be unused
+Warning	UnusedResources	app/src/main/res/values/strings.xml	4	The resource `R.string.gps_channel_name` appears to be unused
+Warning	UnusedResources	app/src/main/res/values/strings.xml	5	The resource `R.string.gps_channel_desc` appears to be unused
+Warning	UseKtx	app/src/main/java/com/ginsengo/steward/AppContainer.kt	69	Use the KTX extension function `SharedPreferences.edit` instead?
+Warning	UseKtx	app/src/main/java/com/ginsengo/steward/AppContainer.kt	74	Use the KTX extension function `SharedPreferences.edit` instead?
+Warning	UseKtx	app/src/main/java/com/ginsengo/steward/AppContainer.kt	80	Use the KTX extension function `SharedPreferences.edit` instead?
+Warning	UseKtx	app/src/main/java/com/ginsengo/steward/AppContainer.kt	89	Use the KTX extension function `SharedPreferences.edit` instead?
+Warning	UseKtx	app/src/main/java/com/ginsengo/steward/AppContainer.kt	94	Use the KTX extension function `SharedPreferences.edit` instead?
+Warning	UseKtx	app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt	479	Use the KTX function `createBitmap` instead?
+Warning	UseKtx	app/src/main/java/com/ginsengo/steward/research/KeyVault.kt	43	Use the KTX extension function `SharedPreferences.edit` instead?
+Warning	UseKtx	app/src/main/java/com/ginsengo/steward/research/KeyVault.kt	49	Use the KTX extension function `SharedPreferences.edit` instead?
+Warning	UseKtx	app/src/main/java/com/ginsengo/steward/ui/map/MapDrape.kt	169	Use the KTX extension function `Bitmap.scale` instead?
+Warning	UseKtx	app/src/main/java/com/ginsengo/steward/terrain/SuitabilityRasterizer.kt	95	Use the KTX function `createBitmap` instead?

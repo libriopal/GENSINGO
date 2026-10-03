@@ -1,0 +1,377 @@
+$ find (§1.4 list)
+   299 ./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/learn/FindLearner.kt
+   141 ./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/prospect/Prospects.kt
+    71 ./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/research/KeyVault.kt
+    66 ./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/research/OnDeviceRationale.kt
+   342 ./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/research/RadiusScan.kt
+   246 ./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/terrain3d/TerrainGlRenderer.kt
+    83 ./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/terrain3d/TerrainShaders.kt
+   428 ./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/ui/MainScreen.kt
+    98 ./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/ui/OfflineArea.kt
+   328 ./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/ui/Terrain3DView.kt
+    41 ./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/ui/Theme.kt
+    46 ./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/ui/map/CameraStart.kt
+   599 ./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt
+    47 ./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/ui/map/MapLayers.kt
+   299 ./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/learn/FindLearner.kt
+   141 ./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/prospect/Prospects.kt
+    71 ./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/research/KeyVault.kt
+    66 ./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/research/OnDeviceRationale.kt
+   342 ./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/research/RadiusScan.kt
+   246 ./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/terrain3d/TerrainGlRenderer.kt
+    83 ./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/terrain3d/TerrainShaders.kt
+   428 ./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/ui/MainScreen.kt
+    98 ./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/ui/OfflineArea.kt
+   328 ./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/ui/Terrain3DView.kt
+    41 ./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/ui/Theme.kt
+    46 ./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/ui/map/CameraStart.kt
+   638 ./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt
+    47 ./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/ui/map/MapLayers.kt
+   299 ./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/learn/FindLearner.kt
+   141 ./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/prospect/Prospects.kt
+    71 ./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/research/KeyVault.kt
+    66 ./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/research/OnDeviceRationale.kt
+   342 ./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/research/RadiusScan.kt
+   246 ./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/terrain3d/TerrainGlRenderer.kt
+    83 ./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/terrain3d/TerrainShaders.kt
+   428 ./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/ui/MainScreen.kt
+    98 ./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/ui/OfflineArea.kt
+   328 ./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/ui/Terrain3DView.kt
+    41 ./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/ui/Theme.kt
+    46 ./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/ui/map/CameraStart.kt
+   599 ./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt
+    47 ./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/ui/map/MapLayers.kt
+   299 ./app/src/main/java/com/ginsengo/steward/learn/FindLearner.kt
+   141 ./app/src/main/java/com/ginsengo/steward/prospect/Prospects.kt
+    71 ./app/src/main/java/com/ginsengo/steward/research/KeyVault.kt
+    66 ./app/src/main/java/com/ginsengo/steward/research/OnDeviceRationale.kt
+   342 ./app/src/main/java/com/ginsengo/steward/research/RadiusScan.kt
+   246 ./app/src/main/java/com/ginsengo/steward/terrain3d/TerrainGlRenderer.kt
+    83 ./app/src/main/java/com/ginsengo/steward/terrain3d/TerrainShaders.kt
+   476 ./app/src/main/java/com/ginsengo/steward/ui/MainScreen.kt
+    98 ./app/src/main/java/com/ginsengo/steward/ui/OfflineArea.kt
+   567 ./app/src/main/java/com/ginsengo/steward/ui/Terrain3DView.kt
+    41 ./app/src/main/java/com/ginsengo/steward/ui/Theme.kt
+    46 ./app/src/main/java/com/ginsengo/steward/ui/map/CameraStart.kt
+   694 ./app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt
+    49 ./app/src/main/java/com/ginsengo/steward/ui/map/MapLayers.kt
+ 11763 total
+
+$ grep -ril terrarium --include=*.kt .
+./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/terrain/DemTileStore.kt
+./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt
+./.claude/worktrees/agent-a2cf97878f7071824/app/src/test/java/com/ginsengo/steward/terrain/RealTerrainTest.kt
+./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/terrain/DemTileStore.kt
+./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt
+./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/test/java/com/ginsengo/steward/terrain/RealTerrainTest.kt
+./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/terrain/DemTileStore.kt
+./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt
+./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/test/java/com/ginsengo/steward/terrain/RealTerrainTest.kt
+./app/src/main/java/com/ginsengo/steward/terrain/DemTileStore.kt
+./app/src/main/java/com/ginsengo/steward/ui/map/FieldMap.kt
+./app/src/test/java/com/ginsengo/steward/terrain/RealTerrainTest.kt
+
+$ ls -la terrain3d
+./.claude/worktrees/agent-a2cf97878f7071824/app/build/intermediates/java_res/debug/processDebugJavaRes/out/com/ginsengo/steward/terrain3d:
+total 8
+drwxr-xr-x  2 root root 4096 Oct  1 01:41 .
+drwxr-xr-x 17 root root 4096 Oct  1 01:41 ..
+
+./.claude/worktrees/agent-a2cf97878f7071824/app/build/intermediates/java_res/debugUnitTest/processDebugUnitTestJavaRes/out/com/ginsengo/steward/terrain3d:
+total 8
+drwxr-xr-x  2 root root 4096 Oct  1 01:41 .
+drwxr-xr-x 14 root root 4096 Oct  1 01:41 ..
+
+./.claude/worktrees/agent-a2cf97878f7071824/app/build/tmp/kotlin-classes/debug/com/ginsengo/steward/terrain3d:
+total 156
+drwxr-xr-x  2 root root  4096 Oct  1 01:44 .
+drwxr-xr-x 17 root root  4096 Oct  1 01:44 ..
+-rw-r--r--  1 root root  4111 Oct  1 01:44 AlignmentCheck$Result.class
+-rw-r--r--  1 root root  4490 Oct  1 01:44 AlignmentCheck.class
+-rw-r--r--  1 root root  1815 Oct  1 01:44 MapCamera$Companion.class
+-rw-r--r--  1 root root  7277 Oct  1 01:44 MapCamera.class
+-rw-r--r--  1 root root  3231 Oct  1 01:44 MapCameraKt.class
+-rw-r--r--  1 root root  4528 Oct  1 01:44 MeshCoverage$Region.class
+-rw-r--r--  1 root root  3647 Oct  1 01:44 MeshCoverage.class
+-rw-r--r--  1 root root  6519 Oct  1 01:44 Terrain3D$Scene.class
+-rw-r--r--  1 root root  8240 Oct  1 01:44 Terrain3D.class
+-rw-r--r--  1 root root  1000 Oct  1 01:44 TerrainGlRenderer$Companion.class
+-rw-r--r--  1 root root  3341 Oct  1 01:44 TerrainGlRenderer$Frame.class
+-rw-r--r--  1 root root  1433 Oct  1 01:44 TerrainGlRenderer$Texture.class
+-rw-r--r--  1 root root 15408 Oct  1 01:44 TerrainGlRenderer.class
+-rw-r--r--  1 root root  3013 Oct  1 01:44 TerrainMesh$Mesh.class
+-rw-r--r--  1 root root 13737 Oct  1 01:44 TerrainMesh.class
+-rw-r--r--  1 root root  3353 Oct  1 01:44 TerrainShaders.class
+-rw-r--r--  1 root root  2887 Oct  1 01:44 TerrainTextures$Ground.class
+-rw-r--r--  1 root root  2000 Oct  1 01:44 TerrainTextures$Mode.class
+-rw-r--r--  1 root root  1331 Oct  1 01:44 TerrainTextures$WaterStyle.class
+-rw-r--r--  1 root root   873 Oct  1 01:44 TerrainTextures$WhenMappings.class
+-rw-r--r--  1 root root 15491 Oct  1 01:44 TerrainTextures.class
+
+./.claude/worktrees/agent-a2cf97878f7071824/app/build/tmp/kotlin-classes/debugUnitTest/com/ginsengo/steward/terrain3d:
+total 108
+drwxr-xr-x  2 root root  4096 Oct  1 01:41 .
+drwxr-xr-x 14 root root  4096 Oct  1 01:41 ..
+-rw-r--r--  1 root root  5424 Oct  1 01:41 AlignmentCheckTest.class
+-rw-r--r--  1 root root  2594 Oct  1 01:41 GroundedCameraTest.class
+-rw-r--r--  1 root root 13588 Oct  1 01:41 MapCameraTest.class
+-rw-r--r--  1 root root 14204 Oct  1 01:41 MeshBuildBudgetTest.class
+-rw-r--r--  1 root root  6900 Oct  1 01:41 MeshCoverageTest.class
+-rw-r--r--  1 root root 10904 Oct  1 01:41 ShaderSourceTest.class
+-rw-r--r--  1 root root 15120 Oct  1 01:41 Terrain3DTest.class
+-rw-r--r--  1 root root 16841 Oct  1 01:41 TerrainMeshTest.class
+
+./.claude/worktrees/agent-a2cf97878f7071824/app/src/main/java/com/ginsengo/steward/terrain3d:
+total 80
+drwxr-xr-x  2 root root  4096 Oct  1 01:35 .
+drwxr-xr-x 17 root root  4096 Oct  1 01:35 ..
+-rw-r--r--  1 root root  3712 Oct  1 01:35 AlignmentCheck.kt
+-rw-r--r--  1 root root 11834 Oct  1 01:35 MapCamera.kt
+-rw-r--r--  1 root root  5277 Oct  1 01:35 MeshCoverage.kt
+-rw-r--r--  1 root root  5545 Oct  1 01:35 Terrain3D.kt
+-rw-r--r--  1 root root 10648 Oct  1 01:35 TerrainGlRenderer.kt
+-rw-r--r--  1 root root 11184 Oct  1 01:35 TerrainMesh.kt
+-rw-r--r--  1 root root  3162 Oct  1 01:35 TerrainShaders.kt
+-rw-r--r--  1 root root 11934 Oct  1 01:35 TerrainTextures.kt
+
+./.claude/worktrees/agent-a2cf97878f7071824/app/src/test/java/com/ginsengo/steward/terrain3d:
+total 68
+drwxr-xr-x  2 root root  4096 Oct  1 01:35 .
+drwxr-xr-x 14 root root  4096 Oct  1 01:35 ..
+-rw-r--r--  1 root root 16982 Oct  1 01:35 MapCameraTest.kt
+-rw-r--r--  1 root root  5238 Oct  1 01:35 MeshBuildBudgetTest.kt
+-rw-r--r--  1 root root  7069 Oct  1 01:35 MeshCoverageTest.kt
+-rw-r--r--  1 root root  4088 Oct  1 01:35 ShaderSourceTest.kt
+-rw-r--r--  1 root root  6669 Oct  1 01:35 Terrain3DTest.kt
+-rw-r--r--  1 root root 10321 Oct  1 01:35 TerrainMeshTest.kt
+
+./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/build/intermediates/java_res/debug/processDebugJavaRes/out/com/ginsengo/steward/terrain3d:
+total 8
+drwxr-xr-x  2 root root 4096 Oct  1 01:44 .
+drwxr-xr-x 17 root root 4096 Oct  1 01:44 ..
+
+./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/build/intermediates/java_res/debugUnitTest/processDebugUnitTestJavaRes/out/com/ginsengo/steward/terrain3d:
+total 8
+drwxr-xr-x  2 root root 4096 Oct  1 01:44 .
+drwxr-xr-x 14 root root 4096 Oct  1 01:44 ..
+
+./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/build/tmp/kotlin-classes/debug/com/ginsengo/steward/terrain3d:
+total 172
+drwxr-xr-x  2 root root  4096 Oct  1 01:48 .
+drwxr-xr-x 17 root root  4096 Oct  1 01:44 ..
+-rw-r--r--  1 root root  4111 Oct  1 01:44 AlignmentCheck$Result.class
+-rw-r--r--  1 root root  4490 Oct  1 01:44 AlignmentCheck.class
+-rw-r--r--  1 root root  5430 Oct  1 01:48 CameraMath.class
+-rw-r--r--  1 root root  1815 Oct  1 01:44 MapCamera$Companion.class
+-rw-r--r--  1 root root  8547 Oct  1 01:44 MapCamera.class
+-rw-r--r--  1 root root  3231 Oct  1 01:44 MapCameraKt.class
+-rw-r--r--  1 root root  4528 Oct  1 01:44 MeshCoverage$Region.class
+-rw-r--r--  1 root root  3647 Oct  1 01:44 MeshCoverage.class
+-rw-r--r--  1 root root  6519 Oct  1 01:44 Terrain3D$Scene.class
+-rw-r--r--  1 root root  8240 Oct  1 01:44 Terrain3D.class
+-rw-r--r--  1 root root  1000 Oct  1 01:44 TerrainGlRenderer$Companion.class
+-rw-r--r--  1 root root  3341 Oct  1 01:44 TerrainGlRenderer$Frame.class
+-rw-r--r--  1 root root  1433 Oct  1 01:44 TerrainGlRenderer$Texture.class
+-rw-r--r--  1 root root 15408 Oct  1 01:44 TerrainGlRenderer.class
+-rw-r--r--  1 root root  3013 Oct  1 01:44 TerrainMesh$Mesh.class
+-rw-r--r--  1 root root 13737 Oct  1 01:44 TerrainMesh.class
+-rw-r--r--  1 root root  3353 Oct  1 01:44 TerrainShaders.class
+-rw-r--r--  1 root root  2887 Oct  1 01:44 TerrainTextures$Ground.class
+-rw-r--r--  1 root root  2000 Oct  1 01:44 TerrainTextures$Mode.class
+-rw-r--r--  1 root root  1331 Oct  1 01:44 TerrainTextures$WaterStyle.class
+-rw-r--r--  1 root root   873 Oct  1 01:44 TerrainTextures$WhenMappings.class
+-rw-r--r--  1 root root 15491 Oct  1 01:44 TerrainTextures.class
+-rw-r--r--  1 root root  3565 Oct  1 01:48 ViewCamera.class
+
+./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/build/tmp/kotlin-classes/debugUnitTest/com/ginsengo/steward/terrain3d:
+total 136
+drwxr-xr-x  2 root root  4096 Oct  1 01:45 .
+drwxr-xr-x 14 root root  4096 Oct  1 01:44 ..
+-rw-r--r--  1 root root  5424 Oct  1 01:44 AlignmentCheckTest.class
+-rw-r--r--  1 root root  1009 Oct  1 01:45 CameraMathTest$Companion.class
+-rw-r--r--  1 root root 21358 Oct  1 01:45 CameraMathTest.class
+-rw-r--r--  1 root root  2594 Oct  1 01:44 GroundedCameraTest.class
+-rw-r--r--  1 root root 13588 Oct  1 01:44 MapCameraTest.class
+-rw-r--r--  1 root root 14204 Oct  1 01:44 MeshBuildBudgetTest.class
+-rw-r--r--  1 root root  6900 Oct  1 01:44 MeshCoverageTest.class
+-rw-r--r--  1 root root 10904 Oct  1 01:44 ShaderSourceTest.class
+-rw-r--r--  1 root root 15120 Oct  1 01:44 Terrain3DTest.class
+-rw-r--r--  1 root root 16841 Oct  1 01:44 TerrainMeshTest.class
+
+./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/main/java/com/ginsengo/steward/terrain3d:
+total 92
+drwxr-xr-x  2 root root  4096 Oct  1 01:46 .
+drwxr-xr-x 17 root root  4096 Oct  1 01:35 ..
+-rw-r--r--  1 root root  3712 Oct  1 01:35 AlignmentCheck.kt
+-rw-r--r--  1 root root  4423 Oct  1 01:46 CameraMath.kt
+-rw-r--r--  1 root root 14195 Oct  1 01:44 MapCamera.kt
+-rw-r--r--  1 root root  5277 Oct  1 01:35 MeshCoverage.kt
+-rw-r--r--  1 root root  5545 Oct  1 01:35 Terrain3D.kt
+-rw-r--r--  1 root root 10648 Oct  1 01:35 TerrainGlRenderer.kt
+-rw-r--r--  1 root root 11184 Oct  1 01:35 TerrainMesh.kt
+-rw-r--r--  1 root root  3162 Oct  1 01:35 TerrainShaders.kt
+-rw-r--r--  1 root root 11934 Oct  1 01:35 TerrainTextures.kt
+
+./.claude/worktrees/agent-a8cc6ff9dee8c996c/app/src/test/java/com/ginsengo/steward/terrain3d:
+total 84
+drwxr-xr-x  2 root root  4096 Oct  1 01:45 .
+drwxr-xr-x 14 root root  4096 Oct  1 01:35 ..
+-rw-r--r--  1 root root 14525 Oct  1 01:45 CameraMathTest.kt
+-rw-r--r--  1 root root 16982 Oct  1 01:35 MapCameraTest.kt
+-rw-r--r--  1 root root  5238 Oct  1 01:35 MeshBuildBudgetTest.kt
+-rw-r--r--  1 root root  7069 Oct  1 01:35 MeshCoverageTest.kt
+-rw-r--r--  1 root root  4088 Oct  1 01:35 ShaderSourceTest.kt
+-rw-r--r--  1 root root  6669 Oct  1 01:35 Terrain3DTest.kt
+-rw-r--r--  1 root root 10321 Oct  1 01:35 TerrainMeshTest.kt
+
+./.claude/worktrees/agent-ac1da119fd6ded68f/app/build/intermediates/java_res/debug/processDebugJavaRes/out/com/ginsengo/steward/terrain3d:
+total 8
+drwxr-xr-x  2 root root 4096 Oct  1 01:40 .
+drwxr-xr-x 17 root root 4096 Oct  1 01:40 ..
+
+./.claude/worktrees/agent-ac1da119fd6ded68f/app/build/intermediates/java_res/debugUnitTest/processDebugUnitTestJavaRes/out/com/ginsengo/steward/terrain3d:
+total 8
+drwxr-xr-x  2 root root 4096 Oct  1 01:41 .
+drwxr-xr-x 14 root root 4096 Oct  1 01:41 ..
+
+./.claude/worktrees/agent-ac1da119fd6ded68f/app/build/tmp/kotlin-classes/debug/com/ginsengo/steward/terrain3d:
+total 164
+drwxr-xr-x  2 root root  4096 Oct  1 01:48 .
+drwxr-xr-x 17 root root  4096 Oct  1 01:48 ..
+-rw-r--r--  1 root root  4111 Oct  1 01:48 AlignmentCheck$Result.class
+-rw-r--r--  1 root root  4490 Oct  1 01:48 AlignmentCheck.class
+-rw-r--r--  1 root root  1815 Oct  1 01:48 MapCamera$Companion.class
+-rw-r--r--  1 root root  7277 Oct  1 01:48 MapCamera.class
+-rw-r--r--  1 root root  3231 Oct  1 01:48 MapCameraKt.class
+-rw-r--r--  1 root root  4528 Oct  1 01:48 MeshCoverage$Region.class
+-rw-r--r--  1 root root  3647 Oct  1 01:48 MeshCoverage.class
+-rw-r--r--  1 root root  6729 Oct  1 01:48 Terrain3D$Scene.class
+-rw-r--r--  1 root root  8293 Oct  1 01:48 Terrain3D.class
+-rw-r--r--  1 root root  1000 Oct  1 01:48 TerrainGlRenderer$Companion.class
+-rw-r--r--  1 root root  3341 Oct  1 01:48 TerrainGlRenderer$Frame.class
+-rw-r--r--  1 root root  1433 Oct  1 01:48 TerrainGlRenderer$Texture.class
+-rw-r--r--  1 root root 15408 Oct  1 01:48 TerrainGlRenderer.class
+-rw-r--r--  1 root root  3013 Oct  1 01:48 TerrainMesh$Mesh.class
+-rw-r--r--  1 root root 13737 Oct  1 01:48 TerrainMesh.class
+-rw-r--r--  1 root root  3353 Oct  1 01:48 TerrainShaders.class
+-rw-r--r--  1 root root  3344 Oct  1 01:48 TerrainTextures$Ground.class
+-rw-r--r--  1 root root  3254 Oct  1 01:48 TerrainTextures$Layers.class
+-rw-r--r--  1 root root  2053 Oct  1 01:48 TerrainTextures$Mode.class
+-rw-r--r--  1 root root  1331 Oct  1 01:48 TerrainTextures$WaterStyle.class
+-rw-r--r--  1 root root   916 Oct  1 01:48 TerrainTextures$WhenMappings.class
+-rw-r--r--  1 root root 16430 Oct  1 01:48 TerrainTextures.class
+
+./.claude/worktrees/agent-ac1da119fd6ded68f/app/build/tmp/kotlin-classes/debugUnitTest/com/ginsengo/steward/terrain3d:
+total 140
+drwxr-xr-x  2 root root  4096 Oct  1 01:49 .
+drwxr-xr-x 14 root root  4096 Oct  1 01:41 ..
+-rw-r--r--  1 root root  5424 Oct  1 01:41 AlignmentCheckTest.class
+-rw-r--r--  1 root root  2594 Oct  1 01:41 GroundedCameraTest.class
+-rw-r--r--  1 root root 13588 Oct  1 01:41 MapCameraTest.class
+-rw-r--r--  1 root root 31758 Oct  1 01:49 MapDrapeCompositeTest.class
+-rw-r--r--  1 root root 14204 Oct  1 01:46 MeshBuildBudgetTest.class
+-rw-r--r--  1 root root  6900 Oct  1 01:41 MeshCoverageTest.class
+-rw-r--r--  1 root root 10904 Oct  1 01:41 ShaderSourceTest.class
+-rw-r--r--  1 root root 15407 Oct  1 01:46 Terrain3DTest.class
+-rw-r--r--  1 root root 16841 Oct  1 01:41 TerrainMeshTest.class
+
+./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/main/java/com/ginsengo/steward/terrain3d:
+total 84
+drwxr-xr-x  2 root root  4096 Oct  1 01:46 .
+drwxr-xr-x 17 root root  4096 Oct  1 01:35 ..
+-rw-r--r--  1 root root  3712 Oct  1 01:34 AlignmentCheck.kt
+-rw-r--r--  1 root root 11834 Oct  1 01:35 MapCamera.kt
+-rw-r--r--  1 root root  5277 Oct  1 01:34 MeshCoverage.kt
+-rw-r--r--  1 root root  5545 Oct  1 01:35 Terrain3D.kt
+-rw-r--r--  1 root root 10648 Oct  1 01:35 TerrainGlRenderer.kt
+-rw-r--r--  1 root root 11184 Oct  1 01:35 TerrainMesh.kt
+-rw-r--r--  1 root root  3162 Oct  1 01:35 TerrainShaders.kt
+-rw-r--r--  1 root root 14101 Oct  1 01:47 TerrainTextures.kt
+
+./.claude/worktrees/agent-ac1da119fd6ded68f/app/src/test/java/com/ginsengo/steward/terrain3d:
+total 84
+drwxr-xr-x  2 root root  4096 Oct  1 01:49 .
+drwxr-xr-x 14 root root  4096 Oct  1 01:35 ..
+-rw-r--r--  1 root root 16982 Oct  1 01:35 MapCameraTest.kt
+-rw-r--r--  1 root root 16108 Oct  1 01:49 MapDrapeCompositeTest.kt
+-rw-r--r--  1 root root  5238 Oct  1 01:35 MeshBuildBudgetTest.kt
+-rw-r--r--  1 root root  7069 Oct  1 01:34 MeshCoverageTest.kt
+-rw-r--r--  1 root root  4088 Oct  1 01:35 ShaderSourceTest.kt
+-rw-r--r--  1 root root  6669 Oct  1 01:35 Terrain3DTest.kt
+-rw-r--r--  1 root root 10321 Oct  1 01:35 TerrainMeshTest.kt
+
+./app/src/main/java/com/ginsengo/steward/terrain3d:
+total 104
+drwxr-xr-x  2 root root  4096 Oct  1 02:20 .
+drwxr-xr-x 17 root root  4096 Sep 29 02:05 ..
+-rw-r--r--  1 root root  3712 Sep 28 22:25 AlignmentCheck.kt
+-rw-r--r--  1 root root  9469 Oct  1 02:11 CameraMath.kt
+-rw-r--r--  1 root root 14645 Oct  1 01:58 MapCamera.kt
+-rw-r--r--  1 root root  5277 Sep 28 22:25 MeshCoverage.kt
+-rw-r--r--  1 root root 10243 Oct  1 02:23 Terrain3D.kt
+-rw-r--r--  1 root root 10648 Sep 30 18:23 TerrainGlRenderer.kt
+-rw-r--r--  1 root root 11184 Sep 30 18:23 TerrainMesh.kt
+-rw-r--r--  1 root root  3162 Sep 30 18:23 TerrainShaders.kt
+-rw-r--r--  1 root root 14101 Oct  1 02:07 TerrainTextures.kt
+
+./app/src/test/java/com/ginsengo/steward/terrain3d:
+total 112
+drwxr-xr-x  2 root root  4096 Oct  1 02:05 .
+drwxr-xr-x 14 root root  4096 Sep 28 23:04 ..
+-rw-r--r--  1 root root 15811 Oct  1 01:50 CameraMathTest.kt
+-rw-r--r--  1 root root 16982 Sep 30 18:23 MapCameraTest.kt
+-rw-r--r--  1 root root 16108 Oct  1 01:51 MapDrapeCompositeTest.kt
+-rw-r--r--  1 root root  5238 Sep 30 17:38 MeshBuildBudgetTest.kt
+-rw-r--r--  1 root root  7069 Sep 28 22:25 MeshCoverageTest.kt
+-rw-r--r--  1 root root  3736 Oct  1 02:21 ReanchorTest.kt
+-rw-r--r--  1 root root  4457 Oct  1 02:21 SceneGeometryTest.kt
+-rw-r--r--  1 root root  4088 Sep 30 18:23 ShaderSourceTest.kt
+-rw-r--r--  1 root root  6669 Sep 30 17:40 Terrain3DTest.kt
+-rw-r--r--  1 root root 10321 Sep 30 18:23 TerrainMeshTest.kt
+
+$ wc -l terrain3d/*.kt
+   89 app/src/main/java/com/ginsengo/steward/terrain3d/AlignmentCheck.kt
+  194 app/src/main/java/com/ginsengo/steward/terrain3d/CameraMath.kt
+  331 app/src/main/java/com/ginsengo/steward/terrain3d/MapCamera.kt
+  122 app/src/main/java/com/ginsengo/steward/terrain3d/MeshCoverage.kt
+  203 app/src/main/java/com/ginsengo/steward/terrain3d/Terrain3D.kt
+  246 app/src/main/java/com/ginsengo/steward/terrain3d/TerrainGlRenderer.kt
+  246 app/src/main/java/com/ginsengo/steward/terrain3d/TerrainMesh.kt
+   83 app/src/main/java/com/ginsengo/steward/terrain3d/TerrainShaders.kt
+  288 app/src/main/java/com/ginsengo/steward/terrain3d/TerrainTextures.kt
+ 1802 total
+
+$ find . -name "*.kt" | wc -l  (excluding build/)
+428
+main:
+70
+test:
+42
+androidTest:
+1
+main LOC:
+12120
+test LOC:
+7278
+
+$ other §4 names
+app/src/main/java/com/ginsengo/steward/field/FixAverager.kt
+app/src/main/java/com/ginsengo/steward/research/GeminiResearchClient.kt
+app/src/main/java/com/ginsengo/steward/research/ResearchRepository.kt
+app/src/main/java/com/ginsengo/steward/research/ClaudeResearchClient.kt
+AstroEphemerisEngine.kt ContourLines.kt DemTileStore.kt EsiMatrixModel.kt GinsengSuitability.kt Hydrology.kt Isolines.kt SuitabilityRasterizer.kt TerrainAnalysis.kt TerrainMath.kt WaterLines.kt 
+9
+app/src/main/java/com/ginsengo/steward/ui/FieldViewModel.kt:80:    private val _view3d = MutableStateFlow(false)
+app/src/main/java/com/ginsengo/steward/ui/FieldViewModel.kt:81:    val view3d: StateFlow<Boolean> = _view3d.asStateFlow()
+app/src/main/java/com/ginsengo/steward/ui/FieldViewModel.kt:82:    fun setView3d(on: Boolean) { _view3d.value = on }
+app/src/main/java/com/ginsengo/steward/ui/MainScreen.kt:96:    val view3d by vm.view3d.collectAsState()
+app/src/main/java/com/ginsengo/steward/ui/MainScreen.kt:118:        if (view3d) {
+app/src/main/java/com/ginsengo/steward/ui/MainScreen.kt:168:                    if (view3d) {
+app/src/main/java/com/ginsengo/steward/ui/MainScreen.kt:174:                modifier = Modifier.semantics { contentDescription = if (view3d) "Show flat map" else "Show in 3D" },
+app/src/main/java/com/ginsengo/steward/ui/MainScreen.kt:175:            ) { Icon(if (view3d) Icons.Filled.Map else Icons.Filled.Terrain, null) }
+
+$ adb devices -l
+* daemon not running; starting now at tcp:5037
+* daemon started successfully
+List of devices attached
+

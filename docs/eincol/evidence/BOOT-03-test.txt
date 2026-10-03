@@ -1,0 +1,145 @@
+Picked up JAVA_TOOL_OPTIONS: -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Djavax.net.ssl.trustStoreType=JKS -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=36029 -Dhttp.nonProxyHosts=localhost|127.0.0.1|::1|127.*|0.*|::|169.254.*|api.anthropic.com|api-staging.anthropic.com|api-pr-preview.anthropic.com|mcp-proxy.anthropic.com|mcp-proxy-staging.anthropic.com|registry.npmjs.org|jsr.io|npm.jsr.io|pypi.org|files.pythonhosted.org|index.crates.io|proxy.golang.org|host.docker.internal|10.*|172.16.*|172.17.*|172.18.*|172.19.*|172.20.*|172.21.*|172.22.*|172.23.*|172.24.*|172.25.*|172.26.*|172.27.*|172.28.*|172.29.*|172.30.*|172.31.*|192.168.*|100.64.0.0/10|*.svc.cluster.local|*.svc.cluster.local -Djdk.http.auth.tunneling.disabledSchemes= -Djdk.http.auth.proxying.disabledSchemes=
+Starting a Gradle Daemon, 1 incompatible and 1 stopped Daemons could not be reused, use --status for details
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:copyThirdPartyNotices UP-TO-DATE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:packageDebugUnitTestForUnitTest UP-TO-DATE
+> Task :app:generateDebugUnitTestConfig UP-TO-DATE
+> Task :app:buildKotlinToolingMetadata UP-TO-DATE
+> Task :app:preFieldBuild UP-TO-DATE
+> Task :app:generateFieldBuildConfig UP-TO-DATE
+> Task :app:checkFieldAarMetadata UP-TO-DATE
+> Task :app:generateFieldResValues UP-TO-DATE
+> Task :app:mapFieldSourceSetPaths UP-TO-DATE
+> Task :app:generateFieldResources UP-TO-DATE
+> Task :app:mergeFieldResources UP-TO-DATE
+> Task :app:packageFieldResources UP-TO-DATE
+> Task :app:parseFieldLocalResources UP-TO-DATE
+> Task :app:createFieldCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksField UP-TO-DATE
+> Task :app:processFieldMainManifest UP-TO-DATE
+> Task :app:processFieldManifest UP-TO-DATE
+> Task :app:processFieldManifestForPackage UP-TO-DATE
+> Task :app:processFieldResources UP-TO-DATE
+> Task :app:javaPreCompileField UP-TO-DATE
+> Task :app:preFieldUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileFieldUnitTest FROM-CACHE
+> Task :app:mergeFieldShaders UP-TO-DATE
+> Task :app:compileFieldShaders NO-SOURCE
+> Task :app:generateFieldAssets UP-TO-DATE
+> Task :app:mergeFieldAssets UP-TO-DATE
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :app:generateReleaseBuildConfig
+> Task :app:checkReleaseAarMetadata
+> Task :app:generateReleaseResValues FROM-CACHE
+> Task :app:mapReleaseSourceSetPaths
+> Task :app:generateReleaseResources
+> Task :app:convertLinkedResourcesToBinaryField
+> Task :app:packageFieldUnitTestForUnitTest
+> Task :app:generateFieldUnitTestConfig
+> Task :app:packageReleaseResources
+> Task :app:parseReleaseLocalResources FROM-CACHE
+> Task :app:createReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksRelease FROM-CACHE
+> Task :app:mergeReleaseResources
+> Task :app:processReleaseMainManifest
+> Task :app:processReleaseManifest
+> Task :app:javaPreCompileRelease FROM-CACHE
+> Task :app:preReleaseUnitTestBuild UP-TO-DATE
+> Task :app:processReleaseManifestForPackage
+> Task :app:javaPreCompileReleaseUnitTest FROM-CACHE
+> Task :app:mergeReleaseShaders
+> Task :app:compileReleaseShaders NO-SOURCE
+> Task :app:generateReleaseAssets UP-TO-DATE
+> Task :app:mergeReleaseAssets
+> Task :app:processReleaseResources
+> Task :app:packageReleaseUnitTestForUnitTest
+> Task :app:generateReleaseUnitTestConfig
+> Task :app:kspDebugKotlin
+> Task :app:kspReleaseKotlin
+> Task :app:kspFieldKotlin
+> Task :app:compileDebugKotlin FROM-CACHE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:bundleDebugClassesToCompileJar
+> Task :app:bundleDebugClassesToRuntimeJar
+> Task :app:compileFieldKotlin UP-TO-DATE
+> Task :app:compileFieldJavaWithJavac UP-TO-DATE
+> Task :app:bundleFieldClassesToRuntimeJar
+> Task :app:bundleFieldClassesToCompileJar
+> Task :app:processFieldJavaRes UP-TO-DATE
+> Task :app:kspDebugUnitTestKotlin
+> Task :app:compileDebugUnitTestKotlin UP-TO-DATE
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+> Task :app:kspFieldUnitTestKotlin
+> Task :app:testDebugUnitTest FROM-CACHE
+> Task :app:compileReleaseKotlin
+
+> Task :app:compileFieldUnitTestKotlin
+w: file://app/src/test/java/com/ginsengo/steward/prospect/ProspectsTest.kt:20:16 Redundant creation of Json format. Creating instances for each usage can be slow.
+
+> Task :app:compileFieldUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processFieldUnitTestJavaRes
+
+> Task :app:testFieldUnitTest
+Picked up JAVA_TOOL_OPTIONS: -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Djavax.net.ssl.trustStoreType=JKS -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=36029 -Dhttp.nonProxyHosts=localhost|127.0.0.1|::1|127.*|0.*|::|169.254.*|api.anthropic.com|api-staging.anthropic.com|api-pr-preview.anthropic.com|mcp-proxy.anthropic.com|mcp-proxy-staging.anthropic.com|registry.npmjs.org|jsr.io|npm.jsr.io|pypi.org|files.pythonhosted.org|index.crates.io|proxy.golang.org|host.docker.internal|10.*|172.16.*|172.17.*|172.18.*|172.19.*|172.20.*|172.21.*|172.22.*|172.23.*|172.24.*|172.25.*|172.26.*|172.27.*|172.28.*|172.29.*|172.30.*|172.31.*|192.168.*|100.64.0.0/10|*.svc.cluster.local|*.svc.cluster.local -Djdk.http.auth.tunneling.disabledSchemes= -Djdk.http.auth.proxying.disabledSchemes=
+
+> Task :app:compileReleaseKotlin
+w: file://app/src/main/java/com/ginsengo/steward/ui/Terrain3DView.kt:156:21 'val LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file://app/src/main/java/com/ginsengo/steward/ui/map/MapDrape.kt:142:22 'fun withStyle(uri: String?): MapSnapshotter.Options' is deprecated. use {@link  #withStyleBuilder(Style.Builder)} instead.
+
+> Task :app:compileReleaseJavaWithJavac
+> Task :app:bundleReleaseClassesToCompileJar
+> Task :app:processReleaseJavaRes
+> Task :app:bundleReleaseClassesToRuntimeJar
+> Task :app:kspReleaseUnitTestKotlin
+
+> Task :app:compileReleaseUnitTestKotlin
+w: file://app/src/test/java/com/ginsengo/steward/prospect/ProspectsTest.kt:20:16 Redundant creation of Json format. Creating instances for each usage can be slow.
+
+> Task :app:compileReleaseUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processReleaseUnitTestJavaRes
+
+> Task :app:testReleaseUnitTest
+Picked up JAVA_TOOL_OPTIONS: -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Djavax.net.ssl.trustStoreType=JKS -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=36029 -Dhttp.nonProxyHosts=localhost|127.0.0.1|::1|127.*|0.*|::|169.254.*|api.anthropic.com|api-staging.anthropic.com|api-pr-preview.anthropic.com|mcp-proxy.anthropic.com|mcp-proxy-staging.anthropic.com|registry.npmjs.org|jsr.io|npm.jsr.io|pypi.org|files.pythonhosted.org|index.crates.io|proxy.golang.org|host.docker.internal|10.*|172.16.*|172.17.*|172.18.*|172.19.*|172.20.*|172.21.*|172.22.*|172.23.*|172.24.*|172.25.*|172.26.*|172.27.*|172.28.*|172.29.*|172.30.*|172.31.*|192.168.*|100.64.0.0/10|*.svc.cluster.local|*.svc.cluster.local -Djdk.http.auth.tunneling.disabledSchemes= -Djdk.http.auth.proxying.disabledSchemes=
+
+> Task :app:test
+
+[Incubating] Problems report is available at: file://build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 4m 22s
+93 actionable tasks: 39 executed, 8 from cache, 46 up-to-date
+
+real	4m23.095s
+user	0m2.453s
+sys	0m0.382s
+EXIT test=0

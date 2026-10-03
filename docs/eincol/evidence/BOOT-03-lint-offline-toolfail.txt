@@ -1,0 +1,127 @@
+Picked up JAVA_TOOL_OPTIONS: -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Djavax.net.ssl.trustStoreType=JKS -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=36029 -Dhttp.nonProxyHosts=localhost|127.0.0.1|::1|127.*|0.*|::|169.254.*|api.anthropic.com|api-staging.anthropic.com|api-pr-preview.anthropic.com|mcp-proxy.anthropic.com|mcp-proxy-staging.anthropic.com|registry.npmjs.org|jsr.io|npm.jsr.io|pypi.org|files.pythonhosted.org|index.crates.io|proxy.golang.org|host.docker.internal|10.*|172.16.*|172.17.*|172.18.*|172.19.*|172.20.*|172.21.*|172.22.*|172.23.*|172.24.*|172.25.*|172.26.*|172.27.*|172.28.*|172.29.*|172.30.*|172.31.*|192.168.*|100.64.0.0/10|*.svc.cluster.local|*.svc.cluster.local -Djdk.http.auth.tunneling.disabledSchemes= -Djdk.http.auth.proxying.disabledSchemes=
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:kspDebugKotlin UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :app:generateDebugAndroidTestResValues FROM-CACHE
+> Task :app:generateDebugAndroidTestLintModel FAILED
+> Task :app:extractProguardFiles UP-TO-DATE
+> Task :app:generateDebugLintReportModel
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:generateDebugUnitTestLintModel
+> Task :app:lintAnalyzeDebugAndroidTest FAILED
+> Task :app:lintAnalyzeDebug
+> Task :app:lintAnalyzeDebugUnitTest
+
+[Incubating] Problems report is available at: file://build/reports/problems/problems-report.html
+
+FAILURE: Build completed with 2 failures.
+
+1: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':app:generateDebugAndroidTestLintModel'.
+> Could not resolve all files for configuration ':app:debugAndroidTestCompileClasspath'.
+   > Could not resolve androidx.test.ext:junit:1.2.1.
+     Required by:
+         project :app
+      > No cached version of androidx.test.ext:junit:1.2.1 available for offline mode.
+      > No cached version of androidx.test.ext:junit:1.2.1 available for offline mode.
+      > No cached version of androidx.test.ext:junit:1.2.1 available for offline mode.
+   > Could not resolve androidx.test.espresso:espresso-core:3.6.1.
+     Required by:
+         project :app
+      > No cached version of androidx.test.espresso:espresso-core:3.6.1 available for offline mode.
+      > No cached version of androidx.test.espresso:espresso-core:3.6.1 available for offline mode.
+      > No cached version of androidx.test.espresso:espresso-core:3.6.1 available for offline mode.
+   > Could not resolve androidx.fragment:fragment:1.1.0.
+     Required by:
+         project :app > com.google.android.gms:play-services-location:21.3.0 > com.google.android.gms:play-services-base:18.5.0
+      > No cached version of androidx.fragment:fragment:1.1.0 available for offline mode.
+      > No cached version of androidx.fragment:fragment:1.1.0 available for offline mode.
+      > No cached version of androidx.fragment:fragment:1.1.0 available for offline mode.
+   > Could not resolve androidx.collection:collection-jvm:1.4.2.
+     Required by:
+         project :app > androidx.room:room-runtime:2.7.1 > androidx.room:room-runtime-android:2.7.1 > androidx.collection:collection:1.4.2
+      > No cached version of androidx.collection:collection-jvm:1.4.2 available for offline mode.
+      > No cached version of androidx.collection:collection-jvm:1.4.2 available for offline mode.
+      > No cached version of androidx.collection:collection-jvm:1.4.2 available for offline mode.
+> There are 3 more failures with identical causes.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+==============================================================================
+
+2: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':app:lintAnalyzeDebugAndroidTest'.
+> Could not resolve all files for configuration ':app:debugAndroidTestCompileClasspath'.
+   > Could not resolve androidx.test.ext:junit:1.2.1.
+     Required by:
+         project :app
+      > No cached version of androidx.test.ext:junit:1.2.1 available for offline mode.
+      > No cached version of androidx.test.ext:junit:1.2.1 available for offline mode.
+      > No cached version of androidx.test.ext:junit:1.2.1 available for offline mode.
+   > Could not resolve androidx.test.espresso:espresso-core:3.6.1.
+     Required by:
+         project :app
+      > No cached version of androidx.test.espresso:espresso-core:3.6.1 available for offline mode.
+      > No cached version of androidx.test.espresso:espresso-core:3.6.1 available for offline mode.
+      > No cached version of androidx.test.espresso:espresso-core:3.6.1 available for offline mode.
+   > Could not resolve androidx.fragment:fragment:1.1.0.
+     Required by:
+         project :app > com.google.android.gms:play-services-location:21.3.0 > com.google.android.gms:play-services-base:18.5.0
+      > No cached version of androidx.fragment:fragment:1.1.0 available for offline mode.
+      > No cached version of androidx.fragment:fragment:1.1.0 available for offline mode.
+      > No cached version of androidx.fragment:fragment:1.1.0 available for offline mode.
+   > Could not resolve androidx.collection:collection-jvm:1.4.2.
+     Required by:
+         project :app > androidx.room:room-runtime:2.7.1 > androidx.room:room-runtime-android:2.7.1 > androidx.collection:collection:1.4.2
+      > No cached version of androidx.collection:collection-jvm:1.4.2 available for offline mode.
+      > No cached version of androidx.collection:collection-jvm:1.4.2 available for offline mode.
+      > No cached version of androidx.collection:collection-jvm:1.4.2 available for offline mode.
+> There are 3 more failures with identical causes.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+==============================================================================
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 59s
+27 actionable tasks: 6 executed, 1 from cache, 20 up-to-date
+
+real	1m0.043s
+user	0m1.679s
+sys	0m0.148s
+EXIT lint=1

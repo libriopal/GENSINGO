@@ -1,0 +1,18 @@
+$ adb devices -l (before boot)
+(empty: no device attached)
+
+$ emulator -avd field -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -accel off -memory 3072 -cores 2 -no-snapshot
+sys.boot_completed=1; package/activity/window services found; Android 14; sdk_gphone64_x86_64; GLES 3.0 SwiftShader
+
+$ adb install -r gensingo-field-x86_64-p9.apk   (attempt 1)
+
+Performing Streamed Install
+cmd: Can't find service: activity
+shot 01_map2d
+
+[exited with code 0]
+
+$ adb install -r gensingo-field-x86_64-p9.apk   (attempt 2)
+adb: failed to install gensingo-field-x86_64-p9.apk: cmd: Failure calling service package: Broken pipe (32)
+$ adb shell pm list packages | grep -c com.ginsengo.steward.field
+0
