@@ -93,12 +93,25 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
     )
     private var cameraOnFix = false
 
-    /** One switch, one camera: the view changes, the place does not ([CameraMath.to3d]/[to2d]). */
+    /**
+     * One switch, one camera: the view changes, the place does not ([CameraMath.to3d]/[to2d]).
+     *
+     * Into 3D the camera glides to a 3D pitch on the map the user is still looking at, while the
+     * terrain is built under it (MainScreen's cross-fade). Back to the map the camera is NOT moved
+     * here: [landFlat] moves it when the fade reaches the hand-off, under a 3D view that still
+     * covers the map, so the jump into the map's range is never seen.
+     */
     fun setView3d(on: Boolean) {
         if (_view3d.value == on) return
-        camera.move(CameraMath.forView(camera.camera, on))
+        if (on) camera.move(CameraMath.forView(camera.camera, true), animate = true)
         _view3d.value = on
     }
+
+    /**
+     * Lands the camera within what the flat map draws, as an app move the map follows: it also
+     * brings the map, which ignored the 3D view's gestures under it, to where the user left the 3D.
+     */
+    fun landFlat() = camera.move(CameraMath.forView(camera.camera, false))
 
     /** "Centre on me", in whichever view is showing. */
     fun recenter() {

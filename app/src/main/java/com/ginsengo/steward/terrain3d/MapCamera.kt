@@ -157,7 +157,14 @@ class MapCamera(
      * pinch-zoom without rebuilding the mesh on every frame. [originX]/[originY] are in
      * BUILD-zoom world pixels, as [TerrainMesh.Mesh] stores them.
      */
-    fun mvpForMeshBuiltAt(buildZoom: Double, originX: Double, originY: Double, groundZ: Double = 0.0): FloatArray {
+    fun mvpForMeshBuiltAt(
+        buildZoom: Double, originX: Double, originY: Double, groundZ: Double = 0.0,
+        /**
+         * Heights above the target plane scaled by this, 0..1: at 0 the mesh lies flat on the
+         * plane the 2D map draws, which is where the cross-fade between them starts ([Handoff]).
+         */
+        relief: Double = 1.0,
+    ): FloatArray {
         val k = Math.pow(2.0, zoom - buildZoom)
         var m = perspective(FOV, viewportWidth.toDouble() / viewportHeight, nearZ, farZ)
         m = m * scale(1.0, -1.0, 1.0)
@@ -166,6 +173,7 @@ class MapCamera(
         m = m * rotateZ(angle)
         m = m * translate(originX * k - centerX, originY * k - centerY, 0.0)
         m = m * scale(k, k, k)
+        m = m * scale(1.0, 1.0, relief)
         // [groundZ] (build-zoom pixels) is lowered to the camera's target plane, so the camera
         // looks at the ground under the user rather than at sea level beneath it: with ~1 km
         // of exaggerated elevation in between, the model floated in the top half of the screen.

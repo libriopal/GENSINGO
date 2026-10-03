@@ -391,5 +391,32 @@ class GroundedCameraTest {
         val ry = (raw[1] * x + raw[5] * y + raw[9] * z + raw[13]) / (raw[3] * x + raw[7] * y + raw[11] * z + raw[15])
         org.junit.Assert.assertTrue("ungrounded ndc y $ry", ry > 0.2)
     }
+
+    /**
+     * The cross-fade's relief scale (Handoff): a vertex 400 m above the target plane is drawn
+     * where [MapCamera.project] draws it at relief x 400 m, and at relief 0 on the plane itself,
+     * where the 2D map draws the ground. Witness: [MapCamera.project], the alignment path.
+     */
+    @Test
+    fun reliefScalesHeightsAboveTheTargetPlane() {
+        val build = 14.0
+        val cam = MapCamera(35.56, -83.0, 14.6, 30.0, 55.0, 1080, 2400)
+        val b = MapCamera(35.56, -83.0, build, 0.0, 0.0, 1000, 1000)
+        val originX = b.worldX(-83.01); val originY = b.worldY(35.57)
+        val groundZ = 950.0 * b.pixelsPerMeter * 1.5
+        val lat = 35.565; val lng = -82.995
+        val x = b.worldX(lng) - originX; val y = b.worldY(lat) - originY
+        val aboveM = 400.0
+        val z = groundZ + aboveM * b.pixelsPerMeter
+        for (relief in listOf(0.0, 0.37, 1.0)) {
+            val m = cam.mvpForMeshBuiltAt(build, originX, originY, groundZ, relief)
+            val cw = m[3] * x + m[7] * y + m[11] * z + m[15]
+            val sx = ((m[0] * x + m[4] * y + m[8] * z + m[12]) / cw + 1) / 2 * 1080
+            val sy = (1 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / cw) / 2 * 2400
+            val want = cam.project(lat, lng, relief * aboveM)!!
+            org.junit.Assert.assertEquals("x at relief $relief", want[0].toDouble(), sx, 0.05)
+            org.junit.Assert.assertEquals("y at relief $relief", want[1].toDouble(), sy, 0.05)
+        }
+    }
 }
 

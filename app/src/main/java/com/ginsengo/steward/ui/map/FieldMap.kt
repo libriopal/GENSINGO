@@ -121,6 +121,14 @@ fun FieldMap(
      * fallback (false): the 3D view drapes the style only when it actually loaded here.
      */
     onBasemap: (Boolean) -> Unit = {},
+    /**
+     * False while the 3D view covers this map (MainScreen's cross-fade): the map then neither
+     * follows app moves nor recomputes its habitat raster under a picture no one sees. The moves
+     * it skips are spent, not saved: on the way back MainScreen lands the camera with a fresh
+     * move (FieldViewModel.landFlat), and replaying an older one would report a stale camera
+     * over the one the user left the 3D view at.
+     */
+    active: Boolean = true,
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
@@ -136,6 +144,7 @@ fun FieldMap(
     val curSuggestions = rememberUpdatedState(suggestions)
     val curCenter = rememberUpdatedState(radiusCenter)
     val curOnBasemap = rememberUpdatedState(onBasemap)
+    val curActive = rememberUpdatedState(active)
 
     val mapView = remember {
         MapView(context, MapLibreMapOptions.createFromAttributes(context).textureMode(true))
@@ -283,7 +292,7 @@ fun FieldMap(
         val style = st.style ?: return
         applyVisibility(style, curLayers.value)
         pushData(style, st, curMe.value, curTrack.value, curFinds.value, curSuggestions.value, curCenter.value)
-        refreshHabitat(map, force = false)
+        if (curActive.value) refreshHabitat(map, force = false)
     }
 
     /**
@@ -306,8 +315,14 @@ fun FieldMap(
     LaunchedEffect(camera) {
         camera.state.collect { s ->
             val map = st.map ?: return@collect
-            st.follower?.take(s)?.let { follow(map, it) }
+            // Taken either way (each epoch is spent once); followed only while the map shows.
+            st.follower?.take(s)?.let { if (curActive.value) follow(map, it) }
         }
+    }
+
+    // Back from under the 3D view: the raster may be due for the ground the 3D view moved to.
+    LaunchedEffect(active) {
+        if (active) st.map?.let { refreshHabitat(it, force = false) }
     }
 
     AndroidView(
@@ -339,7 +354,7 @@ fun FieldMap(
                     val p = map.cameraPosition
                     p.target?.let { t -> camera.report(CameraState(t.latitude, t.longitude, p.zoom, p.bearing, p.tilt)) }
                 }
-                map.addOnCameraIdleListener { refreshHabitat(map, force = false) }
+                map.addOnCameraIdleListener { if (curActive.value) refreshHabitat(map, force = false) }
                 // OFFLINE FALLBACK. Measured on the emulator with no network: the remote style
                 // failed to load and, because every layer is installed in the style callback,
                 // the map stayed a blank grey rectangle - no heatmaps, no track, no suggestions,
@@ -355,7 +370,7 @@ fun FieldMap(
                             st.style = style
                             st.basemap = curLayers.value.basemap
                             runCatching { install(style, null) }
-                                .onSuccess { Log.i(TAG, "fallback style: layers installed") }
+                                .onSuccess { Log.i(TAG, "fallback style: layers installed"); checkSceneOrder(style) }
                                 .onFailure { Log.w(TAG, "fallback style: install failed", it) }
                             st.resetKeys()
                             refreshHabitat(map, force = true)
@@ -419,7 +434,7 @@ private fun loadStyle(map: MapLibreMap, basemap: Basemap, st: State, onReady: ()
         st.style = style
         st.basemap = basemap
         runCatching { install(style, basemap) }
-            .onSuccess { Log.i(TAG, "style ${basemap.name}: layers installed") }
+            .onSuccess { Log.i(TAG, "style ${basemap.name}: layers installed"); checkSceneOrder(style) }
             .onFailure { Log.w(TAG, "style ${basemap.name}: install failed", it) }
         onReady()
     }
@@ -582,19 +597,23 @@ private fun install(style: Style, basemap: Basemap?) {
     )
 }
 
+/** The sheet's switches, through the scene description (SceneLayer), onto the style's layers. */
 private fun applyVisibility(style: Style, s: MapLayerState) = runCatching {
-    fun vis(id: String, on: Boolean) =
-        style.getLayer(id)?.setProperties(PropertyFactory.visibility(if (on) Property.VISIBLE else Property.NONE))
-    vis("g-hillshade", s.hillshade)
-    vis("g-habitat-layer", s.habitat)
-    vis("g-water-layer", s.water)
-    vis("g-contour-layer", s.contours)
-    style.getLayer("g-habitat-layer")?.setProperties(PropertyFactory.rasterOpacity(s.heatmapOpacity))
-    vis("g-visited-layer", s.visited)
-    vis("g-track-layer", s.trackLine)
-    vis("g-finds-heat", s.finds)
-    vis("g-finds-dots", s.finds)
-    vis("g-suggest-layer", s.suggestions)
+    for (layer in SceneLayer.entries) for (id in FlatLayers.ids(layer)) {
+        style.getLayer(id)?.setProperties(PropertyFactory.visibility(if (layer.shown(s)) Property.VISIBLE else Property.NONE))
+    }
+    style.getLayer(FlatLayers.ids(SceneLayer.HABITAT).single())?.setProperties(PropertyFactory.rasterOpacity(s.heatmapOpacity))
+}
+
+/**
+ * The depth policy on the flat map is the stacking order (SceneLayer, exe.md A10): checked against
+ * the style as loaded, because the order is whatever [install] happened to add.
+ */
+private fun checkSceneOrder(style: Style) {
+    val wanted = FlatLayers.ORDER.toSet()
+    val loaded = style.layers.map { it.id }.filter { it in wanted }
+    if (loaded == FlatLayers.ORDER) Log.i(TAG, "layers: style order matches the scene (${loaded.size} layers)")
+    else Log.e(TAG, "layers: style order $loaded differs from the scene ${FlatLayers.ORDER}")
 }
 
 private fun pushData(
@@ -652,12 +671,12 @@ private fun pushData(
     }
 }
 
-/** A geodesic circle as a closed line, 96 vertices. */
-fun ring(lat: Double, lng: Double, radiusM: Double): LineString {
+/** A geodesic circle as a closed line of [vertices] segments. */
+fun ring(lat: Double, lng: Double, radiusM: Double, vertices: Int = 96): LineString {
     val d = radiusM / 6_371_000.0
     val la = Math.toRadians(lat); val lo = Math.toRadians(lng)
-    val pts = (0..96).map { i ->
-        val b = 2 * Math.PI * i / 96
+    val pts = (0..vertices).map { i ->
+        val b = 2 * Math.PI * i / vertices
         val lat2 = Math.asin(sin(la) * cos(d) + cos(la) * sin(d) * cos(b))
         val lng2 = lo + Math.atan2(sin(b) * sin(d) * cos(la), cos(d) - sin(la) * sin(lat2))
         Point.fromLngLat(Math.toDegrees(lng2), Math.toDegrees(lat2))

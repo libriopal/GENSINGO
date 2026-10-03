@@ -78,6 +78,13 @@ import com.ginsengo.steward.terrain.GinsengSuitability
 import com.ginsengo.steward.ui.map.Basemap
 import com.ginsengo.steward.ui.map.DARK_STYLE
 import com.ginsengo.steward.ui.map.FieldMap
+import com.ginsengo.steward.ui.map.SceneLayer
+import com.ginsengo.steward.terrain3d.CameraMath
+import com.ginsengo.steward.terrain3d.Handoff
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 
 private enum class Sheet { NONE, SUGGEST, FIND, LAYERS }
@@ -98,7 +105,36 @@ fun MainScreen(vm: FieldViewModel) {
     val permission by vm.permission.collectAsState()
 
     var sheet by remember { mutableStateOf(Sheet.NONE) }
-    var habitatStatus by remember { mutableStateOf("") }
+    var mapStatus by remember { mutableStateOf("") }
+    var meshStatus by remember { mutableStateOf("") }
+    LaunchedEffect(view3d) { if (!view3d) meshStatus = "" }
+    val habitatStatus = if (view3d && meshStatus.isNotBlank()) meshStatus else mapStatus
+
+    // The cross-fade between the map and the 3D view (exe.md A8, Handoff.blend): 0 is the map;
+    // Handoff.COVERED, the 3D view covering it with its relief at the measured hand-off;
+    // Handoff.RISEN, full relief and the gestures on the 3D view. The fade starts only once the
+    // 3D view is built, fitted and drawn: until then the map stays, and stays usable.
+    val reveal = remember { Animatable(0f) }
+    var meshReady by remember { mutableStateOf(false) }
+    LaunchedEffect(view3d, meshReady) {
+        if (view3d) {
+            if (meshReady || reveal.value > 0f) reveal.animateTo(Handoff.RISEN, tween(REVEAL_MS, easing = LinearEasing))
+        } else if (reveal.value > 0f) {
+            if (reveal.value > Handoff.COVERED) {
+                // Sink to the hand-off relief, easing the pitch into the flat map's range on the way.
+                val pitch0 = vm.camera.camera.pitch
+                val pitch1 = minOf(pitch0, CameraMath.MAX_2D_PITCH)
+                val from = reveal.value
+                reveal.animateTo(Handoff.COVERED, tween(SINK_MS, easing = LinearEasing)) {
+                    val t = ((from - value) / (from - Handoff.COVERED)).toDouble().coerceIn(0.0, 1.0)
+                    if (pitch1 != pitch0) vm.camera.report(vm.camera.camera.copy(pitch = pitch0 + (pitch1 - pitch0) * t))
+                }
+            }
+            vm.landFlat()
+            reveal.animateTo(0f, tween(FADE_OUT_MS, easing = LinearEasing))
+        }
+    }
+    val revealed = reveal.value
     // The 3D view drapes the 2D map's style only when that style actually loaded here.
     var darkStyleLoaded by remember { mutableStateOf(false) }
     val weights = verdict?.active ?: GinsengSuitability.PRIOR_WEIGHTS
@@ -108,24 +144,32 @@ fun MainScreen(vm: FieldViewModel) {
     }
 
     Box(Modifier.fillMaxSize().background(Gen.Bg)) {
-        if (view3d) {
-            Terrain3DView(
-                me = me, camera = vm.camera,
-                track = track, finds = finds, suggestions = suggestions,
-                layers = layers, weights = weights, demStore = vm.container.demTiles,
-                styleUri = if (darkStyleLoaded && layers.basemap == Basemap.DARK) DARK_STYLE else null,
-                onStatus = { habitatStatus = it }, modifier = Modifier.fillMaxSize(),
-            )
-        } else {
+        // One stack: the map always; the 3D view over it while it shows, or under it (hidden,
+        // building) until it is ready to fade in. Both are TextureViews, so they stack and fade.
+        Box(Modifier.fillMaxSize()) {
             FieldMap(
                 me = me, track = track, finds = finds, suggestions = suggestions,
                 radiusCenter = run?.let { it.centerLat to it.centerLng },
                 layers = layers, weights = weights, demStore = vm.container.demTiles,
                 camera = vm.camera,
-                onHabitatStatus = { habitatStatus = it },
+                onHabitatStatus = { mapStatus = it },
                 modifier = Modifier.fillMaxSize(),
                 onBasemap = { darkStyleLoaded = it },
+                active = revealed < Handoff.RISEN,
             )
+            if (view3d || revealed > 0f) {
+                Terrain3DView(
+                    me = me, camera = vm.camera,
+                    track = track, finds = finds, suggestions = suggestions,
+                    layers = layers, weights = weights, demStore = vm.container.demTiles,
+                    styleUri = if (darkStyleLoaded && layers.basemap == Basemap.DARK) DARK_STYLE else null,
+                    onStatus = { meshStatus = it },
+                    modifier = Modifier.fillMaxSize().zIndex(if (revealed > 0f) 1f else -1f),
+                    radiusCenter = run?.let { it.centerLat to it.centerLng },
+                    reveal = revealed,
+                    onReady = { meshReady = it },
+                )
+            }
         }
 
         // ---- status line
@@ -359,14 +403,12 @@ private fun LayersSheet(vm: FieldViewModel, verdict: FindLearner.Verdict?, onClo
     ModalBottomSheet(onDismissRequest = onClose, containerColor = Gen.Surface) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState())) {
             Text("Layers", style = MaterialTheme.typography.titleMedium)
-            Toggle("Habitat heatmap (${if (verdict?.adopted == true) "learned weights" else "published weights"})", layers.habitat) { vm.setLayers(layers.copy(habitat = it)) }
-            Toggle("Creeks & streams (traced from elevation)", layers.water) { vm.setLayers(layers.copy(water = it)) }
-            Toggle("Where I've been", layers.visited) { vm.setLayers(layers.copy(visited = it)) }
-            Toggle("My finds", layers.finds) { vm.setLayers(layers.copy(finds = it)) }
-            Toggle("Track line", layers.trackLine) { vm.setLayers(layers.copy(trackLine = it)) }
-            Toggle("Suggestions", layers.suggestions) { vm.setLayers(layers.copy(suggestions = it)) }
-            Toggle("Contour lines", layers.contours) { vm.setLayers(layers.copy(contours = it)) }
-            Toggle("Hillshade (flat map)", layers.hillshade) { vm.setLayers(layers.copy(hillshade = it)) }
+            // One row per switch in the scene description: each means the same in 2D and 3D.
+            for (layer in SceneLayer.SHEET) {
+                val label = SceneLayer.label(layer) + if (layer == SceneLayer.HABITAT)
+                    " (${if (verdict?.adopted == true) "learned weights" else "published weights"})" else ""
+                Toggle(label, layer.shown(layers)) { vm.setLayers(layer.set!!(layers, it)) }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Basemap.entries.forEach { b ->
                     FilterChip(selected = layers.basemap == b, onClick = { vm.setLayers(layers.copy(basemap = b)) }, label = { Text(b.label) })
@@ -458,3 +500,8 @@ private fun Toggle(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
         Switch(checked = value, onCheckedChange = onChange)
     }
 }
+
+/** The cross-fade's timing: fade in and rise (0 → RISEN), sink to the hand-off, fade out. */
+private const val REVEAL_MS = 1_200
+private const val SINK_MS = 600
+private const val FADE_OUT_MS = 600

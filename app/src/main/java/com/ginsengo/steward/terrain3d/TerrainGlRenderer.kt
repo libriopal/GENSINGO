@@ -1,8 +1,8 @@
 package com.ginsengo.steward.terrain3d
 
 import android.opengl.GLES30
-import android.opengl.GLSurfaceView
 import android.util.Log
+import com.ginsengo.steward.terrain3d.gl.GLTextureView
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicReference
@@ -22,7 +22,7 @@ import javax.microedition.khronos.opengles.GL10
  * mesh once, from a hand-off slot it had already emptied, so the view came back blank. The
  * current mesh and texture are now kept and re-uploaded whenever a context is created.
  */
-class TerrainGlRenderer : GLSurfaceView.Renderer {
+class TerrainGlRenderer : GLTextureView.Renderer {
 
     /** Latest mesh / texture, kept for re-upload after a context loss. */
     private val mesh = AtomicReference<TerrainMesh.Mesh?>(null)
@@ -37,6 +37,13 @@ class TerrainGlRenderer : GLSurfaceView.Renderer {
         private set
     @Volatile var trianglesDrawn: Int = 0
         private set
+
+    /**
+     * Called on the GL thread after every frame that drew the terrain. The 3D view waits for the
+     * first one before it fades in over the map: fading in a surface with nothing on it yet would
+     * flash the haze colour over the map.
+     */
+    @Volatile var onTerrainDrawn: (() -> Unit)? = null
 
     class Texture(val argb: IntArray, val size: Int)
 
@@ -131,6 +138,7 @@ class TerrainGlRenderer : GLSurfaceView.Renderer {
         GLES30.glDrawElements(GLES30.GL_TRIANGLES, indexCount, GLES30.GL_UNSIGNED_INT, 0)
         GLES30.glBindVertexArray(0)
         trianglesDrawn = indexCount / 3
+        onTerrainDrawn?.invoke()
     }
 
     private fun uploadMesh(mesh: TerrainMesh.Mesh) {
