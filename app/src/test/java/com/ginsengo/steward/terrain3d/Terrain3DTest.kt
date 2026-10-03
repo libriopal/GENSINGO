@@ -113,6 +113,52 @@ class Terrain3DTest {
         assertTrue("west-facing $w vs east-facing $e", w > e * 1.3)
     }
 
+    /**
+     * The sheet's Hillshade switch reaches the 3D bake (exe.md A9: it was "Hillshade (flat map)",
+     * a control that meant nothing in 3D). Off, both faces of the ridge are the same colour.
+     */
+    @Test
+    fun theHillshadeSwitchTurnsTheBakedShadingOff() {
+        val n = 256; val c = n / 2
+        val m = mosaic(n) { x, _ -> 800.0 - abs(x - c) * 4.0 }
+        val g = TerrainTextures.Ground(m, null, n, emptyList(), 1.0)
+        fun faces(hillshade: Boolean): Pair<Double, Double> {
+            val px = TerrainTextures.bake(g, TerrainTextures.Mode.ELEVATION, n,
+                TerrainTextures.Layers(contours = false, hillshade = hillshade))
+            // Mirror-image texels across the ridge have the same elevation, so the same tint.
+            var w = 0.0; var e = 0.0
+            for (y in 10 until n - 10) for (d in 10 until c - 10) { w += lum(px[y * n + c - d]); e += lum(px[y * n + c + d]) }
+            return w to e
+        }
+        val (shadedW, shadedE) = faces(true)
+        val (flatW, flatE) = faces(false)
+        assertTrue("shaded: west $shadedW vs east $shadedE", shadedW > shadedE * 1.3)
+        assertEquals("unshaded faces differ", 1.0, flatW / flatE, 1e-3)
+    }
+
+    /**
+     * The sheet's Heat opacity fades the 3D habitat as the 2D raster's opacity fades the heatmap.
+     * Witness: straight-alpha compositing written out, (1 − a·o)·base + a·o·colour.
+     */
+    @Test
+    fun theHeatOpacityFadesTheHabitatAsTheTwoDimensionalRasterDoes() {
+        val n = 32
+        val m = mosaic(n) { _, _ -> 700.0 }
+        val scores = DoubleArray(n * n) { 0.4 + 0.6 * (it % n) / (n - 1.0) }
+        val ground = TerrainTextures.Ground(m, scores, n, emptyList(), 1.5)
+        val opacity = 0.45f
+        val px = TerrainTextures.bake(ground, TerrainTextures.Mode.HABITAT, n, TerrainTextures.Layers(habitatOpacity = opacity))
+        val base = TerrainTextures.NEUTRAL_RAMP[0]
+        for (i in px.indices) {
+            val c = SuitabilityRasterizer.colourFor(scores[i], TerrainTextures.MIN_SCORE)
+            val a = ((c ushr 24) and 255) / 255.0 * opacity
+            for (shift in intArrayOf(16, 8, 0)) {
+                val want = (1 - a) * ((base shr shift) and 255) + a * ((c shr shift) and 255)
+                assertEquals("texel $i channel $shift", want, ((px[i] shr shift) and 255).toDouble(), 1.01)
+            }
+        }
+    }
+
     @Test
     fun theAreaIsTheThreeByThreeTilesAroundTheUser() {
         val lat = 35.5605; val lng = -82.996

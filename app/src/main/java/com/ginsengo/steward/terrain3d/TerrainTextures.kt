@@ -43,7 +43,15 @@ object TerrainTextures {
      * existed, so a caller that passes none gets the old picture exactly. [habitat] has no
      * effect in [Mode.ELEVATION], whose base is the elevation tint.
      */
-    data class Layers(val habitat: Boolean = true, val water: Boolean = true, val contours: Boolean = true)
+    data class Layers(
+        val habitat: Boolean = true,
+        val water: Boolean = true,
+        val contours: Boolean = true,
+        /** The baked relief shading: the 2D map's hillshade layer, under the same switch. */
+        val hillshade: Boolean = true,
+        /** The habitat colour's opacity: the sheet's "Heat opacity", as the 2D raster's opacity. */
+        val habitatOpacity: Float = 1f,
+    )
 
     /** Everything the baker needs about the ground; produced once per 3D build. */
     class Ground(
@@ -123,20 +131,22 @@ object TerrainTextures {
                             val score = bilinear(s, ground.scoreSize, ground.scoreSize,
                                 (tx + 0.5) / size * ground.scoreSize - 0.5,
                                 (ty + 0.5) / size * ground.scoreSize - 0.5).toDouble()
-                            over(base, SuitabilityRasterizer.colourFor(score, MIN_SCORE))
+                            over(base, fade(SuitabilityRasterizer.colourFor(score, MIN_SCORE), layers.habitatOpacity))
                         }
                     }
                 }
-                // Hillshade from the texel gradient (central differences, clamped at edges).
-                val xl = elev[ty * size + max(tx - 1, 0)]; val xr = elev[ty * size + min(tx + 1, size - 1)]
-                val yu = elev[max(ty - 1, 0) * size + tx]; val yd = elev[min(ty + 1, size - 1) * size + tx]
-                val dzdx = (xr - xl) / (2 * cellX) * ground.exaggeration
-                val dzdy = (yd - yu) / (2 * cellY) * ground.exaggeration   // rows run south
-                // Normal (east, north, up) = (-dz/de, -dz/dn, 1) with dz/dn = -dzdy.
-                val nx = -dzdx; val ny = dzdy; val len = sqrt(nx * nx + ny * ny + 1.0)
-                val hs = ((nx * LIGHT_E + ny * LIGHT_N + LIGHT_UP) / len).coerceAtLeast(0.0)
-                val shade = (0.28 + 0.72 * hs / LIGHT_UP).coerceIn(0.22, 1.18)
-                rgb = scale(rgb, shade)
+                if (layers.hillshade) {
+                    // Hillshade from the texel gradient (central differences, clamped at edges).
+                    val xl = elev[ty * size + max(tx - 1, 0)]; val xr = elev[ty * size + min(tx + 1, size - 1)]
+                    val yu = elev[max(ty - 1, 0) * size + tx]; val yd = elev[min(ty + 1, size - 1) * size + tx]
+                    val dzdx = (xr - xl) / (2 * cellX) * ground.exaggeration
+                    val dzdy = (yd - yu) / (2 * cellY) * ground.exaggeration   // rows run south
+                    // Normal (east, north, up) = (-dz/de, -dz/dn, 1) with dz/dn = -dzdy.
+                    val nx = -dzdx; val ny = dzdy; val len = sqrt(nx * nx + ny * ny + 1.0)
+                    val hs = ((nx * LIGHT_E + ny * LIGHT_N + LIGHT_UP) / len).coerceAtLeast(0.0)
+                    val shade = (0.28 + 0.72 * hs / LIGHT_UP).coerceIn(0.22, 1.18)
+                    rgb = scale(rgb, shade)
+                }
                 out[i] = rgb or (0xFF shl 24)
             }
         }
@@ -251,6 +261,12 @@ object TerrainTextures {
         val a = stops[i]; val b = stops[i + 1]
         fun ch(s: Int) = (((a shr s) and 255) + (((b shr s) and 255) - ((a shr s) and 255)) * u).roundToInt()
         return (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+    }
+
+    /** [c] (ARGB) with its alpha multiplied by [opacity]. */
+    internal fun fade(c: Int, opacity: Float): Int {
+        val a = (((c ushr 24) and 255) * opacity.coerceIn(0f, 1f)).roundToInt()
+        return (a shl 24) or (c and 0xFFFFFF)
     }
 
     /** [top] (ARGB, straight alpha) over opaque [base] (RGB). */
