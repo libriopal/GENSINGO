@@ -1,0 +1,30 @@
+# A1/A3 structural witness (exe.md A1: 'no second camera field; both backends read the same instance'). Structural, not behavioural; the behaviour is SharedCameraTest + CameraConformanceTest.
+$ grep -rnE "mutableStateOf\(camera\)|var cam\b|jumpTo|jumpTick|recenterTick|onCameraIdle|focus: Suggestion|setCamera|_camera\b" ui/ terrain3d/
+(no matches)
+
+$ grep -rn "SharedCamera" ui/ (who holds and who mirrors the one camera)
+ui/map/FieldMap.kt:29:import com.ginsengo.steward.terrain3d.SharedCamera
+ui/map/FieldMap.kt:116:    camera: SharedCamera,
+ui/map/FieldMap.kt:294:    fun follow(map: MapLibreMap, s: SharedCamera.Snapshot) {
+ui/map/FieldMap.kt:335:                st.follower = SharedCamera.Follower(start.epoch)
+ui/map/FieldMap.kt:405:    var follower: SharedCamera.Follower? = null
+ui/Terrain3DView.kt:77:import com.ginsengo.steward.terrain3d.SharedCamera
+ui/Terrain3DView.kt:116:    camera: SharedCamera,
+ui/Terrain3DView.kt:140:    val follower = remember { SharedCamera.Follower(camera.state.value.epoch) }
+ui/FieldViewModel.kt:21:import com.ginsengo.steward.terrain3d.SharedCamera
+ui/FieldViewModel.kt:87:     * The one camera (exe.md A1): both views mirror it under [SharedCamera]'s epoch rule; neither
+ui/FieldViewModel.kt:91:    val camera = SharedCamera(
+
+$ grep -rn "map.cameraPosition =" ui/ (MapLibre camera written only from the shared camera)
+ui/map/FieldMap.kt:331:                map.cameraPosition = CameraPosition.Builder()
+
+# A2 structural witness: the forward/inverse Web Mercator formulas outside geo/Projection.kt
+$ grep -rnE "asinh\(tan|ln\(tan|atan\(sinh|atan\(kotlin\.math\.exp|atan\(exp|\(1 shl [a-z.]+\) \* 360|/ 360\.0 \* \(1 shl" --include=*.kt . | grep -v geo/Projection.kt
+(no matches)
+
+$ grep -rln "geo.Projection" --include=*.kt . (the callers)
+./research/RadiusScan.kt
+./terrain/DemTileStore.kt
+./terrain/WaterLines.kt
+./terrain3d/MapCamera.kt
+./terrain3d/Terrain3D.kt

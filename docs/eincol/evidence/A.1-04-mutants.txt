@@ -1,0 +1,17 @@
+$ python3 tools/mutate.py Q1 Q2 Q3 Q4 Q5
+('Q1', 'camera sign flip: bearing reversed in the mesh matrix only (exe.md I3)', 'KILLED', 31)
+('Q2', 'Terrarium offset dropped (exe.md I4)', 'SURVIVED', 21)
+('Q3', 'north/south reversal in the one projection', 'KILLED', 21)
+('Q4', 'latAtRow back to linear latitude (the defect A2 removed)', 'KILLED', 21)
+('Q5', 'a gesture report bumps the epoch (views chase their own gestures)', 'KILLED', 21)
+
+| ID | Mutation | Result |
+|---|---|---|
+| Q1 | camera sign flip: bearing reversed in the mesh matrix only (exe.md I3) | KILLED |
+| Q2 | Terrarium offset dropped (exe.md I4) | SURVIVED |
+| Q3 | north/south reversal in the one projection | KILLED |
+| Q4 | latAtRow back to linear latitude (the defect A2 removed) | KILLED |
+| Q5 | a gesture report bumps the epoch (views chase their own gestures) | KILLED |
+
+killed 4 / 5
+EXIT mutate=0

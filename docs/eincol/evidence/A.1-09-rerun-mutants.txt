@@ -1,0 +1,11 @@
+$ python3 tools/mutate.py Q2 Q4
+('Q2', 'Terrarium offset dropped (exe.md I4)', 'KILLED', 28)
+('Q4', 'latAtRow back to linear latitude (the defect A2 removed)', 'KILLED', 21)
+
+| ID | Mutation | Result |
+|---|---|---|
+| Q2 | Terrarium offset dropped (exe.md I4) | KILLED |
+| Q4 | latAtRow back to linear latitude (the defect A2 removed) | KILLED |
+
+killed 2 / 2
+EXIT mutate=0

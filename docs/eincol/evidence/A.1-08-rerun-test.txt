@@ -1,0 +1,134 @@
+$ ./gradlew :app:test
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:kspDebugKotlin UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:bundleDebugClassesToRuntimeJar UP-TO-DATE
+> Task :app:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:copyThirdPartyNotices UP-TO-DATE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:packageDebugUnitTestForUnitTest UP-TO-DATE
+> Task :app:generateDebugUnitTestConfig UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:buildKotlinToolingMetadata UP-TO-DATE
+> Task :app:preFieldBuild UP-TO-DATE
+> Task :app:generateFieldBuildConfig UP-TO-DATE
+> Task :app:checkFieldAarMetadata UP-TO-DATE
+> Task :app:generateFieldResValues UP-TO-DATE
+> Task :app:mapFieldSourceSetPaths UP-TO-DATE
+> Task :app:generateFieldResources UP-TO-DATE
+> Task :app:mergeFieldResources UP-TO-DATE
+> Task :app:packageFieldResources UP-TO-DATE
+> Task :app:parseFieldLocalResources UP-TO-DATE
+> Task :app:createFieldCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksField UP-TO-DATE
+> Task :app:processFieldMainManifest UP-TO-DATE
+> Task :app:processFieldManifest UP-TO-DATE
+> Task :app:processFieldManifestForPackage UP-TO-DATE
+> Task :app:processFieldResources UP-TO-DATE
+> Task :app:javaPreCompileField UP-TO-DATE
+> Task :app:preFieldUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileFieldUnitTest UP-TO-DATE
+> Task :app:mergeFieldShaders UP-TO-DATE
+> Task :app:compileFieldShaders NO-SOURCE
+> Task :app:generateFieldAssets UP-TO-DATE
+> Task :app:mergeFieldAssets UP-TO-DATE
+> Task :app:convertLinkedResourcesToBinaryField UP-TO-DATE
+> Task :app:packageFieldUnitTestForUnitTest UP-TO-DATE
+> Task :app:generateFieldUnitTestConfig UP-TO-DATE
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :app:generateReleaseBuildConfig UP-TO-DATE
+> Task :app:checkReleaseAarMetadata UP-TO-DATE
+> Task :app:generateReleaseResValues UP-TO-DATE
+> Task :app:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :app:generateReleaseResources UP-TO-DATE
+> Task :app:mergeReleaseResources UP-TO-DATE
+> Task :app:packageReleaseResources UP-TO-DATE
+> Task :app:parseReleaseLocalResources UP-TO-DATE
+> Task :app:createReleaseCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksRelease UP-TO-DATE
+> Task :app:processReleaseMainManifest UP-TO-DATE
+> Task :app:processReleaseManifest UP-TO-DATE
+> Task :app:processReleaseManifestForPackage UP-TO-DATE
+> Task :app:processReleaseResources UP-TO-DATE
+> Task :app:javaPreCompileRelease UP-TO-DATE
+> Task :app:preReleaseUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileReleaseUnitTest UP-TO-DATE
+> Task :app:mergeReleaseShaders UP-TO-DATE
+> Task :app:compileReleaseShaders NO-SOURCE
+> Task :app:generateReleaseAssets UP-TO-DATE
+> Task :app:mergeReleaseAssets UP-TO-DATE
+> Task :app:packageReleaseUnitTestForUnitTest UP-TO-DATE
+> Task :app:generateReleaseUnitTestConfig UP-TO-DATE
+> Task :app:kspDebugUnitTestKotlin
+> Task :app:compileDebugUnitTestKotlin UP-TO-DATE
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+> Task :app:kspFieldKotlin
+> Task :app:kspReleaseKotlin
+
+> Task :app:testDebugUnitTest
+
+> Task :app:compileFieldKotlin
+> Task :app:compileReleaseKotlin
+> Task :app:compileFieldJavaWithJavac UP-TO-DATE
+> Task :app:processFieldJavaRes UP-TO-DATE
+> Task :app:bundleFieldClassesToRuntimeJar
+> Task :app:bundleFieldClassesToCompileJar
+> Task :app:compileReleaseJavaWithJavac UP-TO-DATE
+> Task :app:processReleaseJavaRes UP-TO-DATE
+> Task :app:bundleReleaseClassesToRuntimeJar
+> Task :app:bundleReleaseClassesToCompileJar
+> Task :app:kspFieldUnitTestKotlin
+> Task :app:kspReleaseUnitTestKotlin
+> Task :app:compileFieldUnitTestKotlin
+> Task :app:compileFieldUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processFieldUnitTestJavaRes UP-TO-DATE
+> Task :app:compileReleaseUnitTestKotlin
+
+> Task :app:testFieldUnitTest
+
+> Task :app:compileReleaseUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processReleaseUnitTestJavaRes UP-TO-DATE
+
+> Task :app:testReleaseUnitTest
+
+> Task :app:test
+
+[Incubating] Problems report is available at: file:///home/user/GENSINGO/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 2m 38s
+93 actionable tasks: 16 executed, 77 up-to-date
+
+real	2m39.075s
+user	0m2.033s
+sys	0m0.219s
+EXIT test=0

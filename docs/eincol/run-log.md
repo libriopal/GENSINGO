@@ -6,6 +6,7 @@ to it and never paraphrases a result it does not link.
 | Wave | Candidates | Branch | Commits | Build / lint / test | Mutants rejected | Device | Evidence |
 |---|---|---|---|---|---|---|---|
 | BOOT | — (bootstrap; drafted J1–J9; registered I17) | `claude/minimal-3d-llm-location-app-yk0lid` | the bootstrap commit | test **green** · lint **red, pre-existing** (1 error, 80 warnings, listed by name) · build not run (not required by §1) | — | **none usable**: the emulator boots, but its package service dies on every APK install | `BOOT-01-toolchain.txt`, `BOOT-03-test.txt`, `BOOT-03-lint.txt`, `BOOT-03-lint-offline-toolfail.txt`, `BOOT-04-locate-before-worktree-cleanup.txt`, `BOOT-lint-baseline.tsv`, `BOOT-06-device.txt` |
+| A.1 | A1, A2, A3, A4 · I2, I3 (=Q1), I4 (=Q2), I17 · drafted J10–J14 · A5, A6 re-queued to A.2 | `eincol/A.1` (+ fast-forward of the session branch) | see `docs/eincol/waves/A.1.md` | build **exit 0** · lint **exit 0** (0 errors, 78 warnings; I17 gone) · test **exit 0**, 355 per variant | Q1, Q2 (after the fix), Q3, Q4, Q5: **5/5 killed** | not required (non-visual wave, §13); A3's device check joins A.2 | `A.1-01…09`, `A.1-05-structural.txt` |
 
 ---
 
@@ -129,3 +130,48 @@ J1–J9 are in exe.md §11, group J, status `proposed`.
 | The 1,636 engine lines have no caller | ✅ | ✅ a symbol search with the defining file excluded, re-runnable. A reflection or ServiceLoader call would evade it: none exists in this codebase (no `Class.forName` on these names) | sound |
 | No usable device: the emulator cannot install the app | ✅ two attempts this session, plus Phase 9 | ✅ `BOOT-06-device.txt` (raw adb output) | sound, for the `field` AVD at 3 GB / 2 cores only; the `aosp` AVD at 4 GB / 4 cores is untried |
 | An emulator could not back a performance claim even if it worked | ✅ | ❌ an engineering judgement (software GL, no KVM), not a measurement | **open**, stated |
+
+---
+
+## A.1 — 2026-10-03 · the one camera
+
+Full record (all eight EINCOL phases, the distribution with the tail worked first, rejected
+alternatives, contracts, and the sovereignty classifier): `docs/eincol/waves/A.1.md`. In brief:
+
+- **Built.**
+  - **One `SharedCamera`**, owned by the view model, seeded from `CameraStart` (dead until now).
+    Both views mirror it under an epoch rule: gestures report, app actions move, and each move is
+    applied once.
+  - **One `Projection`** replaces five Web Mercator copies and fixes a linear-latitude defect in
+    `latAtRow`.
+  - **A conformance test** shows the GL mesh and the projection agreeing within 0.009 px; its
+    stale-camera control fails by 534–2,755 px.
+- **Found by the evaluators:**
+  - Mutant **Q2 survived**: the app's Terrarium decoder had never been tested, because the
+    fixtures were Python-decoded. It was fixed with a spec-vector test, after which Q2 was killed.
+  - **Bootstrap's §4 claimed the opposite**, and is corrected.
+  - The harness overwrote the debug test results after `:app:test`; the verdict is taken from exit
+    codes and the untouched variants.
+- **Counter-candidate I2 (the merge is a rewrite):** no. One structural change remains (GL in a
+  `TextureView`, A.2), and **A14 (one frame clock) needs NDK as written: a replacement is
+  proposed to the owner.**
+- **Drafted this iteration (owner directive):**
+  - J10 deer-browse refuges, as a hypothesis layer (McGraw & Furedi 2005, *Science*);
+  - J11 walk-the-band contour route;
+  - J12 honey-hole detector over your own finds (prong-age relation);
+  - J13 look-alike guard;
+  - J14 seed-planting record with a maturity clock.
+
+```
+conformance: zoom 15.41 bearing  59.9 pitch 68.9 -> worst 0.0038 px over 25 points
+conformance: zoom 14.34 bearing   5.3 pitch  4.8 -> worst 0.0003 px over 25 points
+conformance: zoom 14.55 bearing 306.3 pitch 20.8 -> worst 0.0011 px over 25 points
+conformance: zoom 14.65 bearing 235.4 pitch  7.6 -> worst 0.0010 px over 25 points
+conformance: zoom 14.09 bearing 167.3 pitch  2.0 -> worst 0.0002 px over 25 points
+conformance: zoom 16.39 bearing 123.2 pitch 53.6 -> worst 0.0070 px over 21 points
+conformance: zoom 15.82 bearing 154.7 pitch 53.8 -> worst 0.0047 px over 25 points
+conformance: zoom 15.58 bearing 140.0 pitch 55.3 -> worst 0.0029 px over 25 points
+conformance: zoom 16.36 bearing 318.1 pitch 21.4 -> worst 0.0089 px over 23 points
+conformance: zoom 15.43 bearing 141.8 pitch  3.5 -> worst 0.0018 px over 25 points
+conformance (stale camera, must fail): state 1..9 -> worst 534.2 .. 2754.9 px
+```

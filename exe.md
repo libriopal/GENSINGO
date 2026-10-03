@@ -145,7 +145,7 @@ All paths are under `app/src/main/java/com/ginsengo/steward/` unless they start 
 | Camera seed | `ui/map/CameraStart.kt` | 46 | **promote**: the seed of the one `CameraState` |
 | Palette | `ui/Theme.kt`, `object Gen`, 9 colours | 41 | **freeze** |
 | Contours, hydrology | `terrain/ContourLines.kt`, `terrain/Isolines.kt`, `terrain/Hydrology.kt`, `terrain/WaterLines.kt` | — | **revive**: contours already ship on both views (iteration 1); D1–D4 extend them |
-| DEM decoding (Terrarium) | `terrain/DemTileStore.kt`, `ui/map/FieldMap.kt`; fixture test `app/src/test/…/terrain/RealTerrainTest.kt` | — | the I4 offset mutant targets `DemTileStore` |
+| DEM decoding (Terrarium) | `terrain/DemTileStore.kt` (`terrariumMetres`, pure since A.1), `ui/map/FieldMap.kt` (MapLibre decodes its own copy for the hillshade). Witness: `TerrariumDecodeTest` (spec vectors, A.1). **Correction (A.1):** bootstrap named `RealTerrainTest` as the decoder's test. It is not: its fixtures were decoded offline by a Python script, so the app's decoder had no test, and mutant Q2 (= I4) survived until it got one | — | the I4 offset mutant targets `DemTileStore.terrariumMetres` |
 | Offline area | `ui/OfflineArea.kt` | 98 | **complete**: program H |
 | Prospecting spine | `prospect/Prospects.kt` 141, `research/RadiusScan.kt` 342, `research/OnDeviceRationale.kt` 66 | — | **extend**: the spine of program F |
 | AI providers | `research/KeyVault.kt` 71, `research/ClaudeResearchClient.kt`, `research/GeminiResearchClient.kt`, `research/ResearchRepository.kt` | — | **harden and unify**: program E |
@@ -624,7 +624,7 @@ counter-candidate runs with **every** wave; the rest are assigned as their phase
 | I16 | **Standing gaps with no owner yet** | Device matrix; licence register for every asset and dataset; accessibility audit; localisation; privacy policy; reproducible build; crash-free-session metric; behaviour when the owner's API key is revoked or the provider changes terms | Each gap is either claimed as a new candidate or published as an accepted open item — never left implicit |
 | I17 | **Pre-existing lint error (found at bootstrap)** | `StateFlowValueCalledInComposition` at `ui/MainScreen.kt:120` is gone: the 3D view no longer reads `vm.camera.value` during composition | `./gradlew :app:lint` reports 0 errors. Expected to close inside A.1, whose `CameraState` replaces that line; if A.1 leaves it, I17 runs on its own |
 
-### J — Owner-directed goal candidates · J1–J9 · proposed 2026-10-03 (bootstrap)
+### J — Owner-directed goal candidates · J1–J14 · proposed (J1–J9 at bootstrap, J10–J14 in wave A.1)
 
 Purpose, in the owner's words: put a digger in an almost unfair position to find big ginseng and,
 hopefully, a honey hole. Drafted under the owner's standing rule that every iteration proposes at
@@ -645,6 +645,11 @@ right after F.1, because they feed the top-N engine; J5 and J6 with D.1; J7 with
 | J7 | **Counter-candidate: strike or wire the dead engines** | Each unwired engine (§4 last row, 1,636 lines) is either wired with evidence or deleted. The "nocturnal moonlight" score in `AstroEphemerisEngine`/`EsiMatrixModel` has no cited evidence and must not ship (invariants 2 and 5). The bundled ONNX habitat model's training provenance must be found, or the model struck | For each engine, a written verdict citing its evidence or the lack of it; APK size before and after | Deleting code is a §9 decision; this candidate prepares that decision rather than taking it |
 | J8 | **Soil survey for the saved area** | `soil/SoilSuitability.kt` (coded for the NC mountains) fed from USDA SSURGO for the saved 10 miles, offline after download | A fixture map unit gives the documented verdict | USDA Soil Data Access (public domain). **A new network destination: blocked(owner decision, §9)** |
 | J9 | **Partner sync without a server** | The two diggers exchange finds and observations by QR code, phone to phone, encrypted, owner-initiated, with no network | A round trip reproduces the records exactly; a tampered code is rejected | Offline only. Moves finds between devices, so it needs the owner's explicit yes (invariant 6) |
+| J10 | **Deer-browse refuges (a hypothesis layer)** | Interior depth from field and clearing edges (OpenStreetMap landuse in the saved tiles) plus steep or rocky ground, shown as a *hypothesis*. Never folded into the score until the owner's own browsed or not-found observations (G1) support it; the copy says so | On a synthetic forest with one clearing, interior depth rises monotonically away from the edge; a mutant that ignores the clearing fails | Grounded in McGraw & Furedi 2005, *Science* 307:920 (deer browse threatens ginseng more than harvest; none of 36 surveyed populations viable). **The edge-to-browse link is UNVERIFIED**, so it ships as a hypothesis or not at all (invariant 5, G8) |
+| J11 | **Walk-the-band** | For a ranked place, the elevation band its strongest cells occupy, drawn as the two contours bounding that band across the cove: a walking line along the slope, the way diggers work a cove | On a synthetic cove whose best cells lie at 700–720 m, the route is exactly the 700 m and 720 m isolines clipped to the cove; a band computed from the wrong cells fails | Reuse `terrain/ContourLines.kt` (the maplibre-contour port) and the engine's stored cells (F3) |
+| J12 | **Honey-hole detector over your own finds** | The owner's finds clustered on the device (a patch is finds within tens of metres); a patch with many plants and mostly 3-prong-or-better plants is flagged as a *honey hole* and ranked by mature-plant count. Never leaves the phone | A synthetic set with one dense mature patch and scattered 1-prong finds flags exactly that patch; a prong-blind mutant fails | Reuse the find clustering already in `learn/FindLearner.kt`; `Find.plantCount`/`maxProngs`. Grounded in the prong-age relation (3 prongs ≈ 4+ years, the usual legal threshold) |
+| J13 | **Look-alike guard in the Find sheet** | A short identification check before saving (palmately compound leaves on one stalk, 3–5 serrated leaflets per prong, the berry cluster at the fork), contrasted with the common look-alikes. Text only; no model, no dependency | Saving a find shows the check; the check's wording is reviewed against a state identification guide, cited on screen | PA DCNR *American Ginseng Identification* (2018). Improves the record that every learner and heatmap trusts |
+| J14 | **Seed your own honey hole** | A "planted seeds" record (date, count, place) with a maturity clock (~4–5 years to three prongs) and a reminder; suggested sites are the engine's top-ranked ground near the owner's finds. Planting on someone else's land needs their permission, said on screen | A planting record round-trips through the database; the clock reports the expected 3-prong year | New record kind, so a Room migration (H9, a §9 decision with the migration stated). Long-game: turns today's best ground into a future patch |
 
 ### Register arithmetic
 
@@ -660,7 +665,7 @@ right after F.1, because they feed the top-N engine; J5 and J6 with D.1; J7 with
 | H — Offline and release | H1–H14 | 14 | W8 |
 | I — Gaps and mutations | I1–I17 | 17 | every wave (I17 registered at bootstrap) |
 | **Total** | | **161** | |
-| J — Owner-directed goal candidates | J1–J9 | 9 | proposed; not counted until the owner approves scope |
+| J — Owner-directed goal candidates | J1–J14 | 14 | proposed; not counted until the owner approves scope |
 
 **Phase order and why.** A before B: everything draws through the one map, so building the renderer
 before the merge means building it twice. B before C: a reliable renderer can be profiled; a fast
@@ -674,33 +679,47 @@ per wave, always, recorded with its rejection.
 
 ## 12 — Wave state (rewritten at every wave close)
 
-**Bootstrap:** `done` 2026-10-03 at `c95815f`. §4 is resolved; see `docs/eincol/run-log.md` (BOOT).
-**Cursor:** `W1 / A.1`, the next wave to execute (next session, per §1.8).
-**Device:** none usable. The `field` AVD boots (Android 14, SwiftShader), but its package service dies
-on every APK install (2 of 2 at bootstrap, as in Phase 9). Every visual candidate is
-blocked(device) until the `aosp` AVD at 4 GB / 4 cores (the Phase 8 configuration) or a real phone
-works. Performance claims (C.1–C.3) need a real phone in any case (C18).
-**Blocked:** J8 blocked(owner: new network destination); J9 blocked(owner: finds leave the device);
-C.1–C.3 blocked(device: no real phone for C18); the visual candidates of every wave
-blocked(device) until a device installs the app (A.1 itself is non-visual except A5).
-**Pre-existing, exempt by name:** lint error `StateFlowValueCalledInComposition` at
-`ui/MainScreen.kt:120` (candidate I17), plus 80 lint warnings listed in
-`docs/eincol/evidence/BOOT-lint-baseline.tsv`. Tests: none failing.
-**Counts:** 0 archived · 0 verified · 0 blocked of the 161 queued · 9 proposed (J1–J9, awaiting the
-owner's scope approval).
+**Bootstrap:** `done` 2026-10-03 at `c95815f`. See `docs/eincol/run-log.md` (BOOT).
+**Last wave:** `A.1` **archived** 2026-10-03 (`docs/eincol/waves/A.1.md`).
+**Cursor:** `W1 / A.2`, A5–A12: continuous tilt, delete the switch, measured hand-off, cross-fade,
+scene description, depth policy, draped overlays, one tile store. It starts with the device retry
+(`aosp` AVD, 4 GB / 4 cores) because it is visual, and with the GL host question I2 raised
+(`GLSurfaceView` → `TextureView`-hosted GL).
+**Device:** none usable (bootstrap). Visual candidates are blocked(device) until a device installs
+the app; performance claims need a real phone (C18).
+**Blocked:**
+- C1–C18 blocked(device: performance claims need a real phone, C18);
+- J8 blocked(owner: new network destination);
+- J9 blocked(owner: finds leave the device);
+- the device half of A3 blocked(device), which joins A.2's device run.
+
+**Owner decisions pending:**
+1. Approve the J candidates' scope (J1–J4 recommended as wave J.1 after F.1).
+2. **A14 is infeasible as written.** One frame clock for MapLibre and the mesh needs MapLibre
+   `CustomLayer`, an NDK C++ host (Phase 5, measured). Proposed replacement: "the hidden
+   backend's render loop is paused, and both run only inside the hand-off window" (measurable,
+   same intent).
+3. The branch rule for waves: `eincol/<wave-id>` is pushed and the session branch is
+   fast-forwarded to it.
+
+**Pre-existing, exempt by name:** the 78 lint warnings remaining from `BOOT-lint-baseline.tsv`.
+The bootstrap's lint error (I17) is closed.
+**Counts:** 8 archived (A1, A2, A3 [device half → A.2], A4, I2, I3, I4, I17) · 18 blocked(device)
+(C1–C18) · 135 queued · 14 proposed (J1–J14, awaiting the owner's scope approval). Total
+161 + 14 proposed.
 
 | Wave | Program | Candidates | Status | Branch / commits | Evidence |
 |---|---|---|---|---|---|
 | BOOT | bootstrap | — | **archived** | `claude/minimal-3d-llm-location-app-yk0lid` | `docs/eincol/run-log.md#boot` |
-| A.1 | One map | A1–A6 | queued | — | — |
-| A.2 | One map | A7–A12 | queued | — | — |
-| A.3 | One map | A13–A18 | queued | — | — |
+| A.1 | One map | A1–A4 (+ I2, I3, I4, I17); A5, A6 → A.2 | **archived** | `eincol/A.1` | `docs/eincol/waves/A.1.md` |
+| A.2 | One map | A5–A12 (A5, A6 re-queued from A.1) | queued (cursor) | — | — |
+| A.3 | One map | A13–A18 (A14 re-scope pending the owner) | queued | — | — |
 | B.1 | Reliability | B1–B7 | queued | — | — |
 | B.2 | Reliability | B8–B14 | queued | — | — |
 | B.3 | Reliability | B15–B20 | queued | — | — |
-| C.1 | Performance | C1–C6 | queued | — | — |
-| C.2 | Performance | C7–C12 | queued | — | — |
-| C.3 | Performance | C13–C18 | queued | — | — |
+| C.1 | Performance | C1–C6 | blocked(device) | — | — |
+| C.2 | Performance | C7–C12 | blocked(device) | — | — |
+| C.3 | Performance | C13–C18 | blocked(device) | — | — |
 | D.1 | Comprehension | D1–D6 | queued | — | — |
 | D.2 | Comprehension | D7–D12 | queued | — | — |
 | D.3 | Comprehension | D13–D18 | queued | — | — |
