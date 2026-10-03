@@ -1,5 +1,6 @@
 package com.ginsengo.steward.terrain3d
 
+import com.ginsengo.steward.geo.Projection
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -260,25 +261,20 @@ class MapCamera(
         /** MapLibre's default field of view: 2*atan(1/3). */
         const val FOV = 0.6435011087932844
 
-        const val EARTH_CIRCUMFERENCE = 40_075_016.686
+        const val EARTH_CIRCUMFERENCE = Projection.EARTH_CIRCUMFERENCE
 
         /** Keeps the far plane finite as pitch approaches the horizon. */
         private const val HORIZON_LIMIT = 40.0
 
-        fun mercatorX(lng: Double): Double = (180.0 + lng) / 360.0
+        // The Web Mercator itself lives in [Projection] (exe.md A2); these names stay for the
+        // callers and tests that read the camera's maths in the camera's own terms.
+        fun mercatorX(lng: Double): Double = Projection.x(lng)
 
-        fun mercatorY(lat: Double): Double {
-            val l = lat.coerceIn(-85.051129, 85.051129)
-            return (180.0 -
-                    (180.0 / PI) * ln(tan(PI / 4.0 + l * PI / 360.0))) / 360.0
-        }
+        fun mercatorY(lat: Double): Double = Projection.y(lat)
 
-        fun lngFromMercatorX(x: Double): Double = x * 360.0 - 180.0
+        fun lngFromMercatorX(x: Double): Double = Projection.lng(x)
 
-        fun latFromMercatorY(y: Double): Double {
-            val y2 = 180.0 - y * 360.0
-            return 360.0 / PI * kotlin.math.atan(kotlin.math.exp(y2 * PI / 180.0)) - 90.0
-        }
+        fun latFromMercatorY(y: Double): Double = Projection.lat(y)
     }
 }
 

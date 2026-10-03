@@ -1,5 +1,6 @@
 package com.ginsengo.steward.research
 
+import com.ginsengo.steward.geo.Projection
 import com.ginsengo.steward.learn.FindLearner
 import com.ginsengo.steward.prospect.Prospects
 import com.ginsengo.steward.terrain.DemTileStore
@@ -94,24 +95,16 @@ class RadiusScan private constructor(
         )
     }
 
-    private val worldPx: Double = DemTileStore.TILE.toDouble() * (1 shl zoom)
+    private val worldPx: Double = Projection.worldPx(zoom, DemTileStore.TILE)
 
     /** Geographic position of a cell centre. Exact Web Mercator, not linear interpolation. */
-    fun latOfRow(y: Double): Double {
-        val wy = (tileY0 * DemTileStore.TILE + y + 0.5) / worldPx
-        return Math.toDegrees(atan(sinh(PI * (1.0 - 2.0 * wy))))
-    }
+    fun latOfRow(y: Double): Double = Projection.lat((tileY0 * DemTileStore.TILE + y + 0.5) / worldPx)
 
-    fun lngOfCol(x: Double): Double =
-        (tileX0 * DemTileStore.TILE + x + 0.5) / worldPx * 360.0 - 180.0
+    fun lngOfCol(x: Double): Double = Projection.lng((tileX0 * DemTileStore.TILE + x + 0.5) / worldPx)
 
-    private fun colOf(lng: Double): Double = (lng + 180.0) / 360.0 * worldPx - tileX0 * DemTileStore.TILE - 0.5
+    private fun colOf(lng: Double): Double = Projection.x(lng) * worldPx - tileX0 * DemTileStore.TILE - 0.5
 
-    private fun rowOf(lat: Double): Double {
-        val r = Math.toRadians(lat.coerceIn(-85.0, 85.0))
-        val wy = (1.0 - ln(tan(r) + 1.0 / cos(r)) / PI) / 2.0
-        return wy * worldPx - tileY0 * DemTileStore.TILE - 0.5
-    }
+    private fun rowOf(lat: Double): Double = Projection.y(lat) * worldPx - tileY0 * DemTileStore.TILE - 0.5
 
     /** Six factor values at a cell. Edge cells are clamped one in, as the rasteriser does. */
     fun factorsAtCell(x: Int, y: Int): DoubleArray {

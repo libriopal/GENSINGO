@@ -1,8 +1,6 @@
 package com.ginsengo.steward.terrain
 
-import kotlin.math.PI
-import kotlin.math.atan
-import kotlin.math.sinh
+import com.ginsengo.steward.geo.Projection
 
 /**
  * Channel lines as map polylines: cut to the displayed interior (the halo's drainage areas
@@ -51,13 +49,11 @@ object WaterLines {
 
     /** Longitude of a (fractional) cell column's centre. */
     fun lngOfCell(m: DemTileStore.Mosaic, x: Double): Double =
-        (m.tileX0 * DemTileStore.TILE + x + 0.5) / (DemTileStore.TILE.toDouble() * (1 shl m.zoom)) * 360.0 - 180.0
+        Projection.lng((m.tileX0 * DemTileStore.TILE + x + 0.5) / Projection.worldPx(m.zoom, DemTileStore.TILE))
 
     /** Latitude of a (fractional) cell row's centre: rows are linear in Mercator y, not latitude. */
-    fun latOfCell(m: DemTileStore.Mosaic, y: Double): Double {
-        val wy = (m.tileY0 * DemTileStore.TILE + y + 0.5) / (DemTileStore.TILE.toDouble() * (1 shl m.zoom))
-        return Math.toDegrees(atan(sinh(PI * (1.0 - 2.0 * wy))))
-    }
+    fun latOfCell(m: DemTileStore.Mosaic, y: Double): Double =
+        Projection.lat((m.tileY0 * DemTileStore.TILE + y + 0.5) / Projection.worldPx(m.zoom, DemTileStore.TILE))
 
     /** Two passes of [0.25, 0.5, 0.25] with the ends fixed. */
     private fun smooth(v: DoubleArray) {

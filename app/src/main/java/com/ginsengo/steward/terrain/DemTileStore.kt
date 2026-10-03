@@ -1,5 +1,6 @@
 package com.ginsengo.steward.terrain
 
+import com.ginsengo.steward.geo.Projection
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -99,13 +100,7 @@ class DemTileStore(context: Context) {
         val w = bmp.width; val h = bmp.height
         val px = IntArray(w * h)
         bmp.getPixels(px, 0, w, 0, 0, w, h)
-        return FloatArray(w * h) { i ->
-            val p = px[i]
-            val r = (p shr 16) and 0xFF
-            val g = (p shr 8) and 0xFF
-            val b = p and 0xFF
-            (r * 256f + g + b / 256f) - 32768f
-        }
+        return FloatArray(w * h) { i -> terrariumMetres(px[i]) }
     }
 
     /**
@@ -162,7 +157,7 @@ class DemTileStore(context: Context) {
 
         // Ground resolution at the mosaic's centre latitude.
         val centreLat = (north + south) / 2.0
-        val metresPerPixel = EQUATOR_M * cos(Math.toRadians(centreLat)) / (TILE * (1 shl z))
+        val metresPerPixel = Projection.metresPerPixel(centreLat, Projection.worldPx(z, TILE))
 
         Mosaic(
             grid = TerrainMath.Grid(w, h, z0, metresPerPixel),
@@ -190,11 +185,13 @@ class DemTileStore(context: Context) {
         val westLon: Double get() = tileXToLon(tileX0, zoom)
         val eastLon: Double get() = tileXToLon(tileX0 + tilesX, zoom)
 
-        /** Latitude of a pixel row, used to keep the heat-load index latitude-correct. */
-        fun latAtRow(row: Int): Double {
-            val f = row.toDouble() / grid.h
-            return northLat + (southLat - northLat) * f
-        }
+        /**
+         * Latitude of a pixel row's centre, used to keep the heat-load index latitude-correct.
+         * Exact: rows are linear in Mercator y, not in latitude (the linear stand-in this replaced
+         * also read the row's top edge).
+         */
+        fun latAtRow(row: Int): Double =
+            Projection.lat((tileY0 * TILE + row + 0.5) / Projection.worldPx(zoom, TILE))
     }
 
     companion object {
@@ -239,24 +236,27 @@ class DemTileStore(context: Context) {
         const val MAX_DEM_ZOOM = 15
         private const val RETRY_AFTER_MS = 5 * 60_000L
         const val MAX_TILES = 64
-        private const val EQUATOR_M = 40_075_016.686
         const val TERRARIUM = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium"
 
-        fun lonToTileX(lon: Double, z: Int): Int =
-            floor((lon + 180.0) / 360.0 * (1 shl z)).toInt()
-
-        fun latToTileY(lat: Double, z: Int): Int {
-            val l = lat.coerceIn(-85.05112878, 85.05112878)
-            val r = Math.toRadians(l)
-            return floor((1.0 - asinh(tan(r)) / PI) / 2.0 * (1 shl z)).toInt()
+        /**
+         * One Terrarium pixel (ARGB) to metres: R·256 + G + B/256 − 32768 (the Tilezen/Mapzen
+         * encoding). A pure function so the app's own decoder is tested (exe.md I4): the terrain
+         * fixtures are pre-decoded int16 and never exercised it.
+         */
+        fun terrariumMetres(argb: Int): Float {
+            val r = (argb shr 16) and 0xFF
+            val g = (argb shr 8) and 0xFF
+            val b = argb and 0xFF
+            return (r * 256f + g + b / 256f) - 32768f
         }
 
-        fun tileXToLon(x: Int, z: Int): Double = x.toDouble() / (1 shl z) * 360.0 - 180.0
+        fun lonToTileX(lon: Double, z: Int): Int = floor(Projection.x(lon) * (1 shl z)).toInt()
 
-        fun tileYToLat(y: Int, z: Int): Double {
-            val n = PI - 2.0 * PI * y / (1 shl z)
-            return Math.toDegrees(kotlin.math.atan(sinh(n)))
-        }
+        fun latToTileY(lat: Double, z: Int): Int = floor(Projection.y(lat) * (1 shl z)).toInt()
+
+        fun tileXToLon(x: Int, z: Int): Double = Projection.lng(x.toDouble() / (1 shl z))
+
+        fun tileYToLat(y: Int, z: Int): Double = Projection.lat(y.toDouble() / (1 shl z))
 
         /**
          * ADAPTIVE SCOPE (the "adaptive scopes depending on the area coverage from zoomed
