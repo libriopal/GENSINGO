@@ -7,7 +7,7 @@ to it and never paraphrases a result it does not link.
 |---|---|---|---|---|---|---|---|
 | BOOT | — (bootstrap; drafted J1–J9; registered I17) | `claude/minimal-3d-llm-location-app-yk0lid` | the bootstrap commit | test **green** · lint **red, pre-existing** (1 error, 80 warnings, listed by name) · build not run (not required by §1) | — | **none usable**: the emulator boots, but its package service dies on every APK install | `BOOT-01-toolchain.txt`, `BOOT-03-test.txt`, `BOOT-03-lint.txt`, `BOOT-03-lint-offline-toolfail.txt`, `BOOT-04-locate-before-worktree-cleanup.txt`, `BOOT-lint-baseline.tsv`, `BOOT-06-device.txt` |
 | A.1 | A1, A2, A3, A4 · I2, I3 (=Q1), I4 (=Q2), I17 · drafted J10–J14 · A5, A6 re-queued to A.2 | `eincol/A.1` (+ fast-forward of the session branch) | see `docs/eincol/waves/A.1.md` | build **exit 0** · lint **exit 0** (0 errors, 78 warnings; I17 gone) · test **exit 0**, 355 per variant | Q1, Q2 (after the fix), Q3, Q4, Q5: **5/5 killed** | not required (non-visual wave, §13); A3's device check joins A.2 | `A.1-01…09`, `A.1-05-structural.txt` |
-| A.2 | A7, A8, A9, A10 (+ A11 at 50°; its 60° shot blocked(device)) · A5+A6, A12 blocked(owner) · registered I18–I21 · drafted J15–J19 | `eincol/A.2` (+ fast-forward of the session branch) | see `docs/eincol/waves/A.2.md` | build **exit 0** · lint **exit 0** (0 errors, 80 warnings, none above baseline; copied file exempt by name) · test **exit 0**, 367 per variant | S1–S10: **10/10 killed** (S4 after its oracle was retargeted) | aosp AVD, API 34 x86_64, swiftshader: order check, warming (12 min of usable map), ready log ×2, risen, return; tilt injection failed | `A.2-01…08`, `A.2-device-01…13`, `A.2-device-warming.mp4`, `A.2-device-fade-out.mp4` |
+| A.2 | A7, A8, A9, A10 (+ A11 at 50°; its 60° shot blocked(device)) · A5+A6, A12 blocked(owner) · registered I18–I21 · drafted J15–J19 | `eincol/A.2` (+ fast-forward of the session branch) | see `docs/eincol/waves/A.2.md` | build **exit 0** · lint **exit 0** (0 errors, 80 warnings, none above baseline; copied file exempt by name) · test **exit 0**, 367 per variant | S1–S10: **10/10 killed** (S4 after its oracle was retargeted) | aosp AVD, API 34 x86_64, swiftshader: order check, warming (12 min of usable map), ready log ×3, **the fade in recorded** (flat terrain aligned with the map mid-fade), risen, return; tilt injection failed | `A.2-01…08`, `A.2-device-01…15`, `A.2-device-warming.mp4`, `A.2-device-fade-in.mp4`, `A.2-device-fade-out.mp4` |
 
 ---
 
@@ -210,7 +210,8 @@ Full record (eight phases, the tail worked first, seven rejections, contracts, t
 ```
 Boone z15 full-relief disagreement by pitch: 0°=22.1px, 15°=50.6px, 30°=73.4px, 45°=90.1px, 60°=101.1px
 Boone z15, pitch 50: hand-off relief 0.0216 @2px, 0.0567 @5.25px, 0.3437 @32px
-device: Terrain3D: ready: hand-off relief 0.056 at pitch 50 (tolerance 5.3 px)   (00:22:33, 01:09:18)
+device: Terrain3D: ready: hand-off relief 0.056 at pitch 50 (tolerance 5.3 px)   (00:22:33, 01:09:18, 01:22:25)
+device: fade in, frames #9 map -> #10-#11 3D arriving flat over the map -> #12 covered -> #13-#14 relief rising -> #15 risen (2 s)
 device: GensingoMap: layers: style order matches the scene (11 layers)
 mutants: S1 S2 S3 S4 S5 S6 S7 S8 S9 S10 -> killed 10 / 10
 ```
