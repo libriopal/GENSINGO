@@ -1,5 +1,6 @@
 package com.ginsengo.steward.ui.map
 
+import android.annotation.SuppressLint
 import android.util.Log
 import com.ginsengo.steward.geo.LogRedaction
 import org.maplibre.android.log.Logger
@@ -10,7 +11,11 @@ import org.maplibre.android.log.LoggerDefinition
  * (`Mbgl: Failed to load tile 14/4475/6422…`), and offline that is every tile on screen. Installed
  * once, before the first map, through MapLibre's own hook; the JNI log calls go through it too.
  * Throwables are reduced to one redacted line: their messages can carry tile URLs.
+ *
+ * A log adapter: calling android.util.Log is its job (Timber is not a dependency), so lint's
+ * LogNotTimber is exempted here by name.
  */
+@SuppressLint("LogNotTimber")
 object MapLogging {
 
     fun install() = Logger.setLoggerDefinition(Redacting)

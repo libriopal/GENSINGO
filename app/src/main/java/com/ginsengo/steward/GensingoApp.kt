@@ -24,6 +24,8 @@ class GensingoApp : Application() {
         super.onTrimMemory(level)
         if (!::container.isInitialized) return
         container.memoryBudget.trim(level)
+        // The app logs through android.util.Log throughout (Timber is not a dependency).
+        //noinspection LogNotTimber
         Log.i(TAG, "trim level $level: " + container.memoryBudget.report())
     }
 
