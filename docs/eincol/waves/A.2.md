@@ -170,3 +170,50 @@ emulator cannot reach the network through this container's TLS proxy, so no netw
   oracle:** S4 first SURVIVED because the relief test landed in `GroundedCameraTest` (a second
   class in `MapCameraTest.kt`), which neither the harness entry nor my earlier test run selected —
   so that test had not yet run at all. Retargeted, it passes clean and kills S4.
+
+## 7 — Verify (raw output in `docs/eincol/evidence/A.2-*`)
+
+| Check | Result |
+|---|---|
+| Build | `assembleDebug assembleRelease` **exit 0** (`A.2-01-build.txt`); `assembleField -Pgensingo.abis=x86_64` exit 0 (the device APK, SHA-256 `d6aa4ea7…`) |
+| Tests | `:app:test` **exit 0**: 367 per variant (debug, release, field), 0 failures, 1 skipped (`A.2-03-test.txt`). A.1: 355; +12 = HandoffTest 5, SceneLayersTest 4, Terrain3DTest 2, GroundedCameraTest 1 |
+| Lint | `:app:lint` **exit 0**: 0 errors, 80 warnings, none above the bootstrap baseline by (id, file) (`A.2-02-lint.txt`). Exempt by name: `GLTextureView.java` (LogNotTimber, WrongCommentType: copied code kept as published, `app/lint.xml`) and the one new `Log.i` in `Terrain3DView` (`//noinspection`). Before the exemptions: 121 warnings, 40 of them in the copied file and 1 the new log line |
+| Numerical witnesses | Pinhole formula (A7, straight down, analytic r); `MapCamera.project` (A8 relief in the MVP); straight-alpha compositing written out (A9 opacity); the real Boone z15 Terrarium tile, decoded by Python (A7 measurement, the falsification) |
+| Negative controls | **S1–S10: 10/10 killed** (`A.2-07-mutants.txt`, `A.2-08-rerun-S4.txt`): S4 first survived because its oracle sat in a class the harness entry did not name (phase 6) |
+| No-regression | every pre-existing test passes in all three variants |
+| Device (aosp AVD, Android 14 / API 34, x86_64, 1080×2400 @ 2.625, swiftshader, no acceleration) | **A10:** `GensingoMap: layers: style order matches the scene (11 layers)` on the loaded style. **A8, warming:** after "Show in 3D" the map stays on top and usable for the whole build (`-06`, `-13` frames, `A.2-device-warming.mp4`: 12 min of the 2D map with habitat, creeks and contours and the status "Tracing creeks and colouring the ground…"), against the old dark screen (`-04`). **A7 on device:** `Terrain3D: ready: hand-off relief 0.056 at pitch 50 (tolerance 5.3 px)`, twice (00:22:33, 01:09:18), matching the JVM measurement on the Boone tile (0.0567 at 5.25 px). **A8, risen:** `-07`, terrain drawn through the TextureView host over the map. **A8, return:** `-09` → `-10`, `-11` frames and `A.2-device-fade-out.mp4`: risen terrain → terrain sunk flat to the hand-off (#19) → the map (#20); the map landed on a tile range (25/35) other than the recentred view's (20/24), so the "Centre on me" made in 3D was not replayed (the review fix). The emulator draws 2–4 frames a second, so no partial-alpha frame of the 1.2 s fade was caught: the frames show no visible disagreement, which is weaker than showing the fade itself. **A11:** `-07`/`-04` show habitat, contours and creeks following ridges at 50°; the injected two-finger tilt to 60° did not register (`-08` = `-07`), so the 60° screenshot is **not taken** |
+
+## 8 — Re-evaluate
+
+**What the evaluators found that the design did not:**
+1. **The register's A7 is ill-posed in steep country** (phase 2, measured): the hand-off variable
+   became the relief scale. The acceptance check survives with "tilt" read as "relief".
+2. **The copied `GLTextureView` had a render loop** (phase 3): every displayed frame requested the
+   next. Removed and stated in the file's header.
+3. **A stale-move replay on the way back** (my own review, phase 6): fixed before verification;
+   the device return shows the fix's effect indirectly (tile ranges), not directly (I21 hides the
+   position marker).
+4. **S4's oracle was mis-addressed**, so a test I believed green had never run (phase 6).
+5. **Your position is not drawn on the 2D map** (I21, pre-existing since at least A.1, found only
+   because this wave compared 2D and 3D screenshots).
+6. **The device gate itself had two defects**: `adb logcat -d` cannot dump a full buffer inside 15 s
+   on this emulator (the `ready:` line was missed and the segment holding the fade deleted), and
+   segments stopped while detection ran on. Both rewritten (`--pid -t`, a continuous recorder).
+
+**Sovereignty classifier over this wave's claims:**
+
+| Claim | In time | Against a witness | Verdict |
+|---|---|---|---|
+| The hand-off is measured from agreement, not a constant | ✅ the pinhole witness was written before the bisection | ✅ analytic formula; tolerance moves it; S2, S3 killed; device 0.056 = JVM 0.0567 | sound |
+| No tilt hands off cleanly on real terrain | ✅ phase 3 | ✅ real Terrarium tile, decoded outside the app | sound (one tile, one camera fit: a measurement, not a law) |
+| While the map shows through, the mesh agrees with it within 2 dp | ✅ | ✅ `blend` invariant (S1 killed) + relief MVP witness (S4 killed) | sound in the maths; **open** on screen: no partial-alpha frame was caught at 2–4 fps |
+| The map stays usable while the 3D view builds | — | ✅ device frames across a 12-minute build | sound |
+| Every sheet switch means the same in 2D and 3D | ✅ | ✅ `SceneLayersTest` + Terrain3DTest witnesses (S5–S8, S10 killed) | sound |
+| Every layer's declared depth is honoured by both backends | ✅ | ✅ validation test (S9 killed) + the device order check | sound for DRAPED and ON_TOP; OCCLUDED is declared by no layer (no backend can draw it) |
+| Overlays follow the terrain at 60° (A11) | — | ❌ the 60° screenshot was not taken | **open**: blocked(device) until gesture injection works (J18); at 50° they do (`-07`) |
+| The covered map never replays a stale move | ✅ reviewed before verification | ⚠️ indirect device evidence only | **open** until I21 lets the marker witness it |
+
+**Counter-candidate (one per wave): "the cross-fade is cosmetic"** — answered in phase 2. The
+animation is polish; what it forced (the map alive under the 3D view) is the field value: a usable
+map during a build that took 12 minutes on the emulator, an instant return with the raster kept,
+and a failed build that leaves a working map rather than a dark screen with a message.

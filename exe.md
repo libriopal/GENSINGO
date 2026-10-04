@@ -689,40 +689,54 @@ per wave, always, recorded with its rejection.
 ## 12 — Wave state (rewritten at every wave close)
 
 **Bootstrap:** `done` 2026-10-03 at `c95815f`. See `docs/eincol/run-log.md` (BOOT).
-**Last wave:** `A.1` **archived** 2026-10-03 (`docs/eincol/waves/A.1.md`).
-**Cursor:** `W1 / A.2`, A5–A12: continuous tilt, delete the switch, measured hand-off, cross-fade,
-scene description, depth policy, draped overlays, one tile store. It starts with the device retry
-(`aosp` AVD, 4 GB / 4 cores) because it is visual, and with the GL host question I2 raised
-(`GLSurfaceView` → `TextureView`-hosted GL).
-**Device:** none usable (bootstrap). Visual candidates are blocked(device) until a device installs
-the app; performance claims need a real phone (C18).
+**Last wave:** `A.2` **archived** 2026-10-04 (`docs/eincol/waves/A.2.md`).
+**Cursor:** `W1 / A.3`, A13–A18: one eviction policy, the frame-clock question (A14, re-scope
+pending), camera continuity, state across rotation, one gesture handler, the four merge statements
+as device tests. Start with A13: the map now stays alive under the 3D view, so memory is the open
+cost (A.2, phase 4).
+**Device:** the `aosp` AVD works (API 34, x86_64, swiftshader, 4 GB / 4 cores): installs, taps,
+swipes, screenshots, screen recording (2–4 fps). Not working: two-finger gesture injection (J18);
+the network (the emulator does not trust this container's TLS proxy; it runs on cached tiles).
+Performance claims still need a real phone (C18).
 **Blocked:**
 - C1–C18 blocked(device: performance claims need a real phone, C18);
-- J8 blocked(owner: new network destination);
-- J9 blocked(owner: finds leave the device);
-- the device half of A3 blocked(device), which joins A.2's device run.
+- A5 + A6 blocked(owner): decision 4 below;
+- A12 blocked(owner): decision 5 below; and blocked(device) for its network-log check;
+- A11's 60° screenshot blocked(device) until gesture injection works (J18); at 50° the overlays
+  follow the terrain on device (`A.2-device-07`);
+- J8 blocked(owner: new network destination); J9 blocked(owner: finds leave the device);
+  J15 blocked(owner: new dataset and network destination).
 
 **Owner decisions pending:**
-1. Approve the J candidates' scope (J1–J4 recommended as wave J.1 after F.1).
+1. Approve the J candidates' scope (J1–J4 recommended as wave J.1 after F.1; J15–J19 new in A.2).
 2. **A14 is infeasible as written.** One frame clock for MapLibre and the mesh needs MapLibre
    `CustomLayer`, an NDK C++ host (Phase 5, measured). Proposed replacement: "the hidden
-   backend's render loop is paused, and both run only inside the hand-off window" (measurable,
-   same intent).
+   backend's render loop is paused, and both run only inside the hand-off window". A.2 built
+   most of that: the covered map follows no move and computes no raster, and the 3D view is
+   disposed once faded out.
 3. The branch rule for waves: `eincol/<wave-id>` is pushed and the session branch is
    fast-forwarded to it.
+4. **A5 + A6:** *"Should tilting the flat map to its 60° limit enter 3D (and the 3D view stop at
+   60° on the way back), so the 2D/3D button can be removed; or does the button stay as the way
+   into 3D?"* The map opens at 50° and MapLibre stops at 60°; the 3D view lives at 45–80°.
+5. **A12:** *"Approve declaring `com.squareup.okhttp3:okhttp` (already inside the APK via
+   MapLibre, pinned to MapLibre's version: no new bytes shipped) as a direct dependency, so one
+   interceptor serves MapLibre's hillshade tiles from the app's DEM cache?"*
 
-**Pre-existing, exempt by name:** the 78 lint warnings remaining from `BOOT-lint-baseline.tsv`.
-The bootstrap's lint error (I17) is closed.
-**Counts:** 8 archived (A1, A2, A3 [device half → A.2], A4, I2, I3, I4, I17) · 18 blocked(device)
-(C1–C18) · 135 queued · 14 proposed (J1–J14, awaiting the owner's scope approval). Total
-161 + 14 proposed.
+**Fix first, before F.1 (field defects found in A.2):** I21 (your position dot missing on the 2D
+map) and I18 (a stale last-known fix captures the first-fix landing); I19 (a tile id in logcat).
+**Pre-existing, exempt by name:** the lint warnings remaining from `BOOT-lint-baseline.tsv` (80
+now; none above its per-file counts), and the copied `GLTextureView.java` (`app/lint.xml`).
+**Counts:** 12 archived (A1, A2, A3 [device half done in A.2], A4, A7, A8, A9, A10, I2, I3, I4,
+I17) · 22 blocked (C1–C18 device; A5, A6, A12 owner; A11 device) · 131 queued · 19 proposed
+(J1–J19, awaiting the owner's scope approval). Total 165 + 19 proposed.
 
 | Wave | Program | Candidates | Status | Branch / commits | Evidence |
 |---|---|---|---|---|---|
 | BOOT | bootstrap | — | **archived** | `claude/minimal-3d-llm-location-app-yk0lid` | `docs/eincol/run-log.md#boot` |
 | A.1 | One map | A1–A4 (+ I2, I3, I4, I17); A5, A6 → A.2 | **archived** | `eincol/A.1` | `docs/eincol/waves/A.1.md` |
-| A.2 | One map | A5–A12 (A5, A6 re-queued from A.1) | queued (cursor) | — | — |
-| A.3 | One map | A13–A18 (A14 re-scope pending the owner) | queued | — | — |
+| A.2 | One map | A7–A10 (+ A11 at 50°); A5, A6, A12 blocked(owner); A11's 60° shot blocked(device) | **archived** | `eincol/A.2` | `docs/eincol/waves/A.2.md` |
+| A.3 | One map | A13–A18 (A14 re-scope pending the owner) | queued (cursor) | — | — |
 | B.1 | Reliability | B1–B7 | queued | — | — |
 | B.2 | Reliability | B8–B14 | queued | — | — |
 | B.3 | Reliability | B15–B20 | queued | — | — |

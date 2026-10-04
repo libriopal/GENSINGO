@@ -7,6 +7,7 @@ to it and never paraphrases a result it does not link.
 |---|---|---|---|---|---|---|---|
 | BOOT | — (bootstrap; drafted J1–J9; registered I17) | `claude/minimal-3d-llm-location-app-yk0lid` | the bootstrap commit | test **green** · lint **red, pre-existing** (1 error, 80 warnings, listed by name) · build not run (not required by §1) | — | **none usable**: the emulator boots, but its package service dies on every APK install | `BOOT-01-toolchain.txt`, `BOOT-03-test.txt`, `BOOT-03-lint.txt`, `BOOT-03-lint-offline-toolfail.txt`, `BOOT-04-locate-before-worktree-cleanup.txt`, `BOOT-lint-baseline.tsv`, `BOOT-06-device.txt` |
 | A.1 | A1, A2, A3, A4 · I2, I3 (=Q1), I4 (=Q2), I17 · drafted J10–J14 · A5, A6 re-queued to A.2 | `eincol/A.1` (+ fast-forward of the session branch) | see `docs/eincol/waves/A.1.md` | build **exit 0** · lint **exit 0** (0 errors, 78 warnings; I17 gone) · test **exit 0**, 355 per variant | Q1, Q2 (after the fix), Q3, Q4, Q5: **5/5 killed** | not required (non-visual wave, §13); A3's device check joins A.2 | `A.1-01…09`, `A.1-05-structural.txt` |
+| A.2 | A7, A8, A9, A10 (+ A11 at 50°; its 60° shot blocked(device)) · A5+A6, A12 blocked(owner) · registered I18–I21 · drafted J15–J19 | `eincol/A.2` (+ fast-forward of the session branch) | see `docs/eincol/waves/A.2.md` | build **exit 0** · lint **exit 0** (0 errors, 80 warnings, none above baseline; copied file exempt by name) · test **exit 0**, 367 per variant | S1–S10: **10/10 killed** (S4 after its oracle was retargeted) | aosp AVD, API 34 x86_64, swiftshader: order check, warming (12 min of usable map), ready log ×2, risen, return; tilt injection failed | `A.2-01…08`, `A.2-device-01…13`, `A.2-device-warming.mp4`, `A.2-device-fade-out.mp4` |
 
 ---
 
@@ -174,4 +175,42 @@ conformance: zoom 15.58 bearing 140.0 pitch 55.3 -> worst 0.0029 px over 25 poin
 conformance: zoom 16.36 bearing 318.1 pitch 21.4 -> worst 0.0089 px over 23 points
 conformance: zoom 15.43 bearing 141.8 pitch  3.5 -> worst 0.0018 px over 25 points
 conformance (stale camera, must fail): state 1..9 -> worst 534.2 .. 2754.9 px
+```
+
+## A.2 — 2026-10-04 · one surface
+
+Full record (eight phases, the tail worked first, seven rejections, contracts, the classifier):
+`docs/eincol/waves/A.2.md`. In brief:
+
+- **Built.**
+  - **A measured hand-off (A7).** The largest relief scale at which the mesh agrees with the
+    flat map within 2 dp, by bisection; pinned to the pinhole formula and to the real Boone tile.
+    The register asked for a tilt; on real terrain no tilt agrees (22 px straight down, 101 px at
+    60°), so the hand-off is a relief.
+  - **One surface (A8).** The 3D view moved to a `TextureView` host (GPUImage's `GLTextureView`,
+    Apache-2.0, copied with a render loop removed) and joined the map in one stack: it warms
+    under the map, fades in at the hand-off relief, then rises; back, it sinks, lands the camera
+    flat under the cover and fades out. The map stays usable while the terrain builds.
+  - **A scene description with a depth policy (A9, A10).** One `SceneLayer` registry; both
+    backends implement it through exhaustive `when`s; every layer declares `Depth`; the sheet,
+    the map's visibility and the 3D bake read it. Hillshade and Heat opacity now mean something
+    in 3D; the scan ring is drawn there.
+- **Found by the evaluators:** the tilt hand-off is ill-posed (measured); the copied GL host's
+  render loop; a stale-move replay on the way back (my review, fixed before verification); S4's
+  oracle in the wrong class (a test that had never run); your position dot missing on the 2D map
+  (**I21**, pre-existing); two defects in the device gate itself; the harness's duplicate ids and
+  SIGTERM hazard (**I20**).
+- **Blocked on the owner:** A5 + A6 (tilt into 3D vs. keep the button: the 50° default and the
+  60° limit collide) and A12 (approve OkHttp as a direct dependency, already inside the APK).
+- **Drafted this iteration (owner directive):** J15 canopy gate (NLCD tree canopy, public domain;
+  §9 decision); J16 a cited slope band (its figure **unverified** until a primary source is read);
+  J17 keep the last 3D square warm; J18 gesture injection for device gates; J19 a paper backup of
+  the day's plan.
+
+```
+Boone z15 full-relief disagreement by pitch: 0°=22.1px, 15°=50.6px, 30°=73.4px, 45°=90.1px, 60°=101.1px
+Boone z15, pitch 50: hand-off relief 0.0216 @2px, 0.0567 @5.25px, 0.3437 @32px
+device: Terrain3D: ready: hand-off relief 0.056 at pitch 50 (tolerance 5.3 px)   (00:22:33, 01:09:18)
+device: GensingoMap: layers: style order matches the scene (11 layers)
+mutants: S1 S2 S3 S4 S5 S6 S7 S8 S9 S10 -> killed 10 / 10
 ```
