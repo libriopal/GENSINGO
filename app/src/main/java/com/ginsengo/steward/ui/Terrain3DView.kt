@@ -330,6 +330,8 @@ fun Terrain3DView(
     LaunchedEffect(ready) {
         currentOnReady(ready)
         // The device gate's measurement of A7 (no position in it): the hand-off this view fades at.
+        // The app logs through android.util.Log throughout (Timber is not a dependency).
+        //noinspection LogNotTimber
         if (ready) Log.i(TAG, "ready: hand-off relief %.3f at pitch %.0f (tolerance %.1f px)".format(handoff, cam.pitch, tolerancePx))
     }
     // Gone means not ready: the next visit builds anew and must not fade in before it has drawn.

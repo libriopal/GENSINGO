@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Exemptions by name (exe.md §7: by issue id and path, never by category).
+  terrain3d/gl/GLTextureView.java is third-party code (GPUImage for Android, Apache-2.0) kept as
+  published apart from the two changes its header states; restyling it would make every future
+  comparison with upstream a diff of noise. Its logging is GLSurfaceView's, mostly behind
+  compile-time false flags.
+-->
+<lint>
+    <issue id="LogNotTimber">
+        <ignore path="src/main/java/com/ginsengo/steward/terrain3d/gl/GLTextureView.java" />
+    </issue>
+    <issue id="WrongCommentType">
+        <ignore path="src/main/java/com/ginsengo/steward/terrain3d/gl/GLTextureView.java" />
+    </issue>
+</lint>
