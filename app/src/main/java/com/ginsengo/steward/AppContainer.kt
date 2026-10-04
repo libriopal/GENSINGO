@@ -9,6 +9,7 @@ import com.ginsengo.steward.data.db.AppDatabase
 import com.ginsengo.steward.data.reference.ReferenceRepository
 import com.ginsengo.steward.field.LocationProvider
 import com.ginsengo.steward.memory.FieldMemoryRepository
+import com.ginsengo.steward.perf.MemoryBudget
 import com.ginsengo.steward.research.KeyVault
 import com.ginsengo.steward.research.Provider
 import com.ginsengo.steward.research.ResearchRepository
@@ -35,7 +36,16 @@ class AppContainer(val context: Context) {
      * saved for offline) keeps working with no signal. Feeds the heatmap, the radius scan
      * and the 3D view.
      */
-    val demTiles: DemTileStore by lazy { DemTileStore(context) }
+    val demTiles: DemTileStore by lazy { DemTileStore(context, memoryBudget) }
+
+    /**
+     * The one memory ceiling for the large caches of both views (A13): a third of this app's heap
+     * class. GensingoApp lowers it when the system asks for memory back.
+     */
+    val memoryBudget: MemoryBudget by lazy {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        MemoryBudget(MemoryBudget.ceilingFor(am.memoryClass))
+    }
 
     val memory: FieldMemoryRepository by lazy { FieldMemoryRepository(database) }
 

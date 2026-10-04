@@ -325,6 +325,21 @@ fun FieldMap(
         if (active) st.map?.let { refreshHabitat(it, force = false) }
     }
 
+    // The data pushes follow the data (I21). They used to run only from update() below, but that
+    // lambda captures `layers` and not the data, and with strong skipping (Kotlin 2.x, on by
+    // default) Compose keeps the same lambda while `layers` is unchanged: a fix that arrived after
+    // the style had loaded was never pushed, and your position dot was missing whenever the GPS
+    // answered later than the style (measured on the emulator in A.2: missing in most screenshots).
+    LaunchedEffect(me, track, finds, suggestions, radiusCenter) {
+        val style = st.style ?: return@LaunchedEffect
+        pushData(style, st, me, track, finds, suggestions, radiusCenter)
+    }
+    // New weights (the learner adopted, or the owner switched back) redraw the raster now, not at
+    // the next camera move: the key in refreshHabitat includes the weights.
+    LaunchedEffect(weights.contentHashCode()) {
+        if (curActive.value) st.map?.let { refreshHabitat(it, force = false) }
+    }
+
     AndroidView(
         modifier = modifier,
         factory = {

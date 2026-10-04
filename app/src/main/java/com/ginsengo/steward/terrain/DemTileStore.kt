@@ -1,11 +1,12 @@
 package com.ginsengo.steward.terrain
 
+import com.ginsengo.steward.geo.LogRedaction
+import com.ginsengo.steward.perf.MemoryBudget
 import com.ginsengo.steward.geo.Projection
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
-import android.util.LruCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -44,20 +45,27 @@ import kotlin.math.tan
  * bundled offline grid (assets/geo/dem_grid.bin) so the model keeps working with no signal.
  * Tiles are cached to app-private storage, so ground already walked stays available offline.
  */
-class DemTileStore(context: Context) {
+class DemTileStore(
+    context: Context,
+    /** The app's one memory ceiling (A13); unbounded where no budget is given (tests). */
+    private val budget: MemoryBudget = MemoryBudget(Long.MAX_VALUE),
+) {
 
     private val cacheDir = File(context.cacheDir, "dem_tiles").apply { mkdirs() }
 
     private val failedAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
-    /** Decoded elevation tiles, keyed z/x/y. ~256 KB each as floats; cap at ~24 tiles. */
-    private val memory = object : LruCache<String, FloatArray>(24) {
-        override fun sizeOf(key: String, value: FloatArray) = 1
-    }
+    /**
+     * Decoded elevation tiles, keyed z/x/y, ~256 KB each as floats, held for as long as the shared
+     * budget allows (A13). It used to be a cap of 24 tiles: fewer than one 2D raster asks for (35
+     * at zoom 14 with its halo), so a raster evicted its own first tiles before it finished.
+     */
+    private val memory = java.util.concurrent.ConcurrentHashMap<String, FloatArray>()
+    private val evictTile = MemoryBudget.Owner { memory.remove(it as String) }
 
     suspend fun tile(z: Int, x: Int, y: Int): FloatArray? = withContext(Dispatchers.IO) {
         val key = "$z/$x/$y"
-        memory.get(key)?.let { return@withContext it }
+        memory[key]?.let { budget.touch(BUDGET_OWNER, key); return@withContext it }
 
         val f = File(cacheDir, "${z}_${x}_${y}.png")
         val bytes = if (f.exists() && f.length() > 0) {
@@ -78,7 +86,8 @@ class DemTileStore(context: Context) {
 
         val out = decodeTerrarium(bmp)
         bmp.recycle()
-        memory.put(key, out)
+        memory[key] = out
+        budget.put(BUDGET_OWNER, evictTile, key, out.size * 4L)
         out
     }
 
@@ -92,7 +101,10 @@ class DemTileStore(context: Context) {
             inputStream.use { it.readBytes() }.also { disconnect() }
         }
     }.getOrElse {
-        Log.w(TAG, "DEM tile $z/$x/$y unavailable", it)
+        // No tile id (I19): a zoom-15 id locates the phone to about 1 km. No stack trace either:
+        // offline, every refresh fails dozens of tiles, and the traces flooded logcat until logd
+        // pruned the app's own lines (A.2's device run).
+        Log.w(TAG, "DEM tile unavailable at zoom $z: " + LogRedaction.describe(it))
         null
     }
 
@@ -237,6 +249,9 @@ class DemTileStore(context: Context) {
         private const val RETRY_AFTER_MS = 5 * 60_000L
         const val MAX_TILES = 64
         const val TERRARIUM = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium"
+
+        /** This store's name in the memory budget's counters. */
+        const val BUDGET_OWNER = "dem"
 
         /**
          * One Terrarium pixel (ARGB) to metres: R·256 + G + B/256 − 32768 (the Tilezen/Mapzen

@@ -72,6 +72,7 @@ class TerrainGlRenderer : GLTextureView.Renderer {
     private var uHaze = -1
 
     fun submitMesh(m: TerrainMesh.Mesh?) { mesh.set(m); meshDirty = true }
+    fun hasMesh(m: TerrainMesh.Mesh): Boolean = mesh.get() === m
     fun submitTexture(t: Texture?) { texture.set(t); textureDirty = true }
     fun submitFrame(frame: Frame?) = cameraState.set(frame)
 

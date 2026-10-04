@@ -58,6 +58,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        // Back in the foreground: the memory ceiling a trim lowered goes back up (A13).
+        vm.container.memoryBudget.restore()
         vm.onVisible()
     }
 

@@ -79,12 +79,14 @@ import com.ginsengo.steward.ui.map.Basemap
 import com.ginsengo.steward.ui.map.DARK_STYLE
 import com.ginsengo.steward.ui.map.FieldMap
 import com.ginsengo.steward.ui.map.SceneLayer
-import com.ginsengo.steward.terrain3d.CameraMath
 import com.ginsengo.steward.terrain3d.Handoff
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.zIndex
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import kotlin.math.roundToInt
 
 private enum class Sheet { NONE, SUGGEST, FIND, LAYERS }
@@ -114,25 +116,33 @@ fun MainScreen(vm: FieldViewModel) {
     // Handoff.COVERED, the 3D view covering it with its relief at the measured hand-off;
     // Handoff.RISEN, full relief and the gestures on the 3D view. The fade starts only once the
     // 3D view is built, fitted and drawn: until then the map stays, and stays usable.
-    val reveal = remember { Animatable(0f) }
+    // Saved across a rotation (A16): a risen 3D view comes back risen, but only with its square still
+    // held by the ViewModel; without one it warms under the map again rather than show nothing.
+    var savedReveal by rememberSaveable { mutableFloatStateOf(0f) }
+    val reveal = remember {
+        Animatable(if (view3d && savedReveal >= Handoff.RISEN && vm.meshSession.scene != null) Handoff.RISEN else 0f)
+    }
+    SideEffect { savedReveal = reveal.value }
     var meshReady by remember { mutableStateOf(false) }
     LaunchedEffect(view3d, meshReady) {
         if (view3d) {
             if (meshReady || reveal.value > 0f) reveal.animateTo(Handoff.RISEN, tween(REVEAL_MS, easing = LinearEasing))
         } else if (reveal.value > 0f) {
             if (reveal.value > Handoff.COVERED) {
-                // Sink to the hand-off relief, easing the pitch into the flat map's range on the way.
+                // Sink to the hand-off relief, easing the pitch into the flat map's range on the way
+                // (Handoff.sinkPitch, A15): the landing below then moves nothing.
                 val pitch0 = vm.camera.camera.pitch
-                val pitch1 = minOf(pitch0, CameraMath.MAX_2D_PITCH)
                 val from = reveal.value
                 reveal.animateTo(Handoff.COVERED, tween(SINK_MS, easing = LinearEasing)) {
-                    val t = ((from - value) / (from - Handoff.COVERED)).toDouble().coerceIn(0.0, 1.0)
-                    if (pitch1 != pitch0) vm.camera.report(vm.camera.camera.copy(pitch = pitch0 + (pitch1 - pitch0) * t))
+                    val p = Handoff.sinkPitch(pitch0, from, value)
+                    if (p != vm.camera.camera.pitch) vm.camera.report(vm.camera.camera.copy(pitch = p))
                 }
             }
             vm.landFlat()
             reveal.animateTo(0f, tween(FADE_OUT_MS, easing = LinearEasing))
         }
+        // Back on the map: the square and its memory go (A13, A16).
+        if (!view3d && reveal.value == 0f) vm.meshSession.end()
     }
     val revealed = reveal.value
     // The 3D view drapes the 2D map's style only when that style actually loaded here.
@@ -168,6 +178,7 @@ fun MainScreen(vm: FieldViewModel) {
                     radiusCenter = run?.let { it.centerLat to it.centerLng },
                     reveal = revealed,
                     onReady = { meshReady = it },
+                    session = vm.meshSession,
                 )
             }
         }

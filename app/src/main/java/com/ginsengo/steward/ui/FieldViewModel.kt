@@ -17,6 +17,7 @@ import com.ginsengo.steward.learn.FindLearner
 import com.ginsengo.steward.research.Provider
 import com.ginsengo.steward.research.ResearchTrigger
 import com.ginsengo.steward.terrain3d.CameraMath
+import com.ginsengo.steward.terrain3d.MeshSession
 import com.ginsengo.steward.terrain3d.CameraState
 import com.ginsengo.steward.terrain3d.SharedCamera
 import com.ginsengo.steward.ui.map.CameraStart
@@ -91,7 +92,19 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
     val camera = SharedCamera(
         CameraStart.initial(null, null).let { CameraState(it.lat, it.lon, it.zoom, 0.0, CameraStart.START_TILT) }
     )
-    private var cameraOnFix = false
+    /**
+     * The 3D view's built square for the current visit to 3D (A16): it survives a rotation, which
+     * recreates the views but not this ViewModel. Ended when the user is back on the map.
+     */
+    val meshSession = MeshSession(container.memoryBudget)
+
+    override fun onCleared() {
+        meshSession.end()
+        super.onCleared()
+    }
+
+    /** How far the first-fix landing has got (CameraStart.landing, I18). */
+    private var landed = CameraStart.Landing.NONE
 
     /**
      * One switch, one camera: the view changes, the place does not ([CameraMath.to3d]/[to2d]).
@@ -171,9 +184,11 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun onFix(loc: FieldLocation) {
         _location.value = loc
-        // The first fix JUMPS the camera (CameraStart: an animation can be interrupted, a jump cannot).
-        if (CameraStart.shouldJumpToFix(hasFix = true, alreadyCentred = cameraOnFix)) {
-            cameraOnFix = true
+        // The first fresh fix JUMPS the camera (CameraStart: an animation can be interrupted, a jump
+        // cannot); a stale last-known fix only lands provisionally, so it cannot steal that jump.
+        val action = CameraStart.landing(System.currentTimeMillis() - loc.timestamp, landed)
+        if (action != CameraStart.Landing.NONE) {
+            landed = action
             camera.move(camera.camera.copy(lat = loc.lat, lng = loc.lng, zoom = CameraStart.FIELD_ZOOM))
         }
         burst?.add(loc)
