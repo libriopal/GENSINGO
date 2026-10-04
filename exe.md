@@ -599,7 +599,7 @@ Purpose: make the app survive a ridge with no signal, and a store submission.
 | H13 | Permissions and foreground service | Minimum permissions; Android 14+ foreground service types declared | Manifest audit; service runs without a compliance warning |
 | H14 | Crash reporting without location | No fix, find or track in any crash payload | Payload fixture inspected; no coordinates |
 
-### I — Gaps, mutations and counter-candidates · I1–I20 · every wave
+### I — Gaps, mutations and counter-candidates · I1–I21 · every wave
 
 Purpose: the deliberate attempts to break the above, plus the gaps nobody has claimed yet. One
 counter-candidate runs with **every** wave; the rest are assigned as their phase arrives.
@@ -626,6 +626,7 @@ counter-candidate runs with **every** wave; the rest are assigned as their phase
 | I18 | **A stale last-known fix captures the first-fix landing (found on A.1/A.2's device run)** | The first-fix jump (`FieldViewModel.onFix`, `CameraStart.shouldJumpToFix`) waits for a fix that is fresh and accurate; a cached last-known location hours old and hundreds of km away does not consume it | A test feeding an old, distant last-known fix and then a fresh one lands on the fresh one; the emulator run lands on its `geo fix` without "Centre on me" |
 | I19 | **A DEM tile id in logcat locates the user (found in A.2)** | `DemTileStore` no longer logs `z/x/y` (a z15 tile is ~1 km): failures are counted and logged without the tile id (invariant: privacy, coarse cell only) | Grep: no tile coordinates in any log call; a log-capture test of a failed fetch contains no digits of the tile id |
 | I20 | **The mutation harness can leave a live mutant (found in A.2)** | `tools/mutate.py` refuses duplicate mutant ids (A.2 reused R1–R10, which ran the old hydrology R1–R3 instead), and restores the file on SIGINT/SIGTERM (a killed run left `RadiusScan.kt` mutated; caught by `git status` and restored from git) | Running two mutants with one id fails before any edit; `kill -TERM` mid-run leaves `git status` clean |
+| I21 | **Your position is not drawn on the 2D map (found in A.2, pre-existing)** | The flat map shows the `g-me-layer` dot wherever the GPS chip shows a fix. On the emulator it was missing in every kept 2D screenshot of the A.1 and A.2 builds (`A.2-device-02`, `-03`, `-05`, `-10`, `-12`: after "Centre on me" the map centres on the fix and no dot is drawn), yet a screenshot of a superseded A.2 build (deleted with that run's evidence) showed it, so it is intermittent. Suspect: `pushData` records the position key before the source accepts the data, so a push lost to a style (re)load is never retried while the phone stands still (the GPS drops repeats under 2 m) | A test (or a device run) in which the style loads after the first fix still draws the dot; on device, after "Centre on me", the dot sits at the screen centre. A field defect: fix before F.1 |
 
 ### J — Owner-directed goal candidates · J1–J19 · proposed (J1–J9 at bootstrap, J10–J14 in wave A.1, J15–J19 in wave A.2)
 
@@ -671,8 +672,8 @@ right after F.1, because they feed the top-N engine; J5 and J6 with D.1; J7 with
 | F — Top-N engine | F1–F22 | 22 | W5 |
 | G — Truth and learning | G1–G12 | 12 | W7 |
 | H — Offline and release | H1–H14 | 14 | W8 |
-| I — Gaps and mutations | I1–I20 | 20 | every wave (I17 at bootstrap; I18–I20 in A.2) |
-| **Total** | | **164** | |
+| I — Gaps and mutations | I1–I21 | 21 | every wave (I17 at bootstrap; I18–I21 in A.2) |
+| **Total** | | **165** | |
 | J — Owner-directed goal candidates | J1–J19 | 19 | proposed; not counted until the owner approves scope |
 
 **Phase order and why.** A before B: everything draws through the one map, so building the renderer
