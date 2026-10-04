@@ -599,7 +599,7 @@ Purpose: make the app survive a ridge with no signal, and a store submission.
 | H13 | Permissions and foreground service | Minimum permissions; Android 14+ foreground service types declared | Manifest audit; service runs without a compliance warning |
 | H14 | Crash reporting without location | No fix, find or track in any crash payload | Payload fixture inspected; no coordinates |
 
-### I — Gaps, mutations and counter-candidates · I1–I16 · every wave
+### I — Gaps, mutations and counter-candidates · I1–I20 · every wave
 
 Purpose: the deliberate attempts to break the above, plus the gaps nobody has claimed yet. One
 counter-candidate runs with **every** wave; the rest are assigned as their phase arrives.
@@ -623,8 +623,11 @@ counter-candidate runs with **every** wave; the rest are assigned as their phase
 | I15 | Out-of-season mutant | An out-of-season date is rejected | Season oracle rejects |
 | I16 | **Standing gaps with no owner yet** | Device matrix; licence register for every asset and dataset; accessibility audit; localisation; privacy policy; reproducible build; crash-free-session metric; behaviour when the owner's API key is revoked or the provider changes terms | Each gap is either claimed as a new candidate or published as an accepted open item — never left implicit |
 | I17 | **Pre-existing lint error (found at bootstrap)** | `StateFlowValueCalledInComposition` at `ui/MainScreen.kt:120` is gone: the 3D view no longer reads `vm.camera.value` during composition | `./gradlew :app:lint` reports 0 errors. Expected to close inside A.1, whose `CameraState` replaces that line; if A.1 leaves it, I17 runs on its own |
+| I18 | **A stale last-known fix captures the first-fix landing (found on A.1/A.2's device run)** | The first-fix jump (`FieldViewModel.onFix`, `CameraStart.shouldJumpToFix`) waits for a fix that is fresh and accurate; a cached last-known location hours old and hundreds of km away does not consume it | A test feeding an old, distant last-known fix and then a fresh one lands on the fresh one; the emulator run lands on its `geo fix` without "Centre on me" |
+| I19 | **A DEM tile id in logcat locates the user (found in A.2)** | `DemTileStore` no longer logs `z/x/y` (a z15 tile is ~1 km): failures are counted and logged without the tile id (invariant: privacy, coarse cell only) | Grep: no tile coordinates in any log call; a log-capture test of a failed fetch contains no digits of the tile id |
+| I20 | **The mutation harness can leave a live mutant (found in A.2)** | `tools/mutate.py` refuses duplicate mutant ids (A.2 reused R1–R10, which ran the old hydrology R1–R3 instead), and restores the file on SIGINT/SIGTERM (a killed run left `RadiusScan.kt` mutated; caught by `git status` and restored from git) | Running two mutants with one id fails before any edit; `kill -TERM` mid-run leaves `git status` clean |
 
-### J — Owner-directed goal candidates · J1–J14 · proposed (J1–J9 at bootstrap, J10–J14 in wave A.1)
+### J — Owner-directed goal candidates · J1–J19 · proposed (J1–J9 at bootstrap, J10–J14 in wave A.1, J15–J19 in wave A.2)
 
 Purpose, in the owner's words: put a digger in an almost unfair position to find big ginseng and,
 hopefully, a honey hole. Drafted under the owner's standing rule that every iteration proposes at
@@ -650,6 +653,11 @@ right after F.1, because they feed the top-N engine; J5 and J6 with D.1; J7 with
 | J12 | **Honey-hole detector over your own finds** | The owner's finds clustered on the device (a patch is finds within tens of metres); a patch with many plants and mostly 3-prong-or-better plants is flagged as a *honey hole* and ranked by mature-plant count. Never leaves the phone | A synthetic set with one dense mature patch and scattered 1-prong finds flags exactly that patch; a prong-blind mutant fails | Reuse the find clustering already in `learn/FindLearner.kt`; `Find.plantCount`/`maxProngs`. Grounded in the prong-age relation (3 prongs ≈ 4+ years, the usual legal threshold) |
 | J13 | **Look-alike guard in the Find sheet** | A short identification check before saving (palmately compound leaves on one stalk, 3–5 serrated leaflets per prong, the berry cluster at the fork), contrasted with the common look-alikes. Text only; no model, no dependency | Saving a find shows the check; the check's wording is reviewed against a state identification guide, cited on screen | PA DCNR *American Ginseng Identification* (2018). Improves the record that every learner and heatmap trusts |
 | J14 | **Seed your own honey hole** | A "planted seeds" record (date, count, place) with a maturity clock (~4–5 years to three prongs) and a reminder; suggested sites are the engine's top-ranked ground near the owner's finds. Planting on someone else's land needs their permission, said on screen | A planting record round-trips through the database; the clock reports the expected 3-prong year | New record kind, so a Room migration (H9, a §9 decision with the migration stated). Long-game: turns today's best ground into a future patch |
+| J15 | **Canopy gate** | Cells under open or thin canopy are marked as poor habitat, from the USFS/NLCD Tree Canopy Cover raster (30 m, percent canopy) for the saved area, offline after download. The terrain score is untouched: the gate is a separate, visible layer and mask, and its threshold is the owner's to set from J6's cited shade optimum | A fixture patch of low canopy is masked and one of closed canopy is not; a mutant reading canopy inverted fails | NLCD Tree Canopy Cover, USDA Forest Service, published as public domain (MRLC; USFS raster gateway). **A new dataset and network destination: blocked(owner, §9)**; licence re-checked at adoption. Grounded in Canada's *Recovery Strategy for the American Ginseng* (2018, read in A.2): the species is "intolerant to larger openings in the canopy" and occupies mature, "closed-canopy" forest |
+| J16 | **Slope band, cited and pinned** | The model's slope response is checked against an occurrence band read from a primary source, and the citation shown in the factor read-out. If the weights put the optimum outside that band, the discrepancy goes to the owner; it is not silently "fixed" | A test with the cited band as witness: a slope inside the band beats slopes below and above it; an inverted-band mutant fails | `terrain/GinsengSuitability.kt` factors. **The source is UNVERIFIED:** a "slopes 10–40 %" figure appeared in a search summary, but the Canadian recovery strategy it was attributed to does not contain it (checked in A.2). No number is used until a primary source is read (invariant 5) |
+| J17 | **The last 3D square stays warm** | Leaving 3D keeps the built scene (one square, its mesh and one texture) in the ViewModel under a memory ceiling, so returning to the same place is instant instead of a full rebuild (measured in A.2: 12 min on the unaccelerated emulator; seconds on a phone) | Re-entering 3D at the same tile shows the terrain without a "Tracing creeks…" status; a memory counter shows one scene held, released on trim-memory | `Terrain3D.Scene` as built; feeds A13 (one eviction policy) |
+| J18 | **Gesture injection for device gates** | A committed script drives two-finger tilt, pinch and rotate on the emulator's multitouch device (`sendevent`, protocol B), so the visual witnesses that need a gesture (A11 at 60°, A15, A17, A18) are reproducible by anyone | The script tilts the 3D view by a requested amount; the before/after screenshots differ in pitch as requested | Linux multitouch protocol B; the emulator's `virtio_input_multi_touch` device (found in A.2) |
+| J19 | **A paper backup of the day's plan** | One button writes the day's top places (rank, bearing and distance from the car, elevation band, the cove's contour snippet) to a local PDF the owner can print or keep offline: a dead phone on a ridge still has the plan. Owner-initiated, on the device, no network | The PDF lists exactly the engine's places in rank order with their stored factors; a reorder mutant fails | Android `PdfDocument` (platform API, no dependency); the engine's output (F-group) and `terrain/ContourLines.kt` |
 
 ### Register arithmetic
 
@@ -663,9 +671,9 @@ right after F.1, because they feed the top-N engine; J5 and J6 with D.1; J7 with
 | F — Top-N engine | F1–F22 | 22 | W5 |
 | G — Truth and learning | G1–G12 | 12 | W7 |
 | H — Offline and release | H1–H14 | 14 | W8 |
-| I — Gaps and mutations | I1–I17 | 17 | every wave (I17 registered at bootstrap) |
-| **Total** | | **161** | |
-| J — Owner-directed goal candidates | J1–J14 | 14 | proposed; not counted until the owner approves scope |
+| I — Gaps and mutations | I1–I20 | 20 | every wave (I17 at bootstrap; I18–I20 in A.2) |
+| **Total** | | **164** | |
+| J — Owner-directed goal candidates | J1–J19 | 19 | proposed; not counted until the owner approves scope |
 
 **Phase order and why.** A before B: everything draws through the one map, so building the renderer
 before the merge means building it twice. B before C: a reliable renderer can be profiled; a fast

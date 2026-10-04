@@ -1,0 +1,25 @@
+('S1', 'the fade raises full relief while the map still shows', 'KILLED', 25)
+('S2', 'the hand-off is a constant, not measured', 'KILLED', 24)
+('S3', 'the disagreement ignores the relief scale', 'KILLED', 23)
+('S4', 'the mesh ignores the relief scale', 'SURVIVED', 23)
+('S5', 'a draped layer drawn over the mesh instead of on it', 'KILLED', 26)
+('S6', 'the 3D ignores the Hillshade switch (registry)', 'KILLED', 24)
+('S7', 'the 3D bake shades whatever the switch says', 'KILLED', 25)
+('S8', 'the 3D habitat ignores Heat opacity', 'KILLED', 27)
+('S9', 'a layer declares a depth its 3D renderer does not honour', 'KILLED', 24)
+('S10', 'one switch moves two layers', 'KILLED', 23)
+
+| ID | Mutation | Result |
+|---|---|---|
+| S1 | the fade raises full relief while the map still shows | KILLED |
+| S2 | the hand-off is a constant, not measured | KILLED |
+| S3 | the disagreement ignores the relief scale | KILLED |
+| S4 | the mesh ignores the relief scale | SURVIVED |
+| S5 | a draped layer drawn over the mesh instead of on it | KILLED |
+| S6 | the 3D ignores the Hillshade switch (registry) | KILLED |
+| S7 | the 3D bake shades whatever the switch says | KILLED |
+| S8 | the 3D habitat ignores Heat opacity | KILLED |
+| S9 | a layer declares a depth its 3D renderer does not honour | KILLED |
+| S10 | one switch moves two layers | KILLED |
+
+killed 9 / 10

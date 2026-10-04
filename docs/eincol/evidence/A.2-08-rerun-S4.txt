@@ -1,0 +1,7 @@
+('S4', 'the mesh ignores the relief scale', 'KILLED', 16)
+
+| ID | Mutation | Result |
+|---|---|---|
+| S4 | the mesh ignores the relief scale | KILLED |
+
+killed 1 / 1
