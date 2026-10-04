@@ -1,0 +1,25 @@
+('U1', 'tile ids pass through the log redactor', 'KILLED', 22)
+('U2', 'a stale fix uses up the landing', 'SURVIVED', 21)
+('U3', 'the 3D view tilts at its old 0.15 deg/px', 'KILLED', 22)
+('U4', 'no pitch easing on the sink (the landing clamps)', 'KILLED', 23)
+('U5', 'the budget evicts the most recently used', 'KILLED', 26)
+('U6', 'the budget evicts what is on screen', 'KILLED', 24)
+('U7', 'nothing is ever occluded', 'KILLED', 21)
+('U8', 'the markers drawn on top, ignoring their occlusion', 'KILLED', 21)
+('U9', 'the eye on the wrong side of the target', 'KILLED', 21)
+('U10', 'a trim ignores how hard the system asked', 'KILLED', 23)
+
+| ID | Mutation | Result |
+|---|---|---|
+| U1 | tile ids pass through the log redactor | KILLED |
+| U2 | a stale fix uses up the landing | SURVIVED |
+| U3 | the 3D view tilts at its old 0.15 deg/px | KILLED |
+| U4 | no pitch easing on the sink (the landing clamps) | KILLED |
+| U5 | the budget evicts the most recently used | KILLED |
+| U6 | the budget evicts what is on screen | KILLED |
+| U7 | nothing is ever occluded | KILLED |
+| U8 | the markers drawn on top, ignoring their occlusion | KILLED |
+| U9 | the eye on the wrong side of the target | KILLED |
+| U10 | a trim ignores how hard the system asked | KILLED |
+
+killed 9 / 10

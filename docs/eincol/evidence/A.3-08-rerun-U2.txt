@@ -1,0 +1,7 @@
+('U2', 'a stale fix uses up the landing', 'KILLED', 29)
+
+| ID | Mutation | Result |
+|---|---|---|
+| U2 | a stale fix uses up the landing | KILLED |
+
+killed 1 / 1

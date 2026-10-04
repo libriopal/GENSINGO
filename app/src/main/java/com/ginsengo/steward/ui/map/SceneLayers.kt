@@ -12,9 +12,10 @@ enum class Depth {
     DRAPED,
 
     /**
-     * Stands on the ground and is hidden by a ridge in front of it. No layer may declare it yet:
-     * neither backend can draw it (the 3D markers are a Compose canvas over the GL surface, with no
-     * depth test), and [SceneLayersTest] fails a layer that claims a policy nothing honours.
+     * Stands on the ground and is hidden by a ridge in front of it. In 3D the canvas tests each
+     * marker against the terrain ([com.ginsengo.steward.terrain3d.Occlusion], A18) and draws a
+     * hidden one faint: still a place to walk to, plainly behind the ridge. On the flat map there is
+     * no ridge, so it stacks with the layers drawn on top.
      */
     OCCLUDED,
 
@@ -45,10 +46,10 @@ enum class SceneLayer(
     WATER(Depth.DRAPED, { it.water }, { s, on -> s.copy(water = on) }),
     VISITED(Depth.ON_TOP, { it.visited }, { s, on -> s.copy(visited = on) }),
     TRACK(Depth.ON_TOP, { it.trackLine }, { s, on -> s.copy(trackLine = on) }),
-    FINDS(Depth.ON_TOP, { it.finds }, { s, on -> s.copy(finds = on) }),
+    FINDS(Depth.OCCLUDED, { it.finds }, { s, on -> s.copy(finds = on) }),
     RING(Depth.ON_TOP, { true }, null),
-    SUGGESTIONS(Depth.ON_TOP, { it.suggestions }, { s, on -> s.copy(suggestions = on) }),
-    ME(Depth.ON_TOP, { true }, null),
+    SUGGESTIONS(Depth.OCCLUDED, { it.suggestions }, { s, on -> s.copy(suggestions = on) }),
+    ME(Depth.OCCLUDED, { true }, null),
     ;
 
     companion object {
@@ -97,6 +98,9 @@ enum class MeshDraw {
 
     /** On the Compose canvas over the GL surface, each point lifted to the terrain under it. */
     CANVAS,
+
+    /** On the canvas, and drawn faint where the terrain hides it from the eye (Occlusion). */
+    CANVAS_OCCLUDED,
 }
 
 /** The 3D view's renderer for each layer. */
@@ -104,8 +108,9 @@ object MeshLayers {
     fun draw(layer: SceneLayer): MeshDraw = when (layer) {
         SceneLayer.HILLSHADE, SceneLayer.HABITAT, SceneLayer.CONTOURS, SceneLayer.WATER -> MeshDraw.BAKED
         // VISITED is drawn as the line of where you walked: the 2D heatmap's blur has no 3D size.
-        SceneLayer.VISITED, SceneLayer.TRACK, SceneLayer.FINDS, SceneLayer.RING,
-        SceneLayer.SUGGESTIONS, SceneLayer.ME -> MeshDraw.CANVAS
+        // Lines stay on top: a line half behind a ridge would need per-segment tests for little gain.
+        SceneLayer.VISITED, SceneLayer.TRACK, SceneLayer.RING -> MeshDraw.CANVAS
+        SceneLayer.FINDS, SceneLayer.SUGGESTIONS, SceneLayer.ME -> MeshDraw.CANVAS_OCCLUDED
     }
 
     /** The texture bake's switches, from the sheet, through the registry. */
@@ -118,5 +123,5 @@ object MeshLayers {
     )
 
     /** Whether the canvas draws [layer] now. */
-    fun onCanvas(layer: SceneLayer, s: MapLayerState): Boolean = draw(layer) == MeshDraw.CANVAS && layer.shown(s)
+    fun onCanvas(layer: SceneLayer, s: MapLayerState): Boolean = draw(layer) != MeshDraw.BAKED && layer.shown(s)
 }

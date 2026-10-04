@@ -89,6 +89,19 @@ object Handoff {
         return out
     }
 
+    /**
+     * The pitch during the sink back to the map (exe.md A15): from [pitch0] at [from] (where the
+     * sink started, normally [RISEN]) to within the flat map's 60° at [COVERED], linearly in
+     * [reveal]. The camera then lands flat under the cover ([CameraMath.to2d]) without moving:
+     * without this easing, a 3D view tilted past 60° would jump at the landing.
+     */
+    fun sinkPitch(pitch0: Double, from: Float, reveal: Float): Double {
+        val target = minOf(pitch0, CameraMath.MAX_2D_PITCH)
+        if (from <= COVERED) return target
+        val t = ((from - reveal) / (from - COVERED)).toDouble().coerceIn(0.0, 1.0)
+        return pitch0 + (target - pitch0) * t
+    }
+
     /** What the mesh draws at one moment of the transition. */
     data class Blend(val alpha: Float, val relief: Double)
 

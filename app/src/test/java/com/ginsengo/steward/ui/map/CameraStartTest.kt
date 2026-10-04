@@ -77,6 +77,36 @@ class CameraStartTest {
                 assertFalse("both fired for fix=$fix centred=$centred follow=$follow", jump && anim)
             }
     }
+
+    /**
+     * I18: the phone's cached last-known fix (Play services' `lastLocation`, which can be hours old
+     * and far away) arrives first, then the live fix. The stale one may open the map near it, but
+     * the live one must still land, and once it has, nothing jumps again.
+     */
+    @Test
+    fun aStaleFixCannotStealTheLanding() {
+        val hours = 3 * 3_600_000L
+        var landed = CameraStart.Landing.NONE
+        val first = CameraStart.landing(fixAgeMs = hours, landed = landed)
+        assertEquals("a stale fix lands only provisionally", CameraStart.Landing.PROVISIONAL, first)
+        landed = first
+        assertEquals("a second stale fix does not move the map again",
+            CameraStart.Landing.NONE, CameraStart.landing(hours, landed))
+        val live = CameraStart.landing(fixAgeMs = 1_500, landed = landed)
+        assertEquals("the first fresh fix still lands", CameraStart.Landing.FINAL, live)
+        landed = live
+        for (age in listOf(0L, 1_000L, hours)) assertEquals("nothing jumps after the landing",
+            CameraStart.Landing.NONE, CameraStart.landing(age, landed))
+    }
+
+    @Test
+    fun aFreshFirstFixLandsAtOnceAndTheBoundaryIsInclusive() {
+        assertEquals(CameraStart.Landing.FINAL, CameraStart.landing(0, CameraStart.Landing.NONE))
+        assertEquals(CameraStart.Landing.FINAL, CameraStart.landing(CameraStart.FRESH_FIX_MS, CameraStart.Landing.NONE))
+        assertEquals(CameraStart.Landing.PROVISIONAL, CameraStart.landing(CameraStart.FRESH_FIX_MS + 1, CameraStart.Landing.NONE))
+        assertEquals("a clock-skewed fix from the future counts as fresh",
+            CameraStart.Landing.FINAL, CameraStart.landing(-5_000, CameraStart.Landing.NONE))
+    }
 }
 
 /**

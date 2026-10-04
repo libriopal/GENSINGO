@@ -3,7 +3,6 @@ package com.ginsengo.steward.ui.map
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
 import org.junit.Test
 
 /**
@@ -21,20 +20,23 @@ class SceneLayersTest {
             when (layer.depth) {
                 Depth.DRAPED -> assertEquals("$layer is draped: the 3D view must bake it onto the mesh", MeshDraw.BAKED, mesh)
                 Depth.ON_TOP -> assertEquals("$layer is on top: the 3D view must draw it over the mesh", MeshDraw.CANVAS, mesh)
-                Depth.OCCLUDED -> fail("$layer declares OCCLUDED, which neither backend can draw yet")
+                Depth.OCCLUDED -> assertEquals("$layer is occluded: the 3D view must test it against the terrain", MeshDraw.CANVAS_OCCLUDED, mesh)
             }
         }
     }
 
-    /** On the flat map the policy is the stacking: every draped layer under every layer on top. */
+    /** On the flat map the policy is the stacking: every draped layer under every layer standing on it. */
     @Test
     fun theFlatMapStacksEveryDrapedLayerUnderEveryLayerOnTop() {
         val order = FlatLayers.ORDER
         assertEquals("a style layer drawn for two scene layers", order.size, order.toSet().size)
         for (layer in SceneLayer.entries) assertTrue("$layer has no flat renderer", FlatLayers.ids(layer).isNotEmpty())
-        fun indices(d: Depth) = SceneLayer.entries.filter { it.depth == d }.flatMap(FlatLayers::ids).map(order::indexOf)
-        assertTrue("draped ${indices(Depth.DRAPED)} vs on top ${indices(Depth.ON_TOP)}",
-            indices(Depth.DRAPED).max() < indices(Depth.ON_TOP).min())
+        fun indices(vararg d: Depth) = SceneLayer.entries.filter { it.depth in d }.flatMap(FlatLayers::ids).map(order::indexOf)
+        val standing = indices(Depth.ON_TOP, Depth.OCCLUDED)
+        assertTrue("draped ${indices(Depth.DRAPED)} vs standing $standing", indices(Depth.DRAPED).max() < standing.min())
+        // A18: the markers a digger walks to declare occlusion; the lines do not.
+        assertEquals(setOf(SceneLayer.FINDS, SceneLayer.SUGGESTIONS, SceneLayer.ME),
+            SceneLayer.entries.filter { it.depth == Depth.OCCLUDED }.toSet())
         // The order FieldMap.addLayers has always used (checked again on device against the loaded style).
         assertEquals(listOf("g-hillshade", "g-habitat-layer", "g-contour-layer", "g-water-layer", "g-visited-layer",
             "g-track-layer", "g-finds-heat", "g-finds-dots", "g-ring-layer", "g-suggest-layer", "g-me-layer"), order)
@@ -60,7 +62,7 @@ class SceneLayersTest {
             for (other in SceneLayer.entries - layer) assertEquals("$layer's switch moved $other", other.shown(on), other.shown(off))
             when (MeshLayers.draw(layer)) {
                 MeshDraw.BAKED -> assertNotEquals("$layer's switch does not reach the 3D bake", MeshLayers.baked(on), MeshLayers.baked(off))
-                MeshDraw.CANVAS -> assertTrue("$layer's switch does not reach the 3D canvas",
+                MeshDraw.CANVAS, MeshDraw.CANVAS_OCCLUDED -> assertTrue("$layer's switch does not reach the 3D canvas",
                     MeshLayers.onCanvas(layer, on) && !MeshLayers.onCanvas(layer, off))
             }
         }

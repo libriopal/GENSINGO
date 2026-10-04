@@ -5,6 +5,7 @@ import com.ginsengo.steward.terrain.GinsengSuitability
 import com.ginsengo.steward.terrain.Hydrology
 import com.ginsengo.steward.terrain.SuitabilityRasterizer
 import com.ginsengo.steward.geo.Projection
+import com.ginsengo.steward.perf.MemoryBudget
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.ln
@@ -21,6 +22,10 @@ import kotlin.math.min
  * fallbacks when the zoom-15 tiles are not cached.
  */
 object Terrain3D {
+
+    /** Names in the memory budget's counters (A13). */
+    const val BUDGET_SCENE = "scene"
+    const val BUDGET_TEXTURES = "textures"
 
     val ZOOMS = intArrayOf(15, 14, 13)
     const val AREA_TILES = 3
@@ -102,12 +107,37 @@ object Terrain3D {
             return top * (1 - fy) + bottom * fy
         }
 
-        // At most two textures (a 2048-square one is 16 MB): the one on screen and the last.
+        // Baked textures (a 2048-square one is 16 MB). Without a budget: the one on screen and the
+        // last. With one (the app, A13): as many as the shared ceiling allows, the one on screen
+        // pinned, the rest evicted least-recently-used along with every other cache in the app.
         private val baked = LinkedHashMap<String, IntArray>()
+        private var budget: MemoryBudget? = null
+        private var onScreen: String? = null
+        private val id = System.identityHashCode(this)
+        private val evictTexture = MemoryBudget.Owner { k -> synchronized(this) { baked.remove((k as Pair<*, *>).second) } }
+
+        /** Puts this scene under the app's memory budget: its own arrays pinned, its textures evictable. */
+        @Synchronized
+        fun useBudget(b: MemoryBudget) {
+            budget = b
+            val bytes = mosaic.grid.z.size * 4L + mesh.vertices.size * 4L + mesh.indices.size * 4L + (ground.scores?.size ?: 0) * 8L
+            b.put(BUDGET_SCENE, { }, id, bytes, pinned = true)
+            for ((k, px) in baked) b.put(BUDGET_TEXTURES, evictTexture, id to k, px.size * 4L, pinned = k == onScreen)
+        }
+
+        /** This scene is gone from the screen: the budget forgets it and its textures. */
+        @Synchronized
+        fun release() {
+            val b = budget ?: return
+            b.remove(BUDGET_SCENE, id)
+            for (k in baked.keys) b.remove(BUDGET_TEXTURES, id to k)
+            budget = null
+        }
 
         /**
          * The texture for a colouring, the user's layer toggles, and the 2D map's basemap when
-         * one was rendered (MAP mode drapes it; without it the neutral relief is the base).
+         * one was rendered (MAP mode drapes it; without it the neutral relief is the base). The
+         * texture returned is the one going on screen: it is pinned, the previous one released.
          */
         @Synchronized
         fun texture(
@@ -116,14 +146,27 @@ object Terrain3D {
             basemap: IntArray? = null,
         ): IntArray {
             val key = "$mode:$layers:${basemap?.let { System.identityHashCode(it) } ?: 0}"
-            baked[key]?.let { return it }
-            val g = if (basemap == null) ground else TerrainTextures.Ground(
-                ground.mosaic, ground.scores, ground.scoreSize, ground.lines, ground.exaggeration, basemap)
-            val px = TerrainTextures.bake(g, mode, textureSize, layers)
-            while (baked.size >= 2) baked.remove(baked.keys.first())
-            baked[key] = px
+            val px = baked[key] ?: run {
+                val g = if (basemap == null) ground else TerrainTextures.Ground(
+                    ground.mosaic, ground.scores, ground.scoreSize, ground.lines, ground.exaggeration, basemap)
+                val fresh = TerrainTextures.bake(g, mode, textureSize, layers)
+                if (budget == null) while (baked.size >= 2) baked.remove(baked.keys.first())
+                baked[key] = fresh
+                budget?.put(BUDGET_TEXTURES, evictTexture, id to key, fresh.size * 4L, pinned = true)
+                fresh
+            }
+            val b = budget
+            if (b != null && onScreen != key) {
+                onScreen?.let { b.pin(BUDGET_TEXTURES, id to it, false) }
+                b.pin(BUDGET_TEXTURES, id to key, true)
+                b.touch(BUDGET_TEXTURES, id to key)
+            }
+            onScreen = key
             return px
         }
+
+        /** How many baked textures this scene holds now (the budget's witness in tests). */
+        @Synchronized fun texturesHeld(): Int = baked.size
 
         fun describe(): String =
             "HD 3D · %.1f m elevation · %.1f × %.1f km · %.0f km of creeks & drains"

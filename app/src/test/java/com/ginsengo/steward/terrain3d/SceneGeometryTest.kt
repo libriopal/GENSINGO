@@ -84,4 +84,35 @@ class SceneGeometryTest {
         assertEquals("settling twice changes nothing more", next.zoom, same.zoom, 1e-3)
         assertEquals(nextGround, sameGround, 0.5)
     }
+
+    /**
+     * A13 + A16: the scene under the shared budget. Its own arrays are pinned; the texture on screen
+     * is pinned; other textures are evicted least-recently-used when the ceiling is reached; leaving
+     * 3D (MeshSession.end) gives everything back.
+     */
+    @Test
+    fun theSceneAndItsTexturesLiveUnderTheSharedCeiling() {
+        val s = scene()
+        val tex = s.textureSize.toLong() * s.textureSize * 4
+        val sceneBytes = s.mosaic.grid.z.size * 4L + s.mesh.vertices.size * 4L + s.mesh.indices.size * 4L + (s.ground.scores?.size ?: 0) * 8L
+        val budget = com.ginsengo.steward.perf.MemoryBudget(sceneBytes + 2 * tex + tex / 2)
+        val session = MeshSession(budget)
+        val first = s.texture(TerrainTextures.Mode.HABITAT, TerrainTextures.Layers())
+        session.adopt(s, 1)
+        assertEquals("scene + one texture", sceneBytes + tex, budget.totalBytes())
+        val looks = listOf(
+            TerrainTextures.Layers(contours = false), TerrainTextures.Layers(water = false),
+            TerrainTextures.Layers(hillshade = false), TerrainTextures.Layers(habitatOpacity = 0.5f),
+        )
+        for (l in looks) {
+            val onScreen = s.texture(TerrainTextures.Mode.HABITAT, l)
+            assertTrue("the ceiling holds: ${budget.report()}", budget.totalBytes() <= budget.ceilingBytes)
+            assertTrue("the texture on screen is never evicted", onScreen === s.texture(TerrainTextures.Mode.HABITAT, l))
+        }
+        assertEquals("two textures fit beside the scene", 2, s.texturesHeld())
+        assertTrue(budget.evictions(Terrain3D.BUDGET_TEXTURES) >= 3)
+        assertTrue("the first look was evicted and is baked again", first !== s.texture(TerrainTextures.Mode.HABITAT, TerrainTextures.Layers()))
+        session.end()
+        assertEquals("leaving 3D gives it all back", 0L, budget.totalBytes())
+    }
 }

@@ -1,0 +1,148 @@
+# MapLibre Android 13.6.1 + maplibre-android-gestures 0.0.4: gesture constants and formulas, read with javap (A.3, A17)
+# android-sdk-13.6.1.aar SHA-256: 3863ef506991b590270e1418129a44b98d73da31251c011dc440ea6121fb01aa
+
+## MapLibreConstants
+  public static final float SHOVE_PIXEL_CHANGE_FACTOR = 0.1f;
+  public static final double MAXIMUM_TILT = 60.0d;
+  public static final double MINIMUM_TILT = 0.0d;
+  public static final float ZOOM_RATE = 0.65f;
+  public static final java.lang.String STATE_ZOOM_RATE = "maplibre_zoomRate";
+
+## ShoveGestureListener.onShove (tilt)
+  public boolean onShoveBegin(org.maplibre.android.gestures.ShoveGestureDetector);
+    Code:
+       0: aload_0
+       1: getfield      #1                  // Field this$0:Lorg/maplibre/android/maps/MapGestureDetector;
+       4: getfield      #13                 // Field org/maplibre/android/maps/MapGestureDetector.uiSettings:Lorg/maplibre/android/maps/UiSettings;
+       7: invokevirtual #19                 // Method org/maplibre/android/maps/UiSettings.isTiltGesturesEnabled:()Z
+      10: ifne          15
+      13: iconst_0
+      14: ireturn
+  public boolean onShove(org.maplibre.android.gestures.ShoveGestureDetector, float, float);
+    Code:
+       0: aload_0
+       1: getfield      #1                  // Field this$0:Lorg/maplibre/android/maps/MapGestureDetector;
+       4: getfield      #48                 // Field org/maplibre/android/maps/MapGestureDetector.cameraChangeDispatcher:Lorg/maplibre/android/maps/CameraChangeDispatcher;
+       7: iconst_1
+       8: invokevirtual #54                 // Method org/maplibre/android/maps/CameraChangeDispatcher.onCameraMoveStarted:(I)V
+      11: aload_0
+      12: getfield      #1                  // Field this$0:Lorg/maplibre/android/maps/MapGestureDetector;
+      15: getfield      #58                 // Field org/maplibre/android/maps/MapGestureDetector.transform:Lorg/maplibre/android/maps/Transform;
+      18: invokevirtual #62                 // Method org/maplibre/android/maps/Transform.getTilt:()D
+      21: dstore        4
+      23: dload         4
+      25: ldc           #70                 // float 0.1f
+      27: fload_2
+      28: fmul
+      29: f2d
+      30: dsub
+      31: dstore        4
+      33: dload         4
+      35: dconst_0
+      36: ldc2_w        #71                 // double 60.0d
+      39: invokestatic  #73                 // Method org/maplibre/android/utils/MathUtils.clamp:(DDD)D
+      42: dstore        4
+      44: aload_0
+      45: getfield      #1                  // Field this$0:Lorg/maplibre/android/maps/MapGestureDetector;
+      48: getfield      #58                 // Field org/maplibre/android/maps/MapGestureDetector.transform:Lorg/maplibre/android/maps/Transform;
+      51: dload         4
+      53: invokestatic  #79                 // Method java/lang/Double.valueOf:(D)Ljava/lang/Double;
+      56: invokevirtual #85                 // Method org/maplibre/android/maps/Transform.setTilt:(Ljava/lang/Double;)V
+      59: aload_0
+
+## ScaleGestureListener.onScale, non-quick-zoom branch (pinch)
+     147: invokevirtual #199                // Method org/maplibre/android/gestures/StandardScaleGestureDetector.getScaleFactor:()F
+     150: f2d
+     151: invokestatic  #202                // Method java/lang/Math.log:(D)D
+     154: ldc2_w        #206                // double 1.5707963267948966d
+     157: invokestatic  #202                // Method java/lang/Math.log:(D)D
+     160: ddiv
+     161: ldc2_w        #208                // double 0.6499999761581421d
+     164: dmul
+     165: aload_0
+     166: getfield      #3                  // Field this$0:Lorg/maplibre/android/maps/MapGestureDetector;
+     169: getfield      #41                 // Field org/maplibre/android/maps/MapGestureDetector.uiSettings:Lorg/maplibre/android/maps/UiSettings;
+     172: invokevirtual #192                // Method org/maplibre/android/maps/UiSettings.getZoomRate:()F
+     175: f2d
+     176: dmul
+     177: dstore_3
+     178: aload_0
+     179: getfield      #3                  // Field this$0:Lorg/maplibre/android/maps/MapGestureDetector;
+     182: getfield      #135                // Field org/maplibre/android/maps/MapGestureDetector.transform:Lorg/maplibre/android/maps/Transform;
+     185: dload_3
+     186: aload_2
+     187: invokevirtual #210                // Method org/maplibre/android/maps/Transform.zoomBy:(DLandroid/graphics/PointF;)V
+
+## RotateGestureListener.onRotate (twist)
+  public boolean onRotateBegin(org.maplibre.android.gestures.RotateGestureDetector);
+    Code:
+       0: aload_0
+       1: getfield      #3                  // Field this$0:Lorg/maplibre/android/maps/MapGestureDetector;
+       4: getfield      #34                 // Field org/maplibre/android/maps/MapGestureDetector.uiSettings:Lorg/maplibre/android/maps/UiSettings;
+       7: invokevirtual #40                 // Method org/maplibre/android/maps/UiSettings.isRotateGesturesEnabled:()Z
+      10: ifne          15
+      13: iconst_0
+      14: ireturn
+  public boolean onRotate(org.maplibre.android.gestures.RotateGestureDetector, float, float);
+    Code:
+       0: aload_0
+       1: getfield      #3                  // Field this$0:Lorg/maplibre/android/maps/MapGestureDetector;
+       4: getfield      #114                // Field org/maplibre/android/maps/MapGestureDetector.cameraChangeDispatcher:Lorg/maplibre/android/maps/CameraChangeDispatcher;
+       7: iconst_1
+       8: invokevirtual #120                // Method org/maplibre/android/maps/CameraChangeDispatcher.onCameraMoveStarted:(I)V
+      11: aload_0
+      12: getfield      #3                  // Field this$0:Lorg/maplibre/android/maps/MapGestureDetector;
+      15: getfield      #124                // Field org/maplibre/android/maps/MapGestureDetector.transform:Lorg/maplibre/android/maps/Transform;
+      18: invokevirtual #128                // Method org/maplibre/android/maps/Transform.getRawBearing:()D
+      21: fload_2
+      22: f2d
+      23: dadd
+      24: dstore        4
+      26: aload_0
+      27: aload_1
+      28: invokevirtual #134                // Method getRotateFocalPoint:(Lorg/maplibre/android/gestures/RotateGestureDetector;)Landroid/graphics/PointF;
+      31: astore        6
+      33: aload_0
+      34: getfield      #3                  // Field this$0:Lorg/maplibre/android/maps/MapGestureDetector;
+
+## gestures 0.0.4 RotateGestureDetector.getRotationDegreesSinceLast
+  float getRotationDegreesSinceLast();
+    Code:
+       0: aload_0
+       1: getfield      #24                 // Field pointersDistanceMap:Ljava/util/HashMap;
+       4: new           #25                 // class org/maplibre/android/gestures/PointerDistancePair
+       7: dup
+       8: aload_0
+       9: getfield      #26                 // Field pointerIdList:Ljava/util/List;
+      12: iconst_0
+      13: invokeinterface #27,  2           // InterfaceMethod java/util/List.get:(I)Ljava/lang/Object;
+      18: checkcast     #28                 // class java/lang/Integer
+      21: aload_0
+      22: getfield      #26                 // Field pointerIdList:Ljava/util/List;
+      25: iconst_1
+      26: invokeinterface #27,  2           // InterfaceMethod java/util/List.get:(I)Ljava/lang/Object;
+      31: checkcast     #28                 // class java/lang/Integer
+      34: invokespecial #29                 // Method org/maplibre/android/gestures/PointerDistancePair."<init>":(Ljava/lang/Integer;Ljava/lang/Integer;)V
+      37: invokevirtual #30                 // Method java/util/HashMap.get:(Ljava/lang/Object;)Ljava/lang/Object;
+      40: checkcast     #31                 // class org/maplibre/android/gestures/MultiFingerDistancesObject
+      43: astore_1
+      44: aload_1
+      45: invokevirtual #32                 // Method org/maplibre/android/gestures/MultiFingerDistancesObject.getPrevFingersDiffY:()F
+      48: f2d
+      49: aload_1
+      50: invokevirtual #33                 // Method org/maplibre/android/gestures/MultiFingerDistancesObject.getPrevFingersDiffX:()F
+      53: f2d
+      54: invokestatic  #34                 // Method java/lang/Math.atan2:(DD)D
+      57: aload_1
+      58: invokevirtual #35                 // Method org/maplibre/android/gestures/MultiFingerDistancesObject.getCurrFingersDiffY:()F
+      61: f2d
+      62: aload_1
+      63: invokevirtual #36                 // Method org/maplibre/android/gestures/MultiFingerDistancesObject.getCurrFingersDiffX:()F
+      66: f2d
+      67: invokestatic  #34                 // Method java/lang/Math.atan2:(DD)D
+      70: dsub
+      71: dstore_2
+      72: dload_2
+      73: invokestatic  #37                 // Method java/lang/Math.toDegrees:(D)D
+      76: d2f
+      77: freturn

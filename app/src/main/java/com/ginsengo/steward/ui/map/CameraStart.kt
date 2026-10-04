@@ -47,6 +47,27 @@ object CameraStart {
     fun shouldJumpToFix(hasFix: Boolean, alreadyCentred: Boolean): Boolean =
         hasFix && !alreadyCentred
 
+    /** A fix older than this is a memory of where the phone was, not where it is (I18). */
+    const val FRESH_FIX_MS = 120_000L
+
+    /** What a fix does to the camera: nothing, a provisional landing, or the landing. */
+    enum class Landing { NONE, PROVISIONAL, FINAL }
+
+    /**
+     * The landing rule (I18). The first FRESH fix jumps the camera, once ([Landing.FINAL]). A stale
+     * fix (Play services' cached last-known location, possibly hours old and far away: from home,
+     * opened at the trailhead) may open the map near it, but only provisionally: it does not use up
+     * the landing, so the first fresh fix still lands. After the landing nothing jumps
+     * again (following is animated, [shouldAnimateFollow]). [landed] is what has happened so far;
+     * the result is what this fix does. A clock-skewed fix from the future counts as fresh.
+     */
+    fun landing(fixAgeMs: Long, landed: Landing): Landing = when {
+        landed == Landing.FINAL -> Landing.NONE
+        fixAgeMs <= FRESH_FIX_MS -> Landing.FINAL
+        landed == Landing.NONE -> Landing.PROVISIONAL
+        else -> Landing.NONE
+    }
+
     /** After the first landing, following is a smooth animation and may be switched off. */
     fun shouldAnimateFollow(hasFix: Boolean, alreadyCentred: Boolean, following: Boolean): Boolean =
         hasFix && alreadyCentred && following

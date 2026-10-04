@@ -98,6 +98,54 @@ class HandoffTest {
         assertEquals("half faded, half the hand-off", 0.115, Handoff.blend(0.5f, handoff).relief, 1e-9)
     }
 
+    /**
+     * A15: the way back from a 3D view tilted past the flat map's limit, sampled frame by frame:
+     * the sink (relief falling to the hand-off, pitch eased into 60°), the landing under the cover
+     * (CameraMath.to2d, as FieldViewModel.landFlat), the fade out. The projected screen-centre
+     * ground and the square's corners never jump: no step moves them more than a few pixels, and
+     * the landing moves them by nothing at all. Without the easing (mutant), the landing clamps
+     * 75° to 60° in one frame.
+     */
+    @Test
+    fun theWayBackToTheMapHasNoJump() {
+        val (mc0, samples) = boone(pitch = 75.0)
+        val start = CameraState(mc0.centerLat, mc0.centerLng, mc0.zoom, mc0.bearingDeg, 75.0)
+        // Control points: the corners and centre of the samples' grid (heights as drawn at full relief).
+        val probes = listOf(samples.first(), samples[samples.size / 2], samples.last(),
+            samples[14], samples[samples.size - 15])
+        val handoff = Handoff.relief(mc0, samples, tolPx)
+        fun screen(cam: CameraState, reveal: Float): List<Pair<Double, Double>> {
+            val mc = CameraMath.mapCamera(cam, w, h)
+            val relief = Handoff.blend(reveal, handoff).relief
+            return probes.map { p -> mc.project(p.lat, p.lng, p.heightM * relief)!!.let { it[0].toDouble() to it[1].toDouble() } }
+        }
+        val frames = 36                                         // 600 ms at 60 Hz, as MainScreen's SINK_MS
+        var cam = start
+        var last = screen(cam, Handoff.RISEN)
+        var worstStep = 0.0
+        for (i in 1..frames) {
+            val reveal = Handoff.RISEN - (Handoff.RISEN - Handoff.COVERED) * i / frames
+            cam = cam.copy(pitch = Handoff.sinkPitch(start.pitch, Handoff.RISEN, reveal))
+            val now = screen(cam, reveal)
+            worstStep = maxOf(worstStep, now.zip(last).maxOf { (a, b) -> kotlin.math.hypot(a.first - b.first, a.second - b.second) })
+            last = now
+        }
+        assertEquals("the sink ends within the map's range", CameraMath.MAX_2D_PITCH, cam.pitch, 1e-9)
+        val landed = CameraMath.forView(cam, view3d = false)
+        val landingJump = screen(landed, Handoff.COVERED).zip(screen(cam, Handoff.COVERED))
+            .maxOf { (a, b) -> kotlin.math.hypot(a.first - b.first, a.second - b.second) }
+        println("way back from 75°: worst per-frame step %.2f px, landing %.4f px".format(worstStep, landingJump))
+        assertEquals("the landing moves nothing", 0.0, landingJump, 1e-6)
+        assertTrue("a frame moved the picture $worstStep px", worstStep < 25.0)
+    }
+
+    @Test
+    fun theSinkLeavesAMapRangePitchAlone() {
+        assertEquals(50.0, Handoff.sinkPitch(50.0, Handoff.RISEN, 1.5f), 0.0)
+        assertEquals(67.5, Handoff.sinkPitch(75.0, Handoff.RISEN, 1.5f), 1e-9)
+        assertEquals(60.0, Handoff.sinkPitch(75.0, Handoff.COVERED, 0.7f), 0.0)
+    }
+
     /** The Boone z15 tile as a one-tile scene, the camera fitted over it as the 3D view fits its square. */
     private fun boone(pitch: Double): Pair<MapCamera, List<Handoff.Sample>> {
         val z = 15

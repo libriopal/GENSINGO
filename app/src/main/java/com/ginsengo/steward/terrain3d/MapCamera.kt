@@ -262,6 +262,17 @@ class MapCamera(
         return doubleArrayOf(latFromMercatorY(y / worldSize), lngFromMercatorX(x / worldSize))
     }
 
+    /**
+     * Where the eye is, in world pixels: x east, y south (as [worldX]/[worldY]), z up from the
+     * target plane in the units [project] lifts heights by (metres × [pixelsPerMeter]). The same
+     * construction [unproject] undoes; the occlusion test casts its rays to here.
+     */
+    fun eyeWorld(): DoubleArray {
+        val d = cameraToCenterDistance
+        val eyeY1 = sin(pitch) * d
+        return doubleArrayOf(centerX + sin(angle) * eyeY1, centerY + cos(angle) * eyeY1, cos(pitch) * d)
+    }
+
     companion object {
         /** MapLibre's vector tile size; the whole pixel space is defined against it. */
         const val TILE_SIZE = 512.0
