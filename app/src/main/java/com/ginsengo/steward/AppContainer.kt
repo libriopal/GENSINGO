@@ -39,8 +39,9 @@ class AppContainer(val context: Context) {
     val demTiles: DemTileStore by lazy { DemTileStore(context, memoryBudget) }
 
     /**
-     * The one memory ceiling for the large caches of both views (A13): a third of this app's heap
-     * class. GensingoApp lowers it when the system asks for memory back.
+     * The one memory ceiling for the large caches of both views (A13): a fifth of this app's heap
+     * class. GensingoApp lowers it when the system asks for memory back; the 3D build trims it when
+     * it runs out of memory and tries once more.
      */
     val memoryBudget: MemoryBudget by lazy {
         val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager

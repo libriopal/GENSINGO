@@ -1,0 +1,4 @@
+10-04 16:57:27.197  6501  7765 W o.steward.field: Throwing OutOfMemoryError "Failed to allocate a 13107216 byte allocation with 9103720 free bytes and 8890KB until OOM, target footprint 201326592, growth limit 201326592" (VmSize 14078180 kB)
+10-04 16:57:29.083  6501  7765 W o.steward.field: Throwing OutOfMemoryError "Failed to allocate a 13107216 byte allocation with 9087336 free bytes and 8874KB until OOM, target footprint 201326592, growth limit 201326592" (VmSize 14078180 kB)
+10-04 16:57:29.145  6501  7765 E Terrain3D: 3D build failed
+10-04 16:57:29.145  6501  7765 E Terrain3D: java.lang.OutOfMemoryError: Failed to allocate a 13107216 byte allocation with 9087336 free bytes and 8874KB until OOM, target footprint 201326592, growth limit 201326592

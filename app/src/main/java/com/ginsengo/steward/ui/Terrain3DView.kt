@@ -1,5 +1,6 @@
 package com.ginsengo.steward.ui
 
+import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -80,6 +81,7 @@ import com.ginsengo.steward.terrain3d.GestureMath
 import com.ginsengo.steward.terrain3d.Handoff
 import com.ginsengo.steward.terrain3d.MeshSession
 import com.ginsengo.steward.terrain3d.Occlusion
+import com.ginsengo.steward.perf.MemoryBudget
 import com.ginsengo.steward.terrain3d.Terrain3D
 import com.ginsengo.steward.terrain3d.TerrainGlRenderer
 import com.ginsengo.steward.terrain3d.TerrainTextures
@@ -156,6 +158,8 @@ fun Terrain3DView(
      * instead of rebuilding it. MainScreen ends the session when the user leaves 3D.
      */
     session: MeshSession = remember { MeshSession(null) },
+    /** The app's memory budget (A13): emptied, and the build tried once more, when a build runs out of memory. */
+    budget: MemoryBudget? = null,
 ) {
     val context = LocalContext.current
     val renderer = remember { TerrainGlRenderer() }
@@ -253,17 +257,19 @@ fun Terrain3DView(
         }
         status("Tracing creeks and colouring the ground…")
         val s = withContext(Dispatchers.Default) {
-            runCatching { Terrain3D.build(area.first, weights) }
-                .onFailure { Log.e(TAG, "3D build failed", it) }.getOrNull()
+            afterTrimIfOutOfMemory(budget, "3D build") { Terrain3D.build(area.first, weights) }
         }
         if (s == null) { status("Could not build the 3D terrain here."); return@LaunchedEffect }
         // Colour first, then mesh and colour together: the new ground never wears the old
         // square's texture. (The colour effect below finds this texture in the scene's cache.)
         val l = currentLayers
         val px = withContext(Dispatchers.Default) {
-            s.texture(if (SceneLayer.HABITAT.shown(l)) TerrainTextures.Mode.HABITAT else TerrainTextures.Mode.ELEVATION,
-                MeshLayers.baked(l))
+            afterTrimIfOutOfMemory(budget, "3D colour") {
+                s.texture(if (SceneLayer.HABITAT.shown(l)) TerrainTextures.Mode.HABITAT else TerrainTextures.Mode.ELEVATION,
+                    MeshLayers.baked(l))
+            }
         }
+        if (px == null) { status("Could not colour the 3D terrain here (out of memory)."); return@LaunchedEffect }
         renderer.submitMesh(s.mesh)
         renderer.submitTexture(TerrainGlRenderer.Texture(px, s.textureSize))
         drape = null
@@ -354,7 +360,8 @@ fun Terrain3DView(
         // The device gate's measurement of A7 (no position in it): the hand-off this view fades at.
         // The app logs through android.util.Log throughout (Timber is not a dependency).
         //noinspection LogNotTimber
-        if (ready) Log.i(TAG, "ready: hand-off relief %.3f at pitch %.0f (tolerance %.1f px)".format(handoff, cam.pitch, tolerancePx))
+        if (ready) Log.i(TAG, "ready: hand-off relief %.3f at pitch %.0f (tolerance %.1f px)".format(handoff, cam.pitch, tolerancePx) +
+            (budget?.let { " · " + it.report() } ?: ""))
     }
     // Gone means not ready: the next visit builds anew and must not fade in before it has drawn.
     DisposableEffect(Unit) { onDispose { currentOnReady(false) } }
@@ -621,6 +628,28 @@ private fun trackSegments(track: List<TrackPoint>, s: Terrain3D.Scene): List<Dou
             }
         }
     }
+}
+
+/**
+ * Runs [work]; if it runs out of memory, empties the shared caches (the budget's purpose, A13) and
+ * runs it once more. Found on A.3's device run: a 3D build ran the emulator's 192 MB heap out while
+ * the 10-mile scan's tiles filled the cache. Any other failure, or a second out-of-memory, is logged
+ * and gives null: the caller says so on screen.
+ */
+@SuppressLint("LogNotTimber")   // the app logs through android.util.Log throughout; exempt by name
+private inline fun <T> afterTrimIfOutOfMemory(budget: MemoryBudget?, what: String, work: () -> T): T? {
+    for (attempt in 0..1) {
+        try {
+            return work()
+        } catch (e: OutOfMemoryError) {
+            if (attempt == 1 || budget == null) { Log.e(TAG, "$what failed: out of memory", e); return null }
+            budget.trim(MemoryBudget.TRIM_RUNNING_CRITICAL)
+            Log.w(TAG, "$what: out of memory; caches trimmed (${budget.report()}), trying once more")
+        } catch (e: Exception) {
+            Log.e(TAG, "$what failed", e); return null
+        }
+    }
+    return null
 }
 
 /**

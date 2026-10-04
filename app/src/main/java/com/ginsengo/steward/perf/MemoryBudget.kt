@@ -121,7 +121,13 @@ class MemoryBudget(val baseCeilingBytes: Long, private val clock: () -> Long = {
         const val TRIM_UI_HIDDEN = 20
         const val TRIM_BACKGROUND = 40
 
-        /** A third of the heap the system gives this app class, and never under 48 MB. */
-        fun ceilingFor(memoryClassMb: Int): Long = maxOf(48L, memoryClassMb / 3L) * 1_048_576L
+        /**
+         * A fifth of the heap the system gives this app class, and never under 24 MB. The rest is
+         * for the work itself: a 3D build, the habitat raster and the 10-mile scan each need tens
+         * of MB of short-lived arrays, often at once. A third (the first choice) ran the emulator's
+         * 192 MB heap out of memory during a 3D build on A.3's device run, with the scan's tiles
+         * filling the cache the old 24-tile cap had kept to ~6 MB.
+         */
+        fun ceilingFor(memoryClassMb: Int): Long = maxOf(24L, memoryClassMb / 5L) * 1_048_576L
     }
 }

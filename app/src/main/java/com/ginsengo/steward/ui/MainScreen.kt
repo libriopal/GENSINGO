@@ -179,6 +179,7 @@ fun MainScreen(vm: FieldViewModel) {
                     reveal = revealed,
                     onReady = { meshReady = it },
                     session = vm.meshSession,
+                    budget = vm.container.memoryBudget,
                 )
             }
         }

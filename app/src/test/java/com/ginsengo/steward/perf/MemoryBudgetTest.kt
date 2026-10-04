@@ -93,8 +93,9 @@ class MemoryBudgetTest {
     }
 
     @Test
-    fun theCeilingIsAThirdOfTheHeapClassAndNeverUnder48Mb() {
-        assertEquals(48L * 1_048_576, MemoryBudget.ceilingFor(96))
-        assertEquals(170L * 1_048_576, MemoryBudget.ceilingFor(512))
+    fun theCeilingIsAFifthOfTheHeapClassAndNeverUnder24Mb() {
+        assertEquals(24L * 1_048_576, MemoryBudget.ceilingFor(96))
+        assertEquals("the emulator's 192 MB class (OOM at a third)", 38L * 1_048_576, MemoryBudget.ceilingFor(192))
+        assertEquals(102L * 1_048_576, MemoryBudget.ceilingFor(512))
     }
 }
