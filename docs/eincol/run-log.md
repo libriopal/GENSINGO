@@ -8,6 +8,7 @@ to it and never paraphrases a result it does not link.
 | BOOT | — (bootstrap; drafted J1–J9; registered I17) | `claude/minimal-3d-llm-location-app-yk0lid` | the bootstrap commit | test **green** · lint **red, pre-existing** (1 error, 80 warnings, listed by name) · build not run (not required by §1) | — | **none usable**: the emulator boots, but its package service dies on every APK install | `BOOT-01-toolchain.txt`, `BOOT-03-test.txt`, `BOOT-03-lint.txt`, `BOOT-03-lint-offline-toolfail.txt`, `BOOT-04-locate-before-worktree-cleanup.txt`, `BOOT-lint-baseline.tsv`, `BOOT-06-device.txt` |
 | A.1 | A1, A2, A3, A4 · I2, I3 (=Q1), I4 (=Q2), I17 · drafted J10–J14 · A5, A6 re-queued to A.2 | `eincol/A.1` (+ fast-forward of the session branch) | see `docs/eincol/waves/A.1.md` | build **exit 0** · lint **exit 0** (0 errors, 78 warnings; I17 gone) · test **exit 0**, 355 per variant | Q1, Q2 (after the fix), Q3, Q4, Q5: **5/5 killed** | not required (non-visual wave, §13); A3's device check joins A.2 | `A.1-01…09`, `A.1-05-structural.txt` |
 | A.2 | A7, A8, A9, A10 (+ A11 at 50°; its 60° shot blocked(device)) · A5+A6, A12 blocked(owner) · registered I18–I21 · drafted J15–J19 | `eincol/A.2` (+ fast-forward of the session branch) | see `docs/eincol/waves/A.2.md` | build **exit 0** · lint **exit 0** (0 errors, 80 warnings, none above baseline; copied file exempt by name) · test **exit 0**, 367 per variant | S1–S10: **10/10 killed** (S4 after its oracle was retargeted) | aosp AVD, API 34 x86_64, swiftshader: order check, warming (12 min of usable map), ready log ×3, **the fade in recorded** (flat terrain aligned with the map mid-fade), risen, return; tilt injection failed | `A.2-01…08`, `A.2-device-01…15`, `A.2-device-warming.mp4`, `A.2-device-fade-in.mp4`, `A.2-device-fade-out.mp4` |
+| A.3 | A13, A15, A17, A11 (from A.2) · I18, I19, I21 · A18 partial · A16 blocked(device) · A14 blocked(owner) · registered I22 · drafted J20–J24 | `eincol/A.3` (+ fast-forward of the session branch) | see `docs/eincol/waves/A.3.md` | build **exit 0** · lint **exit 0** (0 errors, 79 warnings, none above baseline) · test **exit 0**, 388 per variant | U1–U10: **10/10 killed** (U2 after its tests were moved into the named class) | aosp AVD, API 34 x86_64, three runs: the dot back (I21), no tile ids (I19), 3D at a logged 60° with an occluded marker (A11, A18), budget counters and trim (A13); found and fixed an out-of-memory crash and a rotation kill; the emulator cannot rotate this app | `A.3-01…12`, `A.3-device-01…04`, `A.3-device-run1-04`, `-05` |
 
 ---
 
@@ -214,4 +215,35 @@ device: Terrain3D: ready: hand-off relief 0.056 at pitch 50 (tolerance 5.3 px)  
 device: fade in, frames #9 map -> #10-#11 3D arriving flat over the map -> #12 covered -> #13-#14 relief rising -> #15 risen (2 s)
 device: GensingoMap: layers: style order matches the scene (11 layers)
 mutants: S1 S2 S3 S4 S5 S6 S7 S8 S9 S10 -> killed 10 / 10
+```
+
+## A.3 — 2026-10-04 · one map, finished + the field defects
+
+Full record: `docs/eincol/waves/A.3.md`. In brief:
+
+- **Field defects fixed first.** Your position dot was missing from the 2D map whenever the GPS
+  answered after the style (I21: the data push lived in a memoized `update` lambda); tile ids were
+  in logcat from the app and from MapLibre's native log (I19: redacted at both); a stale cached fix
+  could steal the first landing on Play-services phones (I18: provisional landing).
+- **One map, finished where it can be.** One memory ceiling across both views' caches with trim
+  handling (A13); the way back to the map proved jump-free frame by frame (A15); the 3D view's
+  gestures on MapLibre's own constants, read from its bytecode (A17: tilt was 50 % too fast);
+  markers hidden by a ridge drawn faint (A18's occlusion); overlays shown following the terrain at
+  a logged 60° (A11, open since A.2).
+- **What the device caught:** the first memory ceiling ran a 3D build out of memory (fixed: a fifth
+  of the heap, trim and retry); recreating the activity on rotation got the app killed by MapLibre's
+  finalizer watchdog (fixed: rotation handled in place); the emulator itself then crashed rotating
+  this app (A16 blocked on a real device). Two-finger gesture injection now works.
+- **Drafted this iteration (owner directive):** J20 strong ground you have not walked; J21 the way
+  back to the car; J22 find photos with GPS tags stripped; J23 honour "remove animations"; J24 a
+  battery field mode.
+
+```
+device: Terrain3D: ready: hand-off relief 0.051 at pitch 60 (tolerance 5.3 px) · memory 37.9/38.0 MB (pinned 28.9) · dem 9.0 · scene 19.9 · textures 9.0 · evicted dem 10
+device: GensingoMemory: trim level 15: memory 28.9/9.5 MB (pinned 28.9) · scene 19.9 · textures 9.0 · evicted dem 46
+device: lines with a z/x/y shape in the app's log: 0 (three runs)
+device: run 0  OutOfMemoryError: Failed to allocate a 13107216 byte allocation (183 of 192 MB) -> ceiling a fifth, trim and retry
+device: run 1  FinalizerWatchdogDaemon: MapRendererFactory$1.finalize() timed out after 10 seconds -> rotation in place
+jvm:    way back from 75°: worst per-frame step 5.18 px, landing 0.0000 px
+mutants: U1 U2 U3 U4 U5 U6 U7 U8 U9 U10 -> killed 10 / 10
 ```

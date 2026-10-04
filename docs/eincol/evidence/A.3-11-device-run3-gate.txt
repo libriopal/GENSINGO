@@ -1,0 +1,48 @@
+== install
+Success
+18:54:47 shot A.3-device-01-2d-first-fix.png
+== I19: tile ids in the app's log
+lines with a z/x/y shape: 0
+10-04 18:51:55.170 25376 25544 W DemTileStore: DEM tile unavailable at zoom 9: SSLHandshakeException: java.security.cert.CertPathValidatorException: Trust anchor for certification path not found.
+10-04 18:51:55.181 25376 25519 W DemTileStore: DEM tile unavailable at zoom 9: SSLHandshakeException: java.security.cert.CertPathValidatorException: Trust anchor for certification path not found.
+10-04 18:51:55.181 25376 25521 W DemTileStore: DEM tile unavailable at zoom 9: SSLHandshakeException: java.security.cert.CertPathValidatorException: Trust anchor for certification path not found.
+== centre on me
+18:55:52 tapped 'Centre on me'
+18:57:09 shot A.3-device-02-2d-centred.png
+== 2D two-finger tilt (MapLibre's own gesture), up 200 px
+tilt -200 sent
+18:58:21 shot A.3-device-03-2d-tilted.png
+== into 3D
+18:58:57 tapped 'Show in 3D'
+19:17:17 ready (1)
+10-04 19:17:05.861 25376 25376 I Terrain3D: ready: hand-off relief 0.047 at pitch 60 (tolerance 5.3 px) · memory 37.9/38.0 MB (pinned 28.9) · dem 9.0 · scene 19.9 · textures 9.0 · evicted dem 10
+19:18:39 shot A.3-device-04-3d-risen.png
+text="HD 3D · 3.9 m elevation · 3.0 × 3.0 km · 40 km of creeks &amp; drains"
+== trim (RUNNING_CRITICAL)
+10-04 19:19:02.627 25376 25376 I GensingoMemory: trim level 15: memory 28.9/9.5 MB (pinned 28.9) · scene 19.9 · textures 9.0 · evicted dem 46
+== rotate to landscape in 3D (handled in place: no recreation, so no new ready line)
+adb: no devices/emulators found
+pid before 25376, after  (47 s)
+error: no devices/emulators found
+SHOT TRUNCATED A.3-device-05-3d-landscape.png
+text="HD 3D · 3.9 m elevation · 3.0 × 3.0 km · 40 km of creeks &amp; drains"
+adb: no devices/emulators found
+== rotate back
+adb: no devices/emulators found
+adb: no devices/emulators found
+pid now 
+error: no devices/emulators found
+SHOT TRUNCATED A.3-device-06-3d-portrait-again.png
+text="HD 3D · 3.9 m elevation · 3.0 × 3.0 km · 40 km of creeks &amp; drains"
+adb: no devices/emulators found
+builds so far (ready lines): 0
+== back to the map
+adb: no devices/emulators found
+19:21:51 tapped 'Show flat map'
+error: no devices/emulators found
+SHOT TRUNCATED A.3-device-07-back-on-map.png
+adb: no devices/emulators found
+adb: no devices/emulators found
+adb: no devices/emulators found
+lines with a z/x/y shape at the end: 0
+done

@@ -599,7 +599,7 @@ Purpose: make the app survive a ridge with no signal, and a store submission.
 | H13 | Permissions and foreground service | Minimum permissions; Android 14+ foreground service types declared | Manifest audit; service runs without a compliance warning |
 | H14 | Crash reporting without location | No fix, find or track in any crash payload | Payload fixture inspected; no coordinates |
 
-### I — Gaps, mutations and counter-candidates · I1–I21 · every wave
+### I — Gaps, mutations and counter-candidates · I1–I22 · every wave
 
 Purpose: the deliberate attempts to break the above, plus the gaps nobody has claimed yet. One
 counter-candidate runs with **every** wave; the rest are assigned as their phase arrives.
@@ -625,8 +625,9 @@ counter-candidate runs with **every** wave; the rest are assigned as their phase
 | I17 | **Pre-existing lint error (found at bootstrap)** | `StateFlowValueCalledInComposition` at `ui/MainScreen.kt:120` is gone: the 3D view no longer reads `vm.camera.value` during composition | `./gradlew :app:lint` reports 0 errors. Expected to close inside A.1, whose `CameraState` replaces that line; if A.1 leaves it, I17 runs on its own |
 | I18 | **A stale last-known fix captures the first-fix landing** | The first-fix jump (`FieldViewModel.onFix`, `CameraStart.landing`) waits for a fresh fix; a cached last-known location (Play services' `lastLocation`, possibly hours old and far away) lands only provisionally and does not consume it | A test feeding an old, distant fix and then a fresh one lands on the fresh one. *Re-diagnosed in A.3:* the emulator's "California" landing was its default GPS position delivered live (the AOSP image has no Play services, so `lastKnown` is empty), not this defect; the device half needs a Play-services phone |
 | I19 | **A DEM tile id in logcat locates the user (found in A.2)** | `DemTileStore` no longer logs `z/x/y` (a z15 tile is ~1 km): failures are counted and logged without the tile id (invariant: privacy, coarse cell only) | Grep: no tile coordinates in any log call; a log-capture test of a failed fetch contains no digits of the tile id |
-| I20 | **The mutation harness can leave a live mutant (found in A.2)** | `tools/mutate.py` refuses duplicate mutant ids (A.2 reused R1–R10, which ran the old hydrology R1–R3 instead), and restores the file on SIGINT/SIGTERM (a killed run left `RadiusScan.kt` mutated; caught by `git status` and restored from git) | Running two mutants with one id fails before any edit; `kill -TERM` mid-run leaves `git status` clean |
+| I20 | **The mutation harness can leave a live mutant, or aim at the wrong class (found in A.2, A.3)** | `tools/mutate.py` refuses duplicate mutant ids (A.2 reused R1–R10, which ran the old hydrology R1–R3 instead), restores the file on SIGINT/SIGTERM (a killed run left `RadiusScan.kt` mutated; caught by `git status`), and checks that each named test class contains tests at all and fails on the mutant for a reason it names: twice (S4 in A.2, U2 in A.3) the killing test sat in a second class of the same file and never ran | Two mutants with one id fail before any edit; `kill -TERM` mid-run leaves `git status` clean; a mutant whose class holds no test that touches the mutated code is reported, not counted |
 | I21 | **Your position is not drawn on the 2D map (found in A.2, pre-existing)** | The flat map shows the `g-me-layer` dot wherever the GPS chip shows a fix. On the emulator it was missing in every kept 2D screenshot of the A.1 and A.2 builds (`A.2-device-02`, `-03`, `-05`, `-10`, `-12`: after "Centre on me" the map centres on the fix and no dot is drawn), yet a screenshot of a superseded A.2 build (deleted with that run's evidence) showed it, so it is intermittent. Suspect: `pushData` records the position key before the source accepts the data, so a push lost to a style (re)load is never retried while the phone stands still (the GPS drops repeats under 2 m) | A test (or a device run) in which the style loads after the first fix still draws the dot; on device, after "Centre on me", the dot sits at the screen centre. A field defect: fix before F.1 |
+| I22 | **MapLibre's renderer finalizer can outlast Android's 10 s watchdog (found in A.3)** | When a map is destroyed under load its renderer is released by a finalizer; on A.3's device run that took over 10 s and Android killed the app (`FinalizerWatchdogDaemon: MapRendererFactory$1.finalize() timed out`). Rotation no longer destroys the map (A16); finishing the activity still does: the map should be released deterministically before the view is dropped, not left to the finalizer | A device run that leaves and re-enters the app under load ten times without a watchdog kill; logcat shows the renderer destroyed on the main thread, not in `FinalizerDaemon` |
 
 ### J — Owner-directed goal candidates · J1–J24 · proposed (J1–J9 at bootstrap, J10–J14 in A.1, J15–J19 in A.2, J20–J24 in A.3)
 
@@ -677,8 +678,8 @@ right after F.1, because they feed the top-N engine; J5 and J6 with D.1; J7 with
 | F — Top-N engine | F1–F22 | 22 | W5 |
 | G — Truth and learning | G1–G12 | 12 | W7 |
 | H — Offline and release | H1–H14 | 14 | W8 |
-| I — Gaps and mutations | I1–I21 | 21 | every wave (I17 at bootstrap; I18–I21 in A.2) |
-| **Total** | | **165** | |
+| I — Gaps and mutations | I1–I22 | 22 | every wave (I17 at bootstrap; I18–I21 in A.2; I22 in A.3) |
+| **Total** | | **166** | |
 | J — Owner-directed goal candidates | J1–J24 | 24 | proposed; not counted until the owner approves scope |
 
 **Phase order and why.** A before B: everything draws through the one map, so building the renderer
@@ -694,55 +695,53 @@ per wave, always, recorded with its rejection.
 ## 12 — Wave state (rewritten at every wave close)
 
 **Bootstrap:** `done` 2026-10-03 at `c95815f`. See `docs/eincol/run-log.md` (BOOT).
-**Last wave:** `A.2` **archived** 2026-10-04 (`docs/eincol/waves/A.2.md`).
-**Cursor:** `W1 / A.3`, A13–A18: one eviction policy, the frame-clock question (A14, re-scope
-pending), camera continuity, state across rotation, one gesture handler, the four merge statements
-as device tests. Start with A13: the map now stays alive under the 3D view, so memory is the open
-cost (A.2, phase 4).
-**Device:** the `aosp` AVD works (API 34, x86_64, swiftshader, 4 GB / 4 cores): installs, taps,
-swipes, screenshots, screen recording (2–4 fps). Not working: two-finger gesture injection (J18);
-the network (the emulator does not trust this container's TLS proxy; it runs on cached tiles).
-Performance claims still need a real phone (C18).
+**Last wave:** `A.3` **archived** 2026-10-04 (`docs/eincol/waves/A.3.md`).
+**Cursor:** `W2 / B.1`, B1–B7: rendering reliability. W1 (one map) is done but for what is blocked
+on the owner (A5, A6, A12, A14) or on a device that can rotate (A16) and A18's fourth statement.
+**Device:** the `aosp` AVD (API 34, x86_64, swiftshader, 4 GB / 4 cores, cold-booted after the
+container restarted). Works: installs, taps, swipes, two-finger gestures through the emulator console
+(`adb emu event send … EV_ABS:ABS_MT_* … EV_SYN:0:0`), screenshots, recording at 2–4 fps,
+`am send-trim-memory`. Does not: the network (this container's TLS proxy); rotating this app (the
+emulator host crashes, A.3); Play services (no `lastLocation`, so I18's device half). Performance
+claims still need a real phone (C18).
 **Blocked:**
 - C1–C18 blocked(device: performance claims need a real phone, C18);
 - A5 + A6 blocked(owner): decision 4 below;
 - A12 blocked(owner): decision 5 below; and blocked(device) for its network-log check;
-- A11's 60° screenshot blocked(device) until gesture injection works (J18); at 50° the overlays
-  follow the terrain on device (`A.2-device-07`);
-- J8 blocked(owner: new network destination); J9 blocked(owner: finds leave the device);
-  J15 blocked(owner: new dataset and network destination).
+- A14 blocked(owner): decision 2 below;
+- A16 blocked(device): the rotation check (the code is in: in-place rotation, the held square);
+- J8, J15 blocked(owner: new network destination or dataset); J9 blocked(owner: finds leave the device).
+
+**Partial:** A18, statement 4 (a device toggle of every Layers switch in 3D).
 
 **Owner decisions pending:**
-1. Approve the J candidates' scope (J1–J4 recommended as wave J.1 after F.1; J15–J19 new in A.2).
-2. **A14 is infeasible as written.** One frame clock for MapLibre and the mesh needs MapLibre
-   `CustomLayer`, an NDK C++ host (Phase 5, measured). Proposed replacement: "the hidden
-   backend's render loop is paused, and both run only inside the hand-off window". A.2 built
-   most of that: the covered map follows no move and computes no raster, and the 3D view is
-   disposed once faded out.
+1. Approve the J candidates' scope (J1–J4 recommended as wave J.1 after F.1; J15–J24 new).
+2. **A14 is infeasible as written** (one frame clock needs MapLibre `CustomLayer`, NDK). Proposed
+   replacement: "the hidden backend's render loop is paused, and both run only inside the hand-off
+   window". A.2 built most of it (the covered map follows nothing; the 3D view is disposed once out).
 3. The branch rule for waves: `eincol/<wave-id>` is pushed and the session branch is
    fast-forwarded to it.
 4. **A5 + A6:** *"Should tilting the flat map to its 60° limit enter 3D (and the 3D view stop at
-   60° on the way back), so the 2D/3D button can be removed; or does the button stay as the way
-   into 3D?"* The map opens at 50° and MapLibre stops at 60°; the 3D view lives at 45–80°.
-5. **A12:** *"Approve declaring `com.squareup.okhttp3:okhttp` (already inside the APK via
-   MapLibre, pinned to MapLibre's version: no new bytes shipped) as a direct dependency, so one
-   interceptor serves MapLibre's hillshade tiles from the app's DEM cache?"*
+   60° on the way back), so the 2D/3D button can be removed; or does the button stay?"* The
+   gesture injection A.3 got working makes the device test of either answer possible.
+5. **A12:** *"Approve declaring `com.squareup.okhttp3:okhttp` (already inside the APK via MapLibre,
+   MapLibre's version: no new bytes) as a direct dependency, so one interceptor serves MapLibre's
+   hillshade tiles from the app's DEM cache?"*
 
-**Fix first, before F.1 (field defects found in A.2):** I21 (your position dot missing on the 2D
-map) and I18 (a stale last-known fix captures the first-fix landing); I19 (a tile id in logcat).
-**Pre-existing, exempt by name:** the lint warnings remaining from `BOOT-lint-baseline.tsv` (80
-now; none above its per-file counts), and the copied `GLTextureView.java` (`app/lint.xml`).
-**Counts:** 12 archived (A1, A2, A3 [device half done in A.2], A4, A7, A8, A9, A10, I2, I3, I4,
-I17) · 22 blocked (C1–C18 device; A5, A6, A12 owner; A11 device) · 131 queued · 19 proposed
-(J1–J19, awaiting the owner's scope approval). Total 165 + 19 proposed.
+**Pre-existing, exempt by name:** the lint warnings remaining from `BOOT-lint-baseline.tsv` (79 now;
+none above its per-file counts); the copied `GLTextureView.java` (`app/lint.xml`); `MapLogging` and
+three log lines (`@SuppressLint`/`//noinspection`, named in the A.2/A.3 records).
+**Counts:** 19 archived (A1, A2, A3, A4, A7, A8, A9, A10, A11, A13, A15, A17, I2, I3, I4, I17,
+I18, I19, I21) · 23 blocked (C1–C18 device; A5, A6, A12, A14 owner; A16 device) · 1 partial (A18) ·
+123 queued · 24 proposed (J1–J24, awaiting the owner's scope approval). Total 166 + 24 proposed.
 
 | Wave | Program | Candidates | Status | Branch / commits | Evidence |
 |---|---|---|---|---|---|
 | BOOT | bootstrap | — | **archived** | `claude/minimal-3d-llm-location-app-yk0lid` | `docs/eincol/run-log.md#boot` |
 | A.1 | One map | A1–A4 (+ I2, I3, I4, I17); A5, A6 → A.2 | **archived** | `eincol/A.1` | `docs/eincol/waves/A.1.md` |
 | A.2 | One map | A7–A10 (+ A11 at 50°); A5, A6, A12 blocked(owner); A11's 60° shot blocked(device) | **archived** | `eincol/A.2` | `docs/eincol/waves/A.2.md` |
-| A.3 | One map | A13–A18 (A14 re-scope pending the owner) | queued (cursor) | — | — |
-| B.1 | Reliability | B1–B7 | queued | — | — |
+| A.3 | One map | A13, A15, A17 + A11 (from A.2); A18 partial; A16 blocked(device); A14 blocked(owner); I18, I19, I21 | **archived** | `eincol/A.3` | `docs/eincol/waves/A.3.md` |
+| B.1 | Reliability | B1–B7 | queued (cursor) | — | — |
 | B.2 | Reliability | B8–B14 | queued | — | — |
 | B.3 | Reliability | B15–B20 | queued | — | — |
 | C.1 | Performance | C1–C6 | blocked(device) | — | — |

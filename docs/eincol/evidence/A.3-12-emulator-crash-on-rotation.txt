@@ -1,0 +1,3 @@
+../../third_party/SwiftShader/src/Vulkan/VkPhysicalDevice.cpp:649 WARNING: UNSUPPORTED: curExtension->sType: 1000338000
+../../third_party/SwiftShader/src/Vulkan/VkPhysicalDevice.cpp:649 WARNING: UNSUPPORTED: curExtension->sType: 1000437000
+INFO         | Created VkDevice:0x5585c934c010 for application:'maplibre-native' instance:0x5585c86a1800. ASTC emulation:on CPU decoding:off. Protected memory:o

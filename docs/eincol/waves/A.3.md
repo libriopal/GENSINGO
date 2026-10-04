@@ -120,6 +120,8 @@ for redaction.
 - **A16** `terrain3d/MeshSession.kt` held by `FieldViewModel` (ended on the way back to the map and
   in `onCleared`); `Terrain3DView` picks up a held square (no rebuild, no refit, the mesh re-submitted
   to the new GL surface); `reveal` saved with `rememberSaveable`, restored risen only with a square.
+  After device run 1 (phase 8): `MainActivity` handles `orientation|screenSize|screenLayout|
+  smallestScreenSize` in place, so a rotation recreates nothing; the session covers the rest.
 - **A18** `terrain3d/Occlusion.kt` and `MapCamera.eyeWorld`; FINDS, SUGGESTIONS and ME declare
   `OCCLUDED`, drawn by `MeshDraw.CANVAS_OCCLUDED`: faint (35 %) when the terrain hides them.
 - **Found on the way:** the same trap as A.2's S4. Two landing tests were appended to the end of
@@ -127,3 +129,62 @@ for redaction.
   `CameraStartTest` never ran them and mutant U2 survived. Moved into the right class, they fail on
   U2 (killed). `HandoffTest`, `SceneGeometryTest` and `Terrain3DTest` hold a single class each
   (checked).
+
+## 7 — Verify (raw output in `docs/eincol/evidence/A.3-*`)
+
+| Check | Result |
+|---|---|
+| Build | `assembleDebug assembleRelease` **exit 0** on the final code, manifest included (`A.3-02-build.txt`) |
+| Tests | `:app:test` **exit 0**: 388 per variant (debug, release, field), 0 failures, 1 skipped (`A.3-04-test.txt`; A.2: 367, +21). Run on the final Kotlin; the manifest change after it touches no unit test |
+| Lint | `:app:lint` **exit 0**: 0 errors, 79 warnings, none above the bootstrap baseline by (id, file) (`A.3-03-lint.txt`). Exempt by name: `LogNotTimber` on `MapLogging` (a log adapter) and two log lines (`//noinspection`, `@SuppressLint` on the out-of-memory helper) |
+| Witnesses | MapLibre's bytecode (A17); the line-of-sight formula E·s/L (A18); the eye on unproject's rays (A18); a hand-run LRU ledger (A13); a frame-by-frame camera walk across the sink and landing (A15); message shapes captured from the device (I19) |
+| Negative controls | **U1–U10: 10/10 killed** (`A.3-07-mutants.txt`, `A.3-08-rerun-U2.txt`; U2 after its tests were moved into the class the harness names) |
+| Device (aosp AVD, Android 14 / API 34, x86_64, swiftshader; three runs) | **I21:** your position dot at the screen centre after the first fix (`A.3-device-01`, `-02`; missing in A.2's `-05`, `-10`, `-12`). **I19:** 0 lines with a z/x/y shape in the app's log, three runs; the elevation store logs `DEM tile unavailable at zoom 9: SSLHandshakeException…`. **A11 (blocked since A.2):** a two-finger tilt injected through the emulator console tilted the map to MapLibre's 60° limit, the 3D view opened at it (`ready: … at pitch 60`), and `-04` shows habitat, contours and creeks following the ridges at 60°. **A18:** in that view "You" is drawn faint (its north-facing slope, seen from the south, is steeper than the 30° sight line under ×1.5 relief) and suggestion ① bright. **A13:** `ready: … · memory 37.9/38.0 MB (pinned 28.9) · dem 9.0 · scene 19.9 · textures 9.0 · evicted dem 10`; `am send-trim-memory RUNNING_CRITICAL` → `memory 28.9/9.5 MB (pinned 28.9) · … · evicted dem 46` (runs 1 and 3 identical). **A7 again:** hand-off relief 0.051 and 0.047 at pitch 60. **A16:** see phase 8: not verified on this emulator |
+
+## 8 — Re-evaluate
+
+**What the device found that the design did not:**
+1. **A13's first ceiling ran the app out of memory** (run 0, `A.3-06`). A third of the heap let the
+   elevation cache fill with the 10-mile scan's tiles while a 3D build needed its arrays: an
+   `OutOfMemoryError` at 183 of 192 MB. Fixed with a fifth of the heap and a trim-and-retry on
+   out-of-memory; the next two runs built the square with the cache at its ceiling.
+2. **A16's first design got the app killed** (run 1, `A.3-10`). The held square did come back after
+   the recreation in 45 s, with no rebuild; then MapLibre's renderer finalizer, for the map the
+   recreation destroyed, exceeded Android's 10 s watchdog. Phase 4 had rejected `configChanges`
+   on a wrong premise (Compose re-lays out by itself). Changed to in-place rotation.
+3. **In-place rotation crashed the emulator itself** (run 3, `A.3-11`, `A.3-12`): the qemu process
+   died as MapLibre recreated its Vulkan device for the resize under gfxstream/SwiftShader. A guest
+   app cannot crash the host on a phone; this emulator cannot witness rotation. **A16 is
+   blocked(device)**: its rotation check needs a real phone or a GPU-backed emulator.
+4. **I18's emulator symptom was not I18** (re-diagnosed in phase 1): no Play services, so the
+   California landing was a fresh default fix.
+5. **The same test-placement trap as A.2's S4** (U2): a test appended to a file whose last class is
+   another one. Two waves running: the harness should check it (added to I20).
+6. **Gesture injection works** through the emulator console (`adb emu event send` with
+   `EV_ABS:ABS_MT_*` codes and `EV_SYN:0:0`): `sendevent` on `/dev/input/event2` did not (A.2).
+   J18 is half done; the script is in the scratchpad and belongs in `tools/` once J18 is approved.
+7. **Two of my own gate runs interfered** (run 1's script outlived the app and tapped "Show flat
+   map" in run 2's session). Run 2 was discarded; run 3 ran alone.
+
+**Sovereignty classifier over this wave's claims:**
+
+| Claim | In time | Against a witness | Verdict |
+|---|---|---|---|
+| Your position is drawn on the map (I21) | ✅ | ✅ device, before and after | sound |
+| No tile id reaches the log (I19) | ✅ | ✅ device-captured shapes + three device runs | sound |
+| A stale fix cannot steal the landing (I18) | ✅ | ✅ JVM sequence (U2 killed) | sound as a rule; **open** on a Play-services phone |
+| The 3D view's gestures match the map's (A17) | ✅ | ✅ MapLibre's bytecode (U3 killed) | sound for the mapping; the device comparison of deltas is **open** |
+| No jump on the way back (A15) | ✅ | ✅ frame-by-frame walk (U4 killed) | sound |
+| One memory ceiling governs both paths (A13) | ✅ | ✅ ledger tests (U5, U6, U10) + device counters + an OOM fixed | sound (after the fix the device found) |
+| Labels are occluded correctly (A18) | ✅ | ✅ sight-line formula (U7, U9) + device | sound for markers; lines stay on top by design |
+| Overlays follow the terrain at 60° (A11) | — | ✅ device at a logged 60° | sound |
+| The square survives rotation (A16) | ✅ | ❌ the emulator cannot rotate this app | **open**: blocked(device) |
+
+**A18's four statements:** (1) tilt without a jump: A.2's recorded fade + A15's walk; (2) overlays
+draped: `-04` at 60°; (3) labels occluded: `-04` ("You" faint, ① bright); (4) every control means
+something: `SceneLayersTest` + A.2's device order check, no device toggle yet. **A18 is partial**
+until statement 4 has its device run.
+
+**Counter-candidate (one per wave): "A.3 is polish on a view rarely opened"** — answered in phase
+2: three of eight candidates were 2D field defects (the missing dot among them), and the device
+runs found an out-of-memory crash and a rotation kill that no unit test could have.
