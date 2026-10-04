@@ -1,0 +1,28 @@
+5:E=/tmp/claude-0/-home-user-GENSINGO/df087ab8-3f31-563e-a73c-fc476f61463e/scratchpad/evidenceA3
+== install
+Success
+17:35:29 shot A.3-device-01-2d-first-fix.png
+== I19: tile ids in the app's log
+lines with a z/x/y shape: 0
+10-04 17:32:40.680 13297 13395 W DemTileStore: DEM tile unavailable at zoom 9: SSLHandshakeException: java.security.cert.CertPathValidatorException: Trust anchor for certification path not found.
+10-04 17:32:41.126 13297 13412 W DemTileStore: DEM tile unavailable at zoom 9: SSLHandshakeException: java.security.cert.CertPathValidatorException: Trust anchor for certification path not found.
+10-04 17:32:42.833 13297 13390 W DemTileStore: DEM tile unavailable at zoom 9: SSLHandshakeException: java.security.cert.CertPathValidatorException: Trust anchor for certification path not found.
+== centre on me
+17:36:30 tapped 'Centre on me'
+17:37:52 shot A.3-device-02-2d-centred.png
+== 2D two-finger tilt (MapLibre's own gesture), up 200 px
+tilt -200 sent
+17:39:04 shot A.3-device-03-2d-tilted.png
+== into 3D
+17:39:38 tapped 'Show in 3D'
+17:56:11 ready (1)
+10-04 17:56:00.497 13297 13297 I Terrain3D: ready: hand-off relief 0.051 at pitch 60 (tolerance 5.3 px) · memory 37.9/38.0 MB (pinned 28.9) · dem 9.0 · scene 19.9 · textures 9.0 · evicted dem 10
+17:57:35 shot A.3-device-04-3d-risen.png
+text="HD 3D · 3.9 m elevation · 3.0 × 3.0 km · 40 km of creeks &amp; drains"
+== trim (RUNNING_CRITICAL)
+10-04 17:58:01.675 13297 13297 I GensingoMemory: trim level 15: memory 28.9/9.5 MB (pinned 28.9) · scene 19.9 · textures 9.0 · evicted dem 46
+== rotate to landscape in 3D
+17:59:09 ready (2)
+back in 45 s
+18:00:30 shot A.3-device-05-3d-landscape.png
+== rotate back

@@ -34,11 +34,19 @@
         android:usesCleartextTraffic="false"
         tools:targetApi="36">
 
+        <!--
+          Rotation and window resizes are handled in place (A16): Compose lays the screen out again
+          by itself, the map and the 3D view just resize. Recreating the activity instead destroyed
+          the map on every rotation, and on A.3's device run MapLibre's renderer finalizer then
+          exceeded Android's 10 s watchdog and the app was killed. Other changes (theme, font
+          size, language) still recreate it; the 3D square survives those in FieldViewModel.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.Gensingo"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -1,0 +1,10 @@
+# A.3 device run 1 (APK with the out-of-memory fix, before configChanges): killed after rotating to landscape in 3D
+# aosp AVD, Android 14 / API 34, x86_64, swiftshader, no acceleration
+10-04 17:59:09  ready (2)  -- the 3D view rehydrated from the held square 45 s after the rotation (no rebuild)
+10-04 17:59:12.069 13297 13317 E AndroidRuntime: FATAL EXCEPTION: FinalizerWatchdogDaemon
+10-04 17:59:12.069 13297 13317 E AndroidRuntime: Process: com.ginsengo.steward.field, PID: 13297
+10-04 17:59:12.069 13297 13317 E AndroidRuntime: java.util.concurrent.TimeoutException: org.maplibre.android.maps.renderer.MapRendererFactory$1.finalize() timed out after 10 seconds
+10-04 17:59:12.069 13297 13317 E AndroidRuntime: 	at com.android.internal.util.VirtualRefBasePtr.nDecStrong(Native Method)
+10-04 17:59:12.069 13297 13317 E AndroidRuntime: 	at com.android.internal.util.VirtualRefBasePtr.release(VirtualRefBasePtr.java:48)
+10-04 17:59:12.069 13297 13317 E AndroidRuntime: 	at com.android.internal.util.VirtualRefBasePtr.finalize(VirtualRefBasePtr.java:56)
+10-04 17:59:12.069 13297 13317 E AndroidRuntime: 	at java.lang.Daemons$FinalizerDaemon.doFinalize(Daemons.java:339)
