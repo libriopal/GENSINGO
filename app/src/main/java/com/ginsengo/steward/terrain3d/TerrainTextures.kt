@@ -50,6 +50,8 @@ object TerrainTextures {
         val hillshade: Boolean = true,
         /** The habitat colour's opacity: the sheet's "Heat opacity". */
         val habitatOpacity: Float = 1f,
+        /** N.1: roads and trails ([Ground.overlay]) over everything else, when there is an overlay. */
+        val roads: Boolean = true,
     )
 
     /** Everything the baker needs about the ground; produced once per 3D build. */
@@ -66,6 +68,11 @@ object TerrainTextures {
          * tiles, offline fallback style, timeout): the view then shows the neutral relief.
          */
         val basemap: IntArray? = null,
+        /**
+         * N.1: roads and trails, ARGB with alpha, texture size squared (MapDrape over ROADS_STYLE):
+         * composited last, so the habitat colour never hides a way in or out. Null: none.
+         */
+        val overlay: IntArray? = null,
     )
 
     const val MAX_SIZE = 2048
@@ -170,6 +177,10 @@ object TerrainTextures {
 
         if (layers.contours) drawContours(out, elev, size, contourInterval((hi - lo).toDouble()), unknown)
         if (layers.water) drawChannels(out, ground, size)
+        val ov = ground.overlay
+        if (layers.roads && ov != null && ov.size == size * size) {
+            for (i in out.indices) if ((ov[i] ushr 24) != 0) out[i] = over(out[i], ov[i]) or (0xFF shl 24)
+        }
         return out
     }
 

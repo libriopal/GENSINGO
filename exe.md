@@ -630,7 +630,7 @@ counter-candidate runs with **every** wave; the rest are assigned as their phase
 | I22 | **MapLibre's renderer finalizer can outlast Android's 10 s watchdog (found in A.3)** | When a map is destroyed under load its renderer is released by a finalizer; on A.3's device run that took over 10 s and Android killed the app (`FinalizerWatchdogDaemon: MapRendererFactory$1.finalize() timed out`). Rotation no longer destroys the map (A16); finishing the activity still does: the map should be released deterministically before the view is dropped, not left to the finalizer | A device run that leaves and re-enters the app under load ten times without a watchdog kill; logcat shows the renderer destroyed on the main thread, not in `FinalizerDaemon` |
 | I23 | **Scores near a hole lean on the store's stand-in (found in B.1)** | B.1 stops missing elevation being drawn, scored or ranked, and a cell is scored only when its 3×3 slope stencil is real. But position on slope (TPI, a disk of 120–1,500 m) and wetness (upslope drainage) still read the edge-extended stand-in when a hole is within reach, so cells near a gap carry scores built partly from invented ground. They should be flagged on the map and in the list (reduced confidence) or not scored | A test with a hole whose stand-in is raised by 50 m: no reported score farther than one TPI radius from the hole changes, and every cell within it is flagged; a mutant that ignores the flag fails |
 
-### J — Owner-directed goal candidates · J1–J46 (J1–J9 at bootstrap, J10–J14 in A.1, J15–J19 in A.2, J20–J24 in A.3, J25–J29 in B.1, J30–J32 the owner's M.1 directive, J33–J37 drafted in M.1, J38–J41 the owner's P.1 directive, J42–J46 drafted in P.1; rows for J38–J46 in `docs/eincol/waves/P.1.md`)
+### J — Owner-directed goal candidates · J1–J46 (J1–J9 at bootstrap, J10–J14 in A.1, J15–J19 in A.2, J20–J24 in A.3, J25–J29 in B.1, J30–J32 the owner's M.1 directive, J33–J37 drafted in M.1, J38–J41 the owner's P.1 directive, J42–J46 drafted in P.1, J47–J51 the owner's N.1 directive, J52–J56 drafted in N.1; rows for J38–J56 in `docs/eincol/waves/P.1.md` and `N.1.md`)
 
 Purpose, in the owner's words: put a digger in an almost unfair position to find big ginseng and,
 hopefully, a honey hole. Drafted under the owner's standing rule that every iteration proposes at
@@ -698,9 +698,9 @@ right after F.1, because they feed the top-N engine; J5 and J6 with D.1; J7 with
 | G — Truth and learning | G1–G12 | 12 | W7 |
 | H — Offline and release | H1–H14 | 14 | W8 |
 | I — Gaps and mutations | I1–I23 | 23 | every wave (I17 at bootstrap; I18–I21 in A.2; I22 in A.3; I23 in B.1) |
-| J — approved or directed by the owner | J20, J21, J23, J24, J30, J31, J32, J38–J41 | 11 | waves M.1, P.1 (2026-10-06) |
-| **Total** | | **178** | |
-| J — Owner-directed goal candidates, proposed | J1–J19, J22, J25–J29, J33–J37, J42–J46 | 35 | not counted until the owner approves scope |
+| J — approved or directed by the owner | J20, J21, J23, J24, J30, J31, J32, J38–J41, J47–J51 | 16 | waves M.1, P.1, N.1 (2026-10-06) |
+| **Total** | | **183** | |
+| J — Owner-directed goal candidates, proposed | J1–J19, J22, J25–J29, J33–J37, J42–J46, J52–J56 | 40 | not counted until the owner approves scope |
 
 **Phase order and why.** A before B: everything draws through the one map, so building the renderer
 before the merge means building it twice. B before C: a reliable renderer can be profiled; a fast
@@ -715,10 +715,14 @@ per wave, always, recorded with its rejection.
 ## 12 — Wave state (rewritten at every wave close)
 
 **Bootstrap:** `done` 2026-10-03 at `c95815f`. See `docs/eincol/run-log.md` (BOOT).
-**Last wave:** `P.1` **built, unverified** 2026-10-06 (`docs/eincol/waves/P.1.md`): the owner's
+**Last wave:** `N.1` **built, partly tested** 2026-10-06 (`docs/eincol/waves/N.1.md`): the owner's
+directive (J47 logging roads and trails, J48 walking guidance, J49 compass heading, J50 follow me,
+J51 saved places). Before it, `P.1` **built, unverified** (`docs/eincol/waves/P.1.md`): the owner's
 directive (polish; J38 search, J39 map types, J40 tap-to-inspect, J41 rendering settings) with
 testing skipped by the owner. Before it, `M.1` archived (`docs/eincol/waves/M.1.md`).
 **Cursor:** `W2 / B.2` (B8–B14). B12 was reworded in M.1: its fallback, the flat map, is gone.
+**Open from N.1:** lint, mutants and a device run; whether the overlay snapshot clears to
+transparent on this MapLibre build (guarded: refused if not).
 **Open from P.1:** its tests and device run (skipped by the owner): unit tests for the parser and the
 point lookups, then search, map types, the card and relief on a device.
 **Open from M.1:** the on-screen check of its three device-found fixes (a cell-tower first fix lands
@@ -745,7 +749,7 @@ A12 (share the DEM cache with the flat map's hillshade: that layer is gone), A14
 for two backends: one backend remains), I22 (the MapView renderer's finalizer: no MapView remains;
 MapDrape's snapshotter is cancelled explicitly). A7, A8 and A15 stay archived as history; their code
 (the measured hand-off, the cross-fade, continuity across it) was removed with the flat map.
-**Partial:** J38, J39, J40, J41 (built in P.1, unverified by the owner's choice); A18, statement 4 (a device toggle of every Layers switch in 3D); I20 (duplicate ids
+**Partial:** J47–J51 (built in N.1, unit-tested in part, no device run); J38, J39, J40, J41 (built in P.1, unverified by the owner's choice); A18, statement 4 (a device toggle of every Layers switch in 3D); I20 (duplicate ids
 refused and SIGTERM restores, B.1; `--check` finds stale mutants and missing test classes, M.1; a
 class that exists but holds no test touching the mutated code is still not caught).
 
@@ -759,10 +763,10 @@ class that exists but holds no test touching the mutated code is still not caugh
 **Pre-existing, exempt by name:** the lint warnings remaining from `BOOT-lint-baseline.tsv` (none
 above its per-file counts); the copied `GLTextureView.java` (`app/lint.xml`); `MapLogging` and
 three log lines (`@SuppressLint`/`//noinspection`, named in the A.2/A.3 records).
-**Counts:** (P.1: + J38–J41 partial, + J42–J46 proposed) 35 archived (A1, A2, A3, A4, A6, A7, A8, A9, A10, A11, A13, A15, A17, B1, B2, B4, B5,
+**Counts:** (P.1: + J38–J41 partial, + J42–J46 proposed; N.1: + J47–J51 partial, + J52–J56 proposed) 35 archived (A1, A2, A3, A4, A6, A7, A8, A9, A10, A11, A13, A15, A17, B1, B2, B4, B5,
 B6, B7, I2, I3, I4, I10, I11, I17, I18, I19, I21, J20, J21, J23, J24, J30, J31, J32) · 19 blocked
-(C1–C18, A16: device) · 6 partial (A18, I20, J38–J41) · 5 struck (B3, A5, A12, A14, I22) · 113 queued · 35
-proposed (J1–J19, J22, J25–J29, J33–J37, J42–J46). Total 178 + 35 proposed.
+(C1–C18, A16: device) · 11 partial (A18, I20, J38–J41, J47–J51) · 5 struck (B3, A5, A12, A14, I22) · 113 queued · 40
+proposed (J1–J19, J22, J25–J29, J33–J37, J42–J46, J52–J56). Total 183 + 40 proposed.
 
 | Wave | Program | Candidates | Status | Branch / commits | Evidence |
 |---|---|---|---|---|---|
@@ -771,6 +775,7 @@ proposed (J1–J19, J22, J25–J29, J33–J37, J42–J46). Total 178 + 35 propos
 | A.2 | One map | A7–A10 (+ A11 at 50°); A5, A6, A12 blocked(owner); A11's 60° shot blocked(device) | **archived** | `eincol/A.2` | `docs/eincol/waves/A.2.md` |
 | A.3 | One map | A13, A15, A17 + A11 (from A.2); A18 partial; A16 blocked(device); A14 blocked(owner); I18, I19, I21 | **archived** | `eincol/A.3` | `docs/eincol/waves/A.3.md` |
 | B.1 | Reliability | B1, B2, B4, B5, B6, B7 (+ I10, I11; I20 partial); B3 struck; registered I23; drafted J25–J29 | **archived** | `eincol/B.1` | `docs/eincol/waves/B.1.md` |
+| N.1 | Owner directive | J47–J51 (logging roads and trails, Go here guidance, compass heading, follow me, saved places); drafted J52–J56 | **built, partly tested** | `eincol/N.1` | `docs/eincol/waves/N.1.md` |
 | P.1 | Owner directive | J38–J41 (search, map types, tap-to-inspect, rendering settings) + polish; tests skipped by the owner; drafted J42–J46 | **built, unverified** | `eincol/P.1` | `docs/eincol/waves/P.1.md` |
 | M.1 | Owner directive + J.2 | J30, J31, J32 (directive) + J20, J21, J23, J24 (J.2); A6 by J30; A5, A12, A14, I22 struck by it; I20 more; drafted J33–J37 | **archived** | `eincol/M.1` | `docs/eincol/waves/M.1.md` |
 | B.2 | Reliability | B8–B14 | queued (cursor) | — | — |

@@ -146,11 +146,21 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_LEGEND, true)
         set(v) = prefs.edit { putBoolean(KEY_LEGEND, v) }
 
+    /** N.1: places the owner kept (SavedPlace JSON) and the compass heading switch. */
+    var savedPlaces: String
+        get() = prefs.getString(KEY_PLACES, "[]") ?: "[]"
+        set(v) = prefs.edit { putString(KEY_PLACES, v) }
+    var compass: Boolean
+        get() = prefs.getBoolean(KEY_COMPASS, true)
+        set(v) = prefs.edit { putBoolean(KEY_COMPASS, v) }
+
     private companion object {
         const val KEY_SAVER = "battery_saver_pct"
         const val KEY_MAP_STYLE = "map_style"
         const val KEY_RELIEF = "relief"
         const val KEY_LEGEND = "legend"
+        const val KEY_PLACES = "saved_places"
+        const val KEY_COMPASS = "compass"
         const val KEY_STATE = "manual_state_code"
         const val KEY_PROVIDER = "research_provider"
         const val KEY_MODEL = "research_model"

@@ -164,6 +164,17 @@ fun Terrain3DView(
     pin: com.ginsengo.steward.ui.map.PlaceSearch.Place? = null,
     /** The legend box shown or collapsed (P.1); the view reports a tap on it. */
     onLegendChange: (Boolean) -> Unit = {},
+    /** N.1: which way the phone faces (degrees from true north), drawn as a cone on your position. */
+    heading: Float? = null,
+    /** N.1: where the owner is walking to: a line on the ground from you to it. */
+    target: com.ginsengo.steward.ui.map.PlaceSearch.Place? = null,
+    /** N.1: the owner's saved places, marked on the ground. */
+    places: List<com.ginsengo.steward.field.SavedPlace> = emptyList(),
+    /** N.1: the inspect card's "Go here" and "Save". */
+    onGoHere: (String, Double, Double) -> Unit = { _, _, _ -> },
+    onSave: (Double, Double) -> Unit = { _, _ -> },
+    /** N.1: the owner moved the map by hand (follow mode stops). */
+    onUserMove: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val renderer = remember { TerrainGlRenderer() }
@@ -345,6 +356,23 @@ fun Terrain3DView(
         publish()
     }
 
+    // ---- N.1: roads and trails (OpenStreetMap), a transparent snapshot baked over everything. Kept in
+    // the battery mode too: the way out matters more than the frame rate.
+    val roadsOn = SceneLayer.ROADS.shown(layers)
+    var overlay by remember { mutableStateOf<Pair<DemTileStore.Mosaic, IntArray>?>(null) }
+    var roadsNote by remember { mutableStateOf("") }
+    LaunchedEffect(square, roadsOn) {
+        val s = scene ?: return@LaunchedEffect
+        if (!roadsOn) { overlay = null; roadsNote = ""; return@LaunchedEffect }
+        if (overlay?.first === s.mosaic) return@LaunchedEffect
+        val px = MapDrape.render(context, com.ginsengo.steward.ui.map.ROADS_STYLE, s.north, s.west, s.south, s.east,
+            s.textureSize, DRAPE_TIMEOUT_MS, maxZoom = 14.0, pixelRatio = 1f)
+        if (scene?.mosaic !== s.mosaic) return@LaunchedEffect
+        overlay = px?.takeIf { MapDrape.mostlyClear(it) }?.let { s.mosaic to it }
+        roadsNote = if (overlay != null) "" else " · roads & trails need a connection here (or Save 10 miles)"
+        if (roadsNote.isNotEmpty()) { drapeNote += roadsNote; publish() }
+    }
+
     // A square held across a rotation reaches a new GL surface here (a built one was submitted above).
     LaunchedEffect(scene) { scene?.let { if (!renderer.hasMesh(it.mesh)) renderer.submitMesh(it.mesh) } }
 
@@ -356,9 +384,10 @@ fun Terrain3DView(
         else -> TerrainTextures.Mode.ELEVATION
     }
     val texLayers = MeshLayers.baked(layers)
-    LaunchedEffect(scene, mode, texLayers, drapePx) {
+    val overlayPx = overlay?.takeIf { it.first === scene?.mosaic }?.second
+    LaunchedEffect(scene, mode, texLayers, drapePx, overlayPx) {
         val s = scene ?: return@LaunchedEffect
-        val px = withContext(Dispatchers.Default) { s.texture(mode, texLayers, drapePx) }
+        val px = withContext(Dispatchers.Default) { s.texture(mode, texLayers, drapePx, overlayPx) }
         renderer.submitTexture(TerrainGlRenderer.Texture(px, s.textureSize))
         requestFrame()
     }
@@ -526,6 +555,7 @@ fun Terrain3DView(
                                 camera.report(done); anchorM = ground
                                 if (!s1.contains(done.lat, done.lng)) pannedOut = true
                                 rebuildIfNeeded(done)
+                                onUserMove()
                             }
                         }
                     }
@@ -596,6 +626,56 @@ fun Terrain3DView(
                     drawText(t, topLeft = Offset(o.x - t.size.width / 2f, o.y - 26f - t.size.height))
                 }
             }
+            // N.1: saved places (a diamond and the name), the line to the target, your heading.
+            places.forEach { pl ->
+                val o = at(pl.lat, pl.lng) ?: return@forEach
+                val a = seen(pl.lat, pl.lng)
+                val d = Path().apply { moveTo(o.x, o.y - 11f); lineTo(o.x + 9f, o.y); lineTo(o.x, o.y + 11f); lineTo(o.x - 9f, o.y); close() }
+                drawPath(d, dark, alpha = a, style = Stroke(5f))
+                drawPath(d, Color(0xFFE6F4EC), alpha = a)
+                val t = textMeasurer.measure(pl.name.take(18), TextStyle(color = Color(0xFFE6F4EC).copy(alpha = a), fontSize = 11.sp, fontWeight = FontWeight.SemiBold))
+                drawText(t, topLeft = Offset(o.x - t.size.width / 2f, o.y - 16f - t.size.height))
+            }
+            target?.let { tg ->
+                val here = me
+                if (here != null) {
+                    val steps = 64
+                    val seg = ArrayList<Double>()
+                    val runs = ArrayList<DoubleArray>()
+                    for (k in 0..steps) {
+                        val la = here.lat + (tg.lat - here.lat) * k / steps
+                        val lo = here.lng + (tg.lng - here.lng) * k / steps
+                        val e = s.elevationAt(la, lo)
+                        if (e == null) { if (seg.size >= 6) runs += seg.toDoubleArray(); seg.clear() }
+                        else { seg += la; seg += lo; seg += e }
+                    }
+                    if (seg.size >= 6) runs += seg.toDoubleArray()
+                    lines(runs, Color(0xE600FF88), Stroke(4.5f, cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(16f, 10f))))
+                }
+                at(tg.lat, tg.lng)?.let { o ->
+                    drawLine(dark, o, o.copy(y = o.y - 36f), strokeWidth = 6f)
+                    drawLine(Color(0xFF00FF88), o, o.copy(y = o.y - 36f), strokeWidth = 3f)
+                    val flag = Path().apply { moveTo(o.x, o.y - 36f); lineTo(o.x + 20f, o.y - 29f); lineTo(o.x, o.y - 22f); close() }
+                    drawPath(flag, Color(0xFF00FF88))
+                }
+            }
+            if (heading != null) me?.let { here ->
+                val o = at(here.lat, here.lng)
+                val tipLL = com.ginsengo.steward.field.Guidance.destination(here.lat, here.lng, heading.toDouble(), 60.0)
+                val tip = at(tipLL.first, tipLL.second)
+                if (o != null && tip != null) {
+                    val dx = tip.x - o.x; val dy = tip.y - o.y
+                    val len = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1e-3f)
+                    val ux = dx / len; val uy = dy / len
+                    val cone = Path().apply {
+                        moveTo(o.x + ux * 46f, o.y + uy * 46f)
+                        lineTo(o.x - uy * 13f + ux * 12f, o.y + ux * 13f + uy * 12f)
+                        lineTo(o.x + uy * 13f + ux * 12f, o.y - ux * 13f + uy * 12f)
+                        close()
+                    }
+                    drawPath(cone, Color(0x9900FF88))
+                }
+            }
             // P.1: the searched place, a pin; the tapped point, a ring.
             pin?.let { pl ->
                 at(pl.lat, pl.lng)?.let { o ->
@@ -632,6 +712,8 @@ fun Terrain3DView(
         val ins = inspect
         if (ins != null) {
             InspectCard(ins, me, context, { inspect = null },
+                onGoHere = { onGoHere("Point", ins.lat, ins.lng); inspect = null },
+                onSave = { onSave(ins.lat, ins.lng); inspect = null },
                 Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 12.dp, end = 12.dp, bottom = 92.dp))
         } else if (s != null && layers.legend) Legend(
             s, mode, layers, showTrack && trackLines.isNotEmpty(), memoryOn, unwalkedOn, basemap,
@@ -662,7 +744,10 @@ private val COMPASS = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 private fun compass(deg: Double) = COMPASS[(((deg % 360 + 360) % 360 + 22.5) / 45).toInt() % 8]
 
 @Composable
-private fun InspectCard(ins: Inspection, me: FieldLocation?, context: android.content.Context, onClose: () -> Unit, modifier: Modifier) {
+private fun InspectCard(
+    ins: Inspection, me: FieldLocation?, context: android.content.Context, onClose: () -> Unit,
+    onGoHere: () -> Unit, onSave: () -> Unit, modifier: Modifier,
+) {
     val coords = "%.5f, %.5f".format(java.util.Locale.US, ins.lat, ins.lng)
     Column(
         modifier.fillMaxWidth().background(Gen.Surface.copy(alpha = 0.96f), RoundedCornerShape(14.dp)).padding(12.dp),
@@ -687,6 +772,10 @@ private fun InspectCard(ins: Inspection, me: FieldLocation?, context: android.co
             Text(com.ginsengo.steward.field.WayBack.describe(com.ginsengo.steward.field.WayBack.Leg(d, b)) + " from you", color = Gen.TextDim, fontSize = 13.sp)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+            androidx.compose.material3.Button(onClick = onGoHere) { Text("Go here") }
+            androidx.compose.material3.OutlinedButton(onClick = onSave) { Text("Save") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             androidx.compose.material3.OutlinedButton(onClick = {
                 // Opens Google Maps (or the browser) with this point as the destination: the owner's tap
                 // is what sends the point there.
@@ -735,6 +824,18 @@ private fun Legend(
             Spacer(Modifier.size(6.dp))
             Text("Creeks, from elevation", color = Gen.TextDim, fontSize = 11.sp)
         }
+        if (layers.roads) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(18.dp).height(3.dp).background(Color(0xFFFFB02E)))
+                Spacer(Modifier.size(6.dp))
+                Text("Logging / forest roads (OSM tracks)", color = Gen.TextDim, fontSize = 11.sp)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(18.dp).height(3.dp).background(Color(0xFFFF6B5A)))
+                Spacer(Modifier.size(6.dp))
+                Text("Trails", color = Gen.TextDim, fontSize = 11.sp)
+            }
+        }
         if (memory) Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(18.dp).height(10.dp).background(Gen.Text.copy(alpha = 0.5f)))
             Spacer(Modifier.size(6.dp))
@@ -753,6 +854,7 @@ private fun Legend(
         )
         // The draped basemap's attribution, owed because the snapshot is drawn without it.
         if (mode == TerrainTextures.Mode.MAP && basemap.attribution.isNotEmpty()) Text(basemap.attribution, color = Gen.TextDim, fontSize = 10.sp)
+        if (layers.roads) Text("Roads & trails © OpenFreeMap © OpenStreetMap contributors", color = Gen.TextDim, fontSize = 10.sp)
         Text("Tap the ground for details · tap here to hide", color = Gen.TextDim, fontSize = 10.sp)
     }
 }

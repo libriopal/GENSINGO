@@ -1,6 +1,8 @@
 package com.ginsengo.steward.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.platform.LocalFocusManager
@@ -83,7 +85,7 @@ import com.ginsengo.steward.terrain.GinsengSuitability
 import com.ginsengo.steward.ui.map.SceneLayer
 import kotlin.math.roundToInt
 
-private enum class Sheet { NONE, SUGGEST, FIND, LAYERS }
+private enum class Sheet { NONE, SUGGEST, FIND, LAYERS, PLACES }
 
 @Composable
 fun MainScreen(vm: FieldViewModel) {
@@ -103,6 +105,11 @@ fun MainScreen(vm: FieldViewModel) {
     val pin by vm.searchPin.collectAsState()
     val results by vm.searchResults.collectAsState()
     val searching by vm.searching.collectAsState()
+    val target by vm.target.collectAsState()
+    val follow by vm.follow.collectAsState()
+    val places by vm.places.collectAsState()
+    val compassOn by vm.compass.collectAsState()
+    val heading = rememberHeading(compassOn && me != null, me?.lat, me?.lng)
 
     var sheet by remember { mutableStateOf(Sheet.NONE) }
     var habitatStatus by remember { mutableStateOf("") }
@@ -131,6 +138,12 @@ fun MainScreen(vm: FieldViewModel) {
             waitForFix = permission && me == null,
             pin = pin,
             onLegendChange = { vm.setLayers(layers.copy(legend = it)) },
+            heading = heading,
+            target = target,
+            places = places,
+            onGoHere = { name, la, lo -> vm.goHere(name, la, lo) },
+            onSave = { la, lo -> vm.savePlace(null, la, lo) },
+            onUserMove = { if (follow) vm.setFollow(false) },
         )
 
         // ---- search (P.1) and the status line
@@ -164,6 +177,19 @@ fun MainScreen(vm: FieldViewModel) {
                 Spacer(Modifier.height(4.dp))
                 Chip("Back to start: " + WayBack.describe(back), Gen.Amber)
             }
+            // N.1: walking guidance to the chosen point; tap to stop.
+            val tg = target
+            if (tg != null && me != null) {
+                val here = me!!
+                val leg = com.ginsengo.steward.field.Guidance.leg(here.lat, here.lng, tg.lat, tg.lng)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "➜ ${tg.name.take(24)}: " + com.ginsengo.steward.field.Guidance.describe(leg, heading, here.accuracyM) + "   ✕",
+                    color = Gen.Accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.background(Gen.Bg.copy(alpha = 0.85f), RoundedCornerShape(10.dp))
+                        .clickable { vm.clearTarget() }.padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
             // J24: the battery mode says so, and why.
             if (lighter) {
                 Spacer(Modifier.height(4.dp))
@@ -186,6 +212,13 @@ fun MainScreen(vm: FieldViewModel) {
                 containerColor = Gen.SurfaceHigh, contentColor = Gen.Text,
                 modifier = Modifier.semantics { contentDescription = "Centre on me" },
             ) { Icon(Icons.Filled.MyLocation, null) }
+            // N.1: follow me: the map keeps you in the middle until you move it.
+            SmallFloatingActionButton(
+                onClick = { vm.setFollow(!follow) },
+                containerColor = if (follow) Gen.Accent else Gen.SurfaceHigh,
+                contentColor = if (follow) Gen.Bg else Gen.Text,
+                modifier = Modifier.semantics { contentDescription = if (follow) "Stop following me" else "Follow me" },
+            ) { Icon(Icons.Filled.Explore, null) }
         }
 
         // ---- bottom bar
@@ -202,6 +235,7 @@ fun MainScreen(vm: FieldViewModel) {
                 vm.startBurst(); sheet = Sheet.FIND
             }
             BarButton(Icons.Filled.AutoAwesome, "Suggest", Gen.Accent) { sheet = Sheet.SUGGEST }
+            BarButton(Icons.Filled.Place, "Places", Gen.Text) { sheet = Sheet.PLACES }
             BarButton(Icons.Filled.Layers, "Layers", Gen.Text) { sheet = Sheet.LAYERS }
         }
     }
@@ -210,6 +244,7 @@ fun MainScreen(vm: FieldViewModel) {
         Sheet.SUGGEST -> SuggestSheet(vm, suggestions, run, busy, me) { sheet = Sheet.NONE }
         Sheet.FIND -> FindSheet(vm) { sheet = Sheet.NONE }
         Sheet.LAYERS -> LayersSheet(vm, verdict) { sheet = Sheet.NONE }
+        Sheet.PLACES -> PlacesSheet(vm, places, me) { sheet = Sheet.NONE }
         Sheet.NONE -> Unit
     }
 }
@@ -221,6 +256,40 @@ private fun Chip(text: String, color: Color, maxLines: Int = Int.MAX_VALUE) {
         modifier = Modifier.background(Gen.Bg.copy(alpha = 0.78f), RoundedCornerShape(10.dp))
             .padding(horizontal = 8.dp, vertical = 4.dp),
     )
+}
+
+/** N.1: the owner's saved places, nearest first, each one a tap from guidance. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlacesSheet(vm: FieldViewModel, places: List<com.ginsengo.steward.field.SavedPlace>, me: com.ginsengo.steward.field.FieldLocation?, onClose: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onClose, containerColor = Gen.Surface) {
+        LazyColumn(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+            item {
+                Text("Places", style = MaterialTheme.typography.titleMedium)
+                Text("Tap the ground and choose Save to keep a spot (the truck, a trailhead, a patch to check). " +
+                    "Kept on this phone only.", color = Gen.TextDim, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+                if (places.isEmpty()) Text("No saved places yet.", color = Gen.TextDim)
+            }
+            val sorted = if (me == null) places else places.sortedBy {
+                com.ginsengo.steward.prospect.Prospects.distanceMetres(me.lat, me.lng, it.lat, it.lng)
+            }
+            items(sorted) { p ->
+                Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                    Text(p.name, color = Gen.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    val where = me?.let {
+                        val leg = com.ginsengo.steward.field.Guidance.leg(it.lat, it.lng, p.lat, p.lng)
+                        com.ginsengo.steward.field.WayBack.describe(com.ginsengo.steward.field.WayBack.Leg(leg.distanceM, leg.bearingDeg)) + " · "
+                    } ?: ""
+                    Text(where + "%.5f, %.5f".format(java.util.Locale.US, p.lat, p.lng), color = Gen.TextDim, fontSize = 12.sp)
+                    Row {
+                        TextButton(onClick = { vm.goHere(p.name, p.lat, p.lng); onClose() }) { Text("Go here") }
+                        TextButton(onClick = { vm.goTo(com.ginsengo.steward.ui.map.PlaceSearch.Place(p.name, p.lat, p.lng)); onClose() }) { Text("Show") }
+                        TextButton(onClick = { vm.deletePlace(p) }) { Text("Delete", color = Gen.Danger) }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** P.1: address, place or coordinate search, Google-Maps-style, over the map. */
@@ -255,7 +324,7 @@ private fun SearchBar(searching: Boolean, active: Boolean, onSearch: (String) ->
 @Composable
 private fun BarButton(icon: ImageVector, label: String, tint: Color, onClick: () -> Unit) {
     Column(
-        Modifier.width(78.dp).clickable(onClick = onClick).padding(vertical = 6.dp)
+        Modifier.width(64.dp).clickable(onClick = onClick).padding(vertical = 6.dp)
             .semantics { contentDescription = label },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -328,6 +397,7 @@ private fun SuggestSheet(
                     }
                     Row {
                         TextButton(onClick = { vm.focusOn(s); onClose() }) { Text("Show on map") }
+                        TextButton(onClick = { vm.goHere("#${s.rank}", s.lat, s.lng); onClose() }) { Text("Go here") }
                         if (s.status == Suggestion.STATUS_NEW || s.status == Suggestion.STATUS_VISITED) {
                             TextButton(onClick = { vm.markNotFound(s) }) { Text("Walked it, none", color = Gen.TextDim) }
                         }
@@ -437,6 +507,8 @@ private fun LayersSheet(vm: FieldViewModel, verdict: FindLearner.Verdict?, onClo
             Text("Height exaggeration of the 3D ground; 1× is true scale. Changing it rebuilds the view.",
                 color = Gen.TextDim, fontSize = 11.sp)
             Toggle("Legend on the map", layers.legend) { vm.setLayers(layers.copy(legend = it)) }
+            val compassNow by vm.compass.collectAsState()
+            Toggle("Compass heading on my position", compassNow) { vm.setCompass(it) }
             Text("Heat opacity", color = Gen.TextDim, fontSize = 12.sp)
             Slider(layers.heatmapOpacity, { vm.setLayers(layers.copy(heatmapOpacity = it)) }, valueRange = 0.2f..1f)
             Text("Green: terrain model (research-grade estimate; cannot see soil calcium or canopy). " +

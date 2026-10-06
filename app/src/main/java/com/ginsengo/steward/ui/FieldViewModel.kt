@@ -154,6 +154,39 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearSearch() { _searchPin.value = null; _searchResults.value = null }
 
+    // ------------------------------------------------------------ navigation (N.1)
+    private val _target = MutableStateFlow<com.ginsengo.steward.ui.map.PlaceSearch.Place?>(null)
+    /** Where the owner is walking to: a line on the ground and a guidance chip until cleared. */
+    val target: StateFlow<com.ginsengo.steward.ui.map.PlaceSearch.Place?> = _target.asStateFlow()
+    fun goHere(name: String, lat: Double, lng: Double) { _target.value = com.ginsengo.steward.ui.map.PlaceSearch.Place(name, lat, lng) }
+    fun clearTarget() { _target.value = null }
+
+    private val _follow = MutableStateFlow(false)
+    /** The map keeps you in the middle as you walk, until you move it yourself. */
+    val follow: StateFlow<Boolean> = _follow.asStateFlow()
+    fun setFollow(on: Boolean) {
+        _follow.value = on
+        if (on) recenter()
+    }
+
+    private val _places = MutableStateFlow(com.ginsengo.steward.field.SavedPlace.fromJson(container.settings.savedPlaces))
+    val places: StateFlow<List<com.ginsengo.steward.field.SavedPlace>> = _places.asStateFlow()
+    fun savePlace(name: String?, lat: Double, lng: Double) {
+        val label = name?.takeIf { it.isNotBlank() } ?: "Place ${_places.value.size + 1}"
+        _places.value = _places.value + com.ginsengo.steward.field.SavedPlace(label, lat, lng, System.currentTimeMillis())
+        container.settings.savedPlaces = com.ginsengo.steward.field.SavedPlace.toJson(_places.value)
+        _toast.value = "Saved \"$label\" (Places)"
+    }
+    fun deletePlace(p: com.ginsengo.steward.field.SavedPlace) {
+        _places.value = _places.value - p
+        container.settings.savedPlaces = com.ginsengo.steward.field.SavedPlace.toJson(_places.value)
+    }
+
+    private val _compass = MutableStateFlow(container.settings.compass)
+    /** The phone's heading drawn on your position and used for "o'clock" guidance. */
+    val compass: StateFlow<Boolean> = _compass.asStateFlow()
+    fun setCompass(on: Boolean) { _compass.value = on; container.settings.compass = on }
+
     /** "Show on map": go to a suggestion (the map builds the square there). */
     fun focusOn(s: Suggestion) {
         camera.move(
@@ -286,6 +319,9 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
         if (action != CameraStart.Landing.NONE) {
             landed = action
             camera.move(camera.camera.copy(lat = loc.lat, lng = loc.lng, zoom = CameraStart.FIELD_ZOOM))
+        } else if (_follow.value && landed == CameraStart.Landing.FINAL) {
+            // N.1 follow: the map keeps you in the middle (bearing, tilt and zoom are left as set).
+            camera.move(camera.camera.copy(lat = loc.lat, lng = loc.lng))
         }
         burst?.add(loc)
         if (refreshJob?.isActive == true) return

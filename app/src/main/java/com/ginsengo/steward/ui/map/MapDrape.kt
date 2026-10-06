@@ -96,10 +96,16 @@ object MapDrape {
         timeoutMs: Long,
         /** The highest zoom asked of the style: the saved offline region's for the dark map (P.1: 15 for USGS rasters). */
         maxZoom: Double = MAX_ZOOM,
+        /**
+         * The pixel ratio, or null for the screen's. N.1's roads overlay uses 1: it has no sprites or
+         * glyphs (the only ratio-dependent resources), and at 1 the snapshot reaches zoom 14, where
+         * the vector tiles carry tracks and trails.
+         */
+        pixelRatio: Float? = null,
     ): IntArray? {
         if (sizePx <= 0 || !(north > south) || !(east > west)) return null
         val app = context.applicationContext ?: context
-        val density = context.resources.displayMetrics.density.takeIf { it > 0f } ?: 1f
+        val density = pixelRatio ?: context.resources.displayMetrics.density.takeIf { it > 0f } ?: 1f
         val lat = (north + south) / 2
         // Width along the centre parallel: the same metres MapCamera and the texture use.
         val widthM = (east - west) / 360.0 * MapCamera.EARTH_CIRCUMFERENCE * cos(Math.toRadians(lat))
@@ -163,6 +169,20 @@ object MapDrape {
             Log.w(TAG, "drape: snapshot not started (${it.javaClass.simpleName})")
             if (cont.isActive) cont.resume(null)
         }
+    }
+
+    /**
+     * True when an overlay snapshot is mostly see-through, as a style with no background draws it.
+     * The guard against a renderer that clears to an opaque colour: such an overlay would paint
+     * the whole ground, so it is refused instead (N.1).
+     */
+    fun mostlyClear(px: IntArray): Boolean {
+        var opaque = 0
+        val step = maxOf(1, px.size / 20_000)
+        var n = 0
+        var i = 0
+        while (i < px.size) { if ((px[i] ushr 24) == 0xFF) opaque++; n++; i += step }
+        return opaque < n * 0.6
     }
 
     /** Exactly [sizePx] squared pixels: the bitmap is scaled when ratio rounding or the zoom cap changed its size. */

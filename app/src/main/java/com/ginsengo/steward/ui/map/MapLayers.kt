@@ -22,6 +22,24 @@ private fun usgsRaster(service: String): String =
     """{"version":8,"sources":{"usgs":{"type":"raster","tiles":["https://basemap.nationalmap.gov/arcgis/rest/services/""" +
         service + """/MapServer/tile/{z}/{y}/{x}"],"tileSize":256,"maxzoom":16}},"layers":[{"id":"usgs","type":"raster","source":"usgs"}]}"""
 
+/**
+ * Roads and trails over the ground (N.1): OpenStreetMap's transportation lines from the same
+ * OpenFreeMap vector tiles the streets map uses (so "Save 10 miles" already holds them offline),
+ * drawn bright on a transparent background and baked ON TOP of the habitat colour. Logging and
+ * forest roads are OSM `highway=track` (class "track"); trails are `path`, `footway`, `bridleway`
+ * (class "path"). No labels: text needs glyphs, and one missing glyph fails a whole snapshot.
+ */
+const val ROADS_STYLE = """{"version":8,"sources":{"omt":{"type":"vector","url":"https://tiles.openfreemap.org/planet"}},"layers":[""" +
+    """{"id":"major-case","type":"line","source":"omt","source-layer":"transportation","filter":["match",["get","class"],["motorway","trunk","primary","secondary","tertiary"],true,false],"layout":{"line-cap":"round","line-join":"round"},"paint":{"line-color":"#06100B","line-width":4.2}},""" +
+    """{"id":"major","type":"line","source":"omt","source-layer":"transportation","filter":["match",["get","class"],["motorway","trunk","primary","secondary","tertiary"],true,false],"layout":{"line-cap":"round","line-join":"round"},"paint":{"line-color":"#FFFFFF","line-width":2.6}},""" +
+    """{"id":"minor-case","type":"line","source":"omt","source-layer":"transportation","filter":["match",["get","class"],["minor","service"],true,false],"layout":{"line-cap":"round","line-join":"round"},"paint":{"line-color":"#06100B","line-width":3.2}},""" +
+    """{"id":"minor","type":"line","source":"omt","source-layer":"transportation","filter":["match",["get","class"],["minor","service"],true,false],"layout":{"line-cap":"round","line-join":"round"},"paint":{"line-color":"#E6F4EC","line-width":1.7}},""" +
+    """{"id":"track-case","type":"line","source":"omt","source-layer":"transportation","filter":["==",["get","class"],"track"],"layout":{"line-cap":"butt","line-join":"round"},"paint":{"line-color":"#06100B","line-width":3.6}},""" +
+    """{"id":"track","type":"line","source":"omt","source-layer":"transportation","filter":["==",["get","class"],"track"],"layout":{"line-cap":"butt","line-join":"round"},"paint":{"line-color":"#FFB02E","line-width":2.2,"line-dasharray":[2.5,1.2]}},""" +
+    """{"id":"path-case","type":"line","source":"omt","source-layer":"transportation","filter":["==",["get","class"],"path"],"layout":{"line-cap":"round","line-join":"round"},"paint":{"line-color":"#06100B","line-width":3.0}},""" +
+    """{"id":"path","type":"line","source":"omt","source-layer":"transportation","filter":["==",["get","class"],"path"],"layout":{"line-cap":"round","line-join":"round"},"paint":{"line-color":"#FF6B5A","line-width":1.8,"line-dasharray":[1.2,1.0]}}""" +
+    """]}"""
+
 /** Vertical exaggeration choices for the 3D ground (rendering settings, P.1). */
 val RELIEF_CHOICES = listOf(1.0f, 1.5f, 2.0f, 3.0f)
 
@@ -52,6 +70,8 @@ data class MapLayerState(
     val trackLine: Boolean = false,
     val suggestions: Boolean = true,
     val water: Boolean = true,
+    /** N.1: logging and forest roads, trails and roads from OpenStreetMap, over the habitat colour. */
+    val roads: Boolean = true,
     val hillshade: Boolean = true,
     /** Contour lines from the elevation tiles. */
     val contours: Boolean = true,

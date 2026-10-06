@@ -191,11 +191,13 @@ object Terrain3D {
             mode: TerrainTextures.Mode,
             layers: TerrainTextures.Layers = TerrainTextures.Layers(),
             basemap: IntArray? = null,
+            /** N.1: roads and trails over everything ([TerrainTextures.Ground.overlay]). */
+            overlay: IntArray? = null,
         ): IntArray {
-            val key = "$mode:$layers:${basemap?.let { System.identityHashCode(it) } ?: 0}"
+            val key = "$mode:$layers:${basemap?.let { System.identityHashCode(it) } ?: 0}:${overlay?.let { System.identityHashCode(it) } ?: 0}"
             val px = baked[key] ?: run {
-                val g = if (basemap == null) ground else TerrainTextures.Ground(
-                    ground.mosaic, ground.scores, ground.scoreSize, ground.lines, ground.exaggeration, basemap)
+                val g = if (basemap == null && overlay == null) ground else TerrainTextures.Ground(
+                    ground.mosaic, ground.scores, ground.scoreSize, ground.lines, ground.exaggeration, basemap, overlay)
                 val fresh = TerrainTextures.bake(g, mode, textureSize, layers)
                 if (budget == null) while (baked.size >= 2) baked.remove(baked.keys.first())
                 baked[key] = fresh

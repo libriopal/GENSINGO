@@ -43,6 +43,8 @@ enum class SceneLayer(
     UNWALKED(Depth.DRAPED, { it.unwalkedOnly }, { s, on -> s.copy(unwalkedOnly = on) }),
     CONTOURS(Depth.DRAPED, { it.contours }, { s, on -> s.copy(contours = on) }),
     WATER(Depth.DRAPED, { it.water }, { s, on -> s.copy(water = on) }),
+    /** N.1: logging and forest roads, trails and roads (OpenStreetMap), baked over the habitat colour. */
+    ROADS(Depth.DRAPED, { it.roads }, { s, on -> s.copy(roads = on) }),
     /** J31: the persistent travel memory, every fix the app has received. */
     VISITED(Depth.DRAPED, { it.visited }, { s, on -> s.copy(visited = on) }),
     TRACK(Depth.ON_TOP, { it.trackLine }, { s, on -> s.copy(trackLine = on) }),
@@ -54,7 +56,7 @@ enum class SceneLayer(
 
     companion object {
         /** The Layers sheet's switches, in the sheet's order: exactly the layers with a [set]. */
-        val SHEET = listOf(HABITAT, UNWALKED, VISITED, WATER, FINDS, TRACK, SUGGESTIONS, CONTOURS, HILLSHADE)
+        val SHEET = listOf(HABITAT, ROADS, UNWALKED, VISITED, WATER, FINDS, TRACK, SUGGESTIONS, CONTOURS, HILLSHADE)
 
         /** The sheet's label for a switch. */
         fun label(layer: SceneLayer): String = when (layer) {
@@ -63,6 +65,7 @@ enum class SceneLayer(
             UNWALKED -> "Only show ground I haven't walked"
             CONTOURS -> "Contour lines"
             WATER -> "Creeks & streams (traced from elevation)"
+            ROADS -> "Logging roads, trails & roads (OpenStreetMap)"
             VISITED -> "Where I've been"
             TRACK -> "Track line"
             FINDS -> "My finds"
@@ -91,7 +94,7 @@ enum class MeshDraw {
 /** The 3D view's renderer for each layer. */
 object MeshLayers {
     fun draw(layer: SceneLayer): MeshDraw = when (layer) {
-        SceneLayer.HILLSHADE, SceneLayer.HABITAT, SceneLayer.CONTOURS, SceneLayer.WATER -> MeshDraw.BAKED
+        SceneLayer.HILLSHADE, SceneLayer.HABITAT, SceneLayer.CONTOURS, SceneLayer.WATER, SceneLayer.ROADS -> MeshDraw.BAKED
         // The travel memory and its J20 grey-out live in their own mask: a new cell must not
         // re-bake the colour texture.
         SceneLayer.VISITED, SceneLayer.UNWALKED -> MeshDraw.MEMORY
@@ -106,6 +109,7 @@ object MeshLayers {
         water = SceneLayer.WATER.shown(s),
         contours = SceneLayer.CONTOURS.shown(s),
         hillshade = SceneLayer.HILLSHADE.shown(s),
+        roads = SceneLayer.ROADS.shown(s),
         habitatOpacity = s.heatmapOpacity,
     )
 
