@@ -79,9 +79,22 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
     val busy: StateFlow<String?> = container.research.busy
 
     // ------------------------------------------------------------ view state
-    private val _layers = MutableStateFlow(MapLayerState())
+    private val _layers = MutableStateFlow(
+        container.settings.let { st ->
+            MapLayerState(
+                basemap = runCatching { com.ginsengo.steward.ui.map.Basemap.valueOf(st.mapStyle) }.getOrDefault(com.ginsengo.steward.ui.map.Basemap.DARK),
+                relief = st.relief.takeIf { it in com.ginsengo.steward.ui.map.RELIEF_CHOICES } ?: 1.5f,
+                legend = st.legend,
+            )
+        }
+    )
     val layers: StateFlow<MapLayerState> = _layers.asStateFlow()
-    fun setLayers(s: MapLayerState) { _layers.value = s }
+    fun setLayers(s: MapLayerState) {
+        _layers.value = s
+        container.settings.mapStyle = s.basemap.name
+        container.settings.relief = s.relief
+        container.settings.legend = s.legend
+    }
 
     /**
      * The one camera (exe.md A1): the 3D map mirrors it under [SharedCamera]'s epoch rule. Seeded
@@ -111,6 +124,35 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
         val me = _location.value ?: return
         camera.move(camera.camera.copy(lat = me.lat, lng = me.lng), animate = true)
     }
+
+    // ------------------------------------------------------------ search (P.1)
+    private val _searchPin = MutableStateFlow<com.ginsengo.steward.ui.map.PlaceSearch.Place?>(null)
+    /** The searched place, pinned on the map until cleared. */
+    val searchPin: StateFlow<com.ginsengo.steward.ui.map.PlaceSearch.Place?> = _searchPin.asStateFlow()
+    private val _searchResults = MutableStateFlow<com.ginsengo.steward.ui.map.PlaceSearch.Result?>(null)
+    val searchResults: StateFlow<com.ginsengo.steward.ui.map.PlaceSearch.Result?> = _searchResults.asStateFlow()
+    private val _searching = MutableStateFlow(false)
+    val searching: StateFlow<Boolean> = _searching.asStateFlow()
+
+    /** Runs a search; one result is gone to at once, several are listed. */
+    fun search(query: String) {
+        if (query.isBlank() || _searching.value) return
+        viewModelScope.launch {
+            _searching.value = true
+            val r = com.ginsengo.steward.ui.map.PlaceSearch.search(getApplication(), query)
+            _searching.value = false
+            if (r.places.size == 1 && r.error == null) goTo(r.places.single()) else _searchResults.value = r
+        }
+    }
+
+    /** Flies the map to a place and pins it (the map builds the square there). */
+    fun goTo(p: com.ginsengo.steward.ui.map.PlaceSearch.Place) {
+        _searchPin.value = p
+        _searchResults.value = null
+        camera.move(camera.camera.copy(lat = p.lat, lng = p.lng, zoom = CameraStart.FOCUS_ZOOM, pitch = CameraStart.FOCUS_TILT))
+    }
+
+    fun clearSearch() { _searchPin.value = null; _searchResults.value = null }
 
     /** "Show on map": go to a suggestion (the map builds the square there). */
     fun focusOn(s: Suggestion) {

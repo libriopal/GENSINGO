@@ -1,16 +1,29 @@
 package com.ginsengo.steward.ui.map
 
 /**
- * The map under the app's layers: the OpenFreeMap dark vector style, drawn on the 3D ground by
- * MapDrape (and saved for offline use by OfflineArea). The USGS Topo choice went with the flat map
- * (wave M.1): it was never draped in 3D, and the 3D ground draws contours and hillshade itself.
+ * The map draped on the 3D ground by MapDrape, under the app's layers (P.1: the owner asked for
+ * Google-Maps-like map types). The dark streets style is the one saved for offline use
+ * (OfflineArea); satellite and topo are the USGS National Map's public-domain tiles (US
+ * government work), which the app used before M.1, and need a connection unless MapLibre's own
+ * cache already holds them. [style] is a style URL or a style JSON; null draws no map.
  */
-enum class Basemap(val label: String, val attribution: String) {
-    DARK("Dark", "© OpenFreeMap © OpenStreetMap contributors"),
+enum class Basemap(val label: String, val attribution: String, val style: String?, val maxZoom: Double) {
+    DARK("Streets", "© OpenFreeMap © OpenStreetMap contributors", DARK_STYLE, 14.0),
+    SATELLITE("Satellite", "Imagery: USGS The National Map", usgsRaster("USGSImageryOnly"), 15.0),
+    TOPO("Topo", "USGS The National Map: US Topo", usgsRaster("USGSTopo"), 15.0),
+    NONE("Terrain only", "", null, 14.0),
 }
 
 /** The dark style both MapDrape and the offline download read. */
 const val DARK_STYLE = "https://tiles.openfreemap.org/styles/dark"
+
+/** A one-layer raster style over a USGS National Map tile service (z/y/x, 256 px, to zoom 16). */
+private fun usgsRaster(service: String): String =
+    """{"version":8,"sources":{"usgs":{"type":"raster","tiles":["https://basemap.nationalmap.gov/arcgis/rest/services/""" +
+        service + """/MapServer/tile/{z}/{y}/{x}"],"tileSize":256,"maxzoom":16}},"layers":[{"id":"usgs","type":"raster","source":"usgs"}]}"""
+
+/** Vertical exaggeration choices for the 3D ground (rendering settings, P.1). */
+val RELIEF_CHOICES = listOf(1.0f, 1.5f, 2.0f, 3.0f)
 
 /**
  * The layers the user can switch, plus the map on the ground ([drape]).
@@ -26,9 +39,12 @@ const val DARK_STYLE = "https://tiles.openfreemap.org/styles/dark"
  * summarises, and the J20 grey-out, which is a question the owner asks, not a default view.
  */
 data class MapLayerState(
+    /** The map draped on the ground (MapDrape); [Basemap.NONE]: relief and layers only. */
     val basemap: Basemap = Basemap.DARK,
-    /** The dark map's roads and names drawn on the ground (MapDrape); off: relief and layers only. */
-    val drape: Boolean = true,
+    /** Vertical exaggeration of the 3D ground ([RELIEF_CHOICES]); a change rebuilds the mesh. */
+    val relief: Float = 1.5f,
+    /** The legend box over the map; hidden, the map is clear. */
+    val legend: Boolean = true,
     val habitat: Boolean = true,
     val visited: Boolean = true,
     val unwalkedOnly: Boolean = false,

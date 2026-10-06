@@ -60,6 +60,20 @@ object CameraMath {
     }
 
     /**
+     * The ground point (lat, lng) under screen ([sx], [sy]): where the ray through it first meets
+     * the terrain, as [pan] finds it. Null when the ray misses the ground. Used by tap-to-inspect (P.1).
+     */
+    fun groundAt(
+        cam: CameraState, sx: Double, sy: Double, viewportW: Int, viewportH: Int,
+        heightAt: (lat: Double, lng: Double) -> Double,
+        heightRange: ClosedFloatingPointRange<Double>? = null,
+    ): DoubleArray? {
+        val mc = mapCamera(cam, viewportW, viewportH)
+        val h = groundHeight(mc, cam, sx, sy, heightAt, heightRange) ?: return null
+        return mc.unproject(sx, sy, h)
+    }
+
+    /**
      * The height (heightAt's convention) at which the ray through screen ([sx], [sy]) meets the
      * terrain: [HEIGHT_ITERATIONS] fixed-point steps, then the ray march when they have not
      * settled and [heightRange] is known. Null when the ray misses the ground plane.

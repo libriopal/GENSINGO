@@ -1,6 +1,7 @@
 package com.ginsengo.steward.terrain3d
 
 import com.ginsengo.steward.terrain.DemTileStore
+import com.ginsengo.steward.terrain.TerrainMath
 import com.ginsengo.steward.terrain.GinsengSuitability
 import com.ginsengo.steward.terrain.Hydrology
 import com.ginsengo.steward.terrain.SuitabilityRasterizer
@@ -78,6 +79,8 @@ object Terrain3D {
     ) {
         /** The square's DEM zoom: its level (SquareLevel). */
         val level: Int get() = mosaic.zoom
+        /** The vertical exaggeration this square was built with (the rendering setting, P.1). */
+        val exaggeration: Double get() = ground.exaggeration
         private val iw = mosaic.grid.w - 2 * mosaic.haloPx
         private val ih = mosaic.grid.h - 2 * mosaic.haloPx
         val widthM = iw * mosaic.grid.cellSizeM
@@ -117,6 +120,37 @@ object Terrain3D {
             val top = g[x0, y0] * (1 - fx) + g[x1, y0] * fx
             val bottom = g[x0, y1] * (1 - fx) + g[x1, y1] * fx
             return top * (1 - fy) + bottom * fy
+        }
+
+        /** The elevation cell under a position (grid x, y), or null outside the displayed square. */
+        private fun cellAt(lat: Double, lng: Double): Pair<Int, Int>? {
+            if (!contains(lat, lng)) return null
+            val n = Projection.worldPx(mosaic.zoom, DemTileStore.TILE)
+            val x = floor(Projection.x(lng) * n - mosaic.tileX0 * DemTileStore.TILE).toInt()
+            val y = floor(Projection.y(lat) * n - mosaic.tileY0 * DemTileStore.TILE).toInt()
+            return (x.coerceIn(0, mosaic.grid.w - 1)) to (y.coerceIn(0, mosaic.grid.h - 1))
+        }
+
+        /**
+         * Slope (degrees) and aspect (degrees from north, the way the slope faces; −1 when flat)
+         * at a position: the habitat analysis's own Horn stencil (B6). Null off the square or over
+         * missing elevation.
+         */
+        fun slopeAspectAt(lat: Double, lng: Double): Pair<Double, Double>? {
+            val (x, y) = cellAt(lat, lng) ?: return null
+            if (!mosaic.scorable(x, y)) return null
+            return TerrainMath.slopeAspect(mosaic.grid, x, y)
+        }
+
+        /** The habitat score (0..1) the map colours at a position, or null before it is computed or where unknown. */
+        fun scoreAt(lat: Double, lng: Double): Double? {
+            val sc = ground.scores ?: return null
+            if (!contains(lat, lng)) return null
+            val n = ground.scoreSize.takeIf { it > 0 } ?: return null
+            val fx = (Projection.x(lng) - Projection.x(west)) / (Projection.x(east) - Projection.x(west))
+            val fy = (Projection.y(lat) - Projection.y(north)) / (Projection.y(south) - Projection.y(north))
+            val v = sc[(fy * n).toInt().coerceIn(0, n - 1) * n + (fx * n).toInt().coerceIn(0, n - 1)]
+            return v.takeIf { !it.isNaN() }
         }
 
         // Baked textures (a 2048-square one is 16 MB). Without a budget: the one on screen and the
@@ -242,19 +276,19 @@ object Terrain3D {
      * the square.
      */
     fun heightFn(s: Scene, anchorM: Double): (Double, Double) -> Double =
-        { lat, lng -> ((s.elevationAt(lat, lng) ?: anchorM) - anchorM) * EXAGGERATION }
+        { lat, lng -> ((s.elevationAt(lat, lng) ?: anchorM) - anchorM) * s.exaggeration }
 
     /**
      * The highest ground of [s] above the camera's target plane (the ground at [anchorM]), in the
-     * pixels of a view at [viewZoom], with the relief scale [relief] and [EXAGGERATION] applied as
+     * pixels of a view at [viewZoom], with the relief scale [relief] and the square's exaggeration applied as
      * [MapCamera.mvpForMeshBuiltAt] draws them: what [DepthRange.near] needs (exe.md B7).
      */
     fun highestAbovePlanePx(s: Scene, anchorM: Double, viewZoom: Double, relief: Double): Double =
-        (s.mesh.maxElevationM - anchorM) * s.mesh.pixelsPerMeter * EXAGGERATION * relief * Math.pow(2.0, viewZoom - BUILD_ZOOM)
+        (s.mesh.maxElevationM - anchorM) * s.mesh.pixelsPerMeter * s.exaggeration * relief * Math.pow(2.0, viewZoom - BUILD_ZOOM)
 
     /** Bounds of [heightFn] over the square, padded: where the pan's ray march starts and stops. */
     fun rangeFor(s: Scene, anchorM: Double): ClosedFloatingPointRange<Double> =
-        ((s.mesh.minElevationM - anchorM) * EXAGGERATION - 50.0)..((s.mesh.maxElevationM - anchorM) * EXAGGERATION + 50.0)
+        ((s.mesh.minElevationM - anchorM) * s.exaggeration - 50.0)..((s.mesh.maxElevationM - anchorM) * s.exaggeration + 50.0)
 
     /**
      * Puts the camera back on the ground of [s] without moving the picture, after a gesture
@@ -265,7 +299,7 @@ object Terrain3D {
     fun settle(cam: CameraState, viewportW: Int, viewportH: Int, s: Scene, anchorM: Double): Pair<CameraState, Double> {
         val (next, dh) = CameraMath.reanchor(cam, viewportW, viewportH, heightFn(s, anchorM), rangeFor(s, anchorM))
             ?: return cam to anchorM
-        return next to anchorM + dh / EXAGGERATION
+        return next to anchorM + dh / s.exaggeration
     }
 
     /** Latitude of a cell-row EDGE (row r's top edge is r): rows are linear in Mercator y. */

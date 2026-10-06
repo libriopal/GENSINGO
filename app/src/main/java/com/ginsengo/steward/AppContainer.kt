@@ -135,8 +135,22 @@ class SettingsStore(context: Context) {
         get() = prefs.getInt(KEY_SAVER, com.ginsengo.steward.field.BatteryMode.DEFAULT_THRESHOLD_PCT)
         set(v) = prefs.edit { putInt(KEY_SAVER, v) }
 
+    /** P.1: the map on the ground, its relief, and the legend, as the owner left them. */
+    var mapStyle: String
+        get() = prefs.getString(KEY_MAP_STYLE, "DARK") ?: "DARK"
+        set(v) = prefs.edit { putString(KEY_MAP_STYLE, v) }
+    var relief: Float
+        get() = prefs.getFloat(KEY_RELIEF, 1.5f)
+        set(v) = prefs.edit { putFloat(KEY_RELIEF, v) }
+    var legend: Boolean
+        get() = prefs.getBoolean(KEY_LEGEND, true)
+        set(v) = prefs.edit { putBoolean(KEY_LEGEND, v) }
+
     private companion object {
         const val KEY_SAVER = "battery_saver_pct"
+        const val KEY_MAP_STYLE = "map_style"
+        const val KEY_RELIEF = "relief"
+        const val KEY_LEGEND = "legend"
         const val KEY_STATE = "manual_state_code"
         const val KEY_PROVIDER = "research_provider"
         const val KEY_MODEL = "research_model"

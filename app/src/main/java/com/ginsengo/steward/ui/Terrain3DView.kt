@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -142,8 +144,8 @@ fun Terrain3DView(
     layers: MapLayerState,
     weights: DoubleArray,
     demStore: DemTileStore,
-    /** The dark map's style to drape, or null for none (switched off, offline, or the battery mode). */
-    styleUri: String?,
+    /** The map to drape on the ground ([Basemap.NONE]: none; the battery mode passes NONE). */
+    basemap: Basemap,
     onStatus: (String) -> Unit,
     modifier: Modifier = Modifier,
     /** The scan's centre: its radius ring is drawn where it crosses the square. */
@@ -158,6 +160,10 @@ fun Terrain3DView(
     lighter: Boolean = false,
     /** True until the first fix: nothing is built at the start position's fallback, far from the owner. */
     waitForFix: Boolean = false,
+    /** A searched place (P.1), pinned on the ground. */
+    pin: com.ginsengo.steward.ui.map.PlaceSearch.Place? = null,
+    /** The legend box shown or collapsed (P.1); the view reports a tap on it. */
+    onLegendChange: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val renderer = remember { TerrainGlRenderer() }
@@ -174,7 +180,8 @@ fun Terrain3DView(
     // This view's side of the epoch rule: app moves are applied once; its own reports never.
     val follower = remember { SharedCamera.Follower(camera.state.value.epoch) }
     // A square held from before a rotation (A16), if it still covers the camera.
-    val held = remember { session.scene?.takeIf { it.contains(camera.camera.lat, camera.camera.lng) && session.lighter == lighter } }
+    val relief = layers.relief
+    val held = remember { session.scene?.takeIf { it.contains(camera.camera.lat, camera.camera.lng) && session.lighter == lighter && it.exaggeration == relief.toDouble() } }
     var fitted by remember { mutableStateOf(held != null && session.fitted) }
     var scene by remember { mutableStateOf(held) }
     var buildAt by remember { mutableStateOf(camera.camera.let { it.lat to it.lng }) }
@@ -185,6 +192,8 @@ fun Terrain3DView(
     // True when the user dragged the camera off the square (settle onto the new ground keeping
     // the eye); false after an app move, which teleports (ground on the new centre instead).
     var pannedOut by remember { mutableStateOf(false) }
+    // Tap-to-inspect (P.1): the ground point last tapped, with what the app knows about it.
+    var inspect by remember { mutableStateOf<Inspection?>(null) }
     // The camera looks at the plane through the ground under its centre, in metres (see
     // MapCamera.mvpForMeshBuiltAt); fixed during a gesture, re-based when it ends.
     var anchorM by remember { mutableDoubleStateOf(held?.elevationAt(camera.camera.lat, camera.camera.lng) ?: Double.NaN) }
@@ -248,11 +257,11 @@ fun Terrain3DView(
     // ---- terrain: relief first, then habitat and creeks on the same mesh (J30).
     val (bLat, bLng) = buildAt
     val buildKey = "$level:${DemTileStore.lonToTileX(bLng, level)}:${DemTileStore.latToTileY(bLat, level)}"
-    LaunchedEffect(buildKey, weights.contentHashCode(), lighter, waitForFix) {
+    LaunchedEffect(buildKey, weights.contentHashCode(), lighter, waitForFix, relief) {
         if (waitForFix && scene == null) { status("Waiting for a GPS fix…"); return@LaunchedEffect }
         val have = scene
         if (have != null && have === session.scene && !have.quick && have.level == level && have.contains(bLat, bLng) &&
-            session.weightsKey == weights.contentHashCode() && session.lighter == lighter) {
+            session.weightsKey == weights.contentHashCode() && session.lighter == lighter && have.exaggeration == relief.toDouble()) {
             publish(); return@LaunchedEffect          // the square held across a rotation (A16)
         }
         val t0 = SystemClock.elapsedRealtime()
@@ -267,7 +276,7 @@ fun Terrain3DView(
         val l = currentLayers
         val quick = withContext(Dispatchers.Default) {
             afterTrimIfOutOfMemory(budget, "3D relief") {
-                val q = Terrain3D.buildQuick(area.first, gridCap = gridCap, textureCap = textureCap)
+                val q = Terrain3D.buildQuick(area.first, exaggeration = relief, gridCap = gridCap, textureCap = textureCap)
                 q to q.texture(if (SceneLayer.HABITAT.shown(l)) TerrainTextures.Mode.HABITAT else TerrainTextures.Mode.ELEVATION, MeshLayers.baked(l))
             }
         }
@@ -298,7 +307,7 @@ fun Terrain3DView(
         val tpi = SquareLevel.tpiRadiusM(q.level, bLat, viewportW())
         val full = withContext(Dispatchers.Default) {
             afterTrimIfOutOfMemory(budget, "3D build") {
-                Terrain3D.build(area.first, weights, tpiRadiusM = tpi, gridCap = gridCap, textureCap = textureCap, mesh = q.mesh)
+                Terrain3D.build(area.first, weights, exaggeration = relief, tpiRadiusM = tpi, gridCap = gridCap, textureCap = textureCap, mesh = q.mesh)
             }
         }
         if (full == null) { status(q.describe().replace("colouring the habitat…", "could not colour the habitat here")); return@LaunchedEffect }
@@ -310,23 +319,29 @@ fun Terrain3DView(
         Log.i(TAG, "habitat: level ${full.level} in ${SystemClock.elapsedRealtime() - t0} ms")
     }
 
-    // ---- the dark map, drawn by MapLibre for this square, under the app's layers (once per square).
+    // ---- the chosen map (streets, satellite, topo), drawn by MapLibre for this square, under the
+    // app's layers (once per square and map type).
     val square = scene?.mosaic
-    LaunchedEffect(square, styleUri) {
+    var drapeOf by remember { mutableStateOf(if (drape != null) basemap else null) }
+    LaunchedEffect(square, basemap) {
         val s = scene ?: return@LaunchedEffect
-        if (styleUri == null) { drape = null; drapeNote = ""; publish(); return@LaunchedEffect }
-        if (drape?.first === s.mosaic) return@LaunchedEffect
+        val style = basemap.style
+        if (style == null) { drape = null; drapeOf = null; drapeNote = ""; publish(); return@LaunchedEffect }
+        if (drape?.first === s.mosaic && drapeOf == basemap) return@LaunchedEffect
         MapDrape.installRequestCounter()   // debug builds only: the device gate's instrument
-        drapeNote = " · drawing the map on the ground…"
+        drapeNote = " · drawing the ${basemap.label.lowercase()} map on the ground…"
         publish()
-        val px = MapDrape.render(context, styleUri, s.north, s.west, s.south, s.east, s.textureSize, DRAPE_TIMEOUT_MS)
+        val px = MapDrape.render(context, style, s.north, s.west, s.south, s.east, s.textureSize, DRAPE_TIMEOUT_MS, basemap.maxZoom)
         if (scene?.mosaic !== s.mosaic) return@LaunchedEffect
         if (px != null) {
-            drape = s.mosaic to px; drapeNote = " · map on the ground"
+            drape = s.mosaic to px; drapeOf = basemap; drapeNote = " · ${basemap.label.lowercase()} map on the ground"
             // Under the shared budget (A13): evicted, the ground is coloured without the map.
             session.keepDrape(px) { drape = null }
+        } else {
+            drape = null; drapeOf = null
+            drapeNote = if (basemap == Basemap.DARK) " · map not cached here (Save 10 miles to have it offline)"
+            else " · ${basemap.label.lowercase()} needs a connection here"
         }
-        else drapeNote = " · map not cached here (Save 10 miles to have it offline)"
         publish()
     }
 
@@ -412,7 +427,7 @@ fun Terrain3DView(
             renderer.submitFrame(
                 TerrainGlRenderer.Frame(
                     mvp = mc.mvpForMeshBuiltAt(Terrain3D.BUILD_ZOOM, s.mesh.originWorldX, s.mesh.originWorldY,
-                        groundZ = anchorM * s.mesh.pixelsPerMeter * Terrain3D.EXAGGERATION,
+                        groundZ = anchorM * s.mesh.pixelsPerMeter * s.exaggeration,
                         // Depth precision from the ground in view (exe.md B7), not a fixed 48 px.
                         nearPx = DepthRange.near(mc, Terrain3D.highestAbovePlanePx(s, anchorM, mc.zoom, 1.0))),
                     hazeStart = (mc.cameraToCenterDistance * 1.1).toFloat(),
@@ -450,10 +465,17 @@ fun Terrain3DView(
                 .fillMaxSize()
                 .pointerInput(Unit) {
                     awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false)
+                        val first = awaitFirstDown(requireUnconsumed = false)
                         var moved = false
+                        // A tap (P.1): one finger, within the touch slop, released quickly.
+                        var multi = false; var far = false; var tEnd = first.uptimeMillis
                         do {
                             val event = awaitPointerEvent()
+                            event.changes.firstOrNull()?.let { tEnd = it.uptimeMillis }
+                            if (event.changes.count { it.pressed } >= 2) multi = true
+                            event.changes.firstOrNull { it.id == first.id }?.let {
+                                if ((it.position - first.position).getDistance() > viewConfiguration.touchSlop) far = true
+                            }
                             // The shared camera now (not the composition's snapshot): every
                             // pointer event builds on the camera the last one reported.
                             val c0 = camera.camera
@@ -487,7 +509,15 @@ fun Terrain3DView(
                             }
                             event.changes.forEach { if (it.positionChanged()) it.consume() }
                         } while (event.changes.any { it.pressed })
-                        if (moved) {
+                        if (!multi && !far && tEnd - first.uptimeMillis < TAP_MS) {
+                            val s1 = scene
+                            val (vw, vh) = size
+                            if (s1 != null && vw > 0 && vh > 0 && !anchorM.isNaN()) {
+                                val g = CameraMath.groundAt(camera.camera, first.position.x.toDouble(), first.position.y.toDouble(),
+                                    vw, vh, Terrain3D.heightFn(s1, anchorM), Terrain3D.rangeFor(s1, anchorM))
+                                inspect = g?.takeIf { s1.contains(it[0], it[1]) }?.let { Inspection.of(s1, it[0], it[1]) }
+                            }
+                        } else if (moved) {
                             val s1 = scene
                             val c1 = camera.camera
                             val (vw, vh) = size
@@ -503,7 +533,7 @@ fun Terrain3DView(
         ) {
             if (mc == null || s == null) return@Canvas
             val anchor = anchorM
-            val lift = Terrain3D.EXAGGERATION
+            val lift = s.exaggeration
             fun at(lat: Double, lng: Double): Offset? {
                 val e = s.elevationAt(lat, lng) ?: return null
                 val p = mc.project(lat, lng, (e - anchor) * lift) ?: return null
@@ -566,6 +596,23 @@ fun Terrain3DView(
                     drawText(t, topLeft = Offset(o.x - t.size.width / 2f, o.y - 26f - t.size.height))
                 }
             }
+            // P.1: the searched place, a pin; the tapped point, a ring.
+            pin?.let { pl ->
+                at(pl.lat, pl.lng)?.let { o ->
+                    drawLine(dark, o, o.copy(y = o.y - 34f), strokeWidth = 6f)
+                    drawLine(Color(0xFFFF6B5A), o, o.copy(y = o.y - 34f), strokeWidth = 3f)
+                    drawCircle(dark, 12f, o.copy(y = o.y - 40f))
+                    drawCircle(Color(0xFFFF6B5A), 9.5f, o.copy(y = o.y - 40f))
+                    drawCircle(Color(0xFFE6F4EC), 3.5f, o.copy(y = o.y - 40f))
+                }
+            }
+            inspect?.let { ins ->
+                at(ins.lat, ins.lng)?.let { o ->
+                    drawCircle(dark, 15f, o, style = Stroke(6f))
+                    drawCircle(Color(0xFFE6F4EC), 15f, o, style = Stroke(3f))
+                    drawCircle(Color(0xFFE6F4EC), 2.5f, o)
+                }
+            }
         }
 
         // Compass: shows where north is; tap to face north, reset the tilt and fit the square.
@@ -582,17 +629,85 @@ fun Terrain3DView(
                 .semantics { contentDescription = "Face north and reset the view" },
         ) { Icon(Icons.Filled.Navigation, null, modifier = Modifier.rotate(-cam.bearing.toFloat())) }
 
-        if (s != null) Legend(
-            s, mode, layers, showTrack && trackLines.isNotEmpty(), memoryOn, unwalkedOn,
-            Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 12.dp, bottom = 96.dp),
+        val ins = inspect
+        if (ins != null) {
+            InspectCard(ins, me, context, { inspect = null },
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(start = 12.dp, end = 12.dp, bottom = 92.dp))
+        } else if (s != null && layers.legend) Legend(
+            s, mode, layers, showTrack && trackLines.isNotEmpty(), memoryOn, unwalkedOn, basemap,
+            Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 12.dp, bottom = 96.dp)
+                .clickable { onLegendChange(false) },
+        ) else if (s != null) Text(
+            "Legend", color = Gen.TextDim, fontSize = 12.sp,
+            modifier = Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 12.dp, bottom = 96.dp)
+                .background(Gen.Bg.copy(alpha = 0.78f), RoundedCornerShape(10.dp)).clickable { onLegendChange(true) }
+                .padding(horizontal = 10.dp, vertical = 6.dp),
         )
+    }
+}
+
+/** What the app knows about a tapped ground point (P.1, Earth-style "what is here"). All on the phone. */
+private data class Inspection(
+    val lat: Double, val lng: Double, val elevationM: Double?, val slopeDeg: Double?, val aspectDeg: Double?, val score: Double?,
+) {
+    companion object {
+        fun of(s: Terrain3D.Scene, lat: Double, lng: Double): Inspection {
+            val sa = s.slopeAspectAt(lat, lng)
+            return Inspection(lat, lng, s.elevationAt(lat, lng), sa?.first, sa?.second?.takeIf { it >= 0 }, s.scoreAt(lat, lng))
+        }
+    }
+}
+
+private val COMPASS = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+private fun compass(deg: Double) = COMPASS[(((deg % 360 + 360) % 360 + 22.5) / 45).toInt() % 8]
+
+@Composable
+private fun InspectCard(ins: Inspection, me: FieldLocation?, context: android.content.Context, onClose: () -> Unit, modifier: Modifier) {
+    val coords = "%.5f, %.5f".format(java.util.Locale.US, ins.lat, ins.lng)
+    Column(
+        modifier.fillMaxWidth().background(Gen.Surface.copy(alpha = 0.96f), RoundedCornerShape(14.dp)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(coords, color = Gen.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text("✕", color = Gen.TextDim, fontSize = 18.sp, modifier = Modifier.clickable(onClick = onClose).padding(6.dp))
+        }
+        ins.elevationM?.let { Text("Elevation %,d ft · %,d m".format((it * 3.28084).roundToInt(), it.roundToInt()), color = Gen.Text, fontSize = 13.sp) }
+        if (ins.slopeDeg != null) Text(
+            "Slope %.0f°".format(ins.slopeDeg) + (ins.aspectDeg?.let { " · faces ${compass(it)} (%.0f°)".format(it) } ?: " · flat"),
+            color = Gen.Text, fontSize = 13.sp,
+        )
+        ins.score?.let { sc ->
+            val band = when { sc >= 0.7 -> "strong"; sc >= 0.55 -> "good"; sc >= TerrainTextures.MIN_SCORE -> "fair"; else -> "weak" }
+            Text("Terrain score %.2f · %s (model estimate, not a sighting)".format(sc, band), color = Gen.Accent, fontSize = 13.sp)
+        }
+        me?.let { m ->
+            val d = com.ginsengo.steward.prospect.Prospects.distanceMetres(m.lat, m.lng, ins.lat, ins.lng)
+            val b = com.ginsengo.steward.prospect.Prospects.bearingTrue(m.lat, m.lng, ins.lat, ins.lng)
+            Text(com.ginsengo.steward.field.WayBack.describe(com.ginsengo.steward.field.WayBack.Leg(d, b)) + " from you", color = Gen.TextDim, fontSize = 13.sp)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+            androidx.compose.material3.OutlinedButton(onClick = {
+                // Opens Google Maps (or the browser) with this point as the destination: the owner's tap
+                // is what sends the point there.
+                runCatching {
+                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$coords".replace(" ", "")))
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            }) { Text("Directions") }
+            androidx.compose.material3.OutlinedButton(onClick = {
+                val cm = context.getSystemService(android.content.ClipboardManager::class.java)
+                cm?.setPrimaryClip(android.content.ClipData.newPlainText("Coordinates", coords))
+            }) { Text("Copy") }
+        }
     }
 }
 
 @Composable
 private fun Legend(
     s: Terrain3D.Scene, mode: TerrainTextures.Mode, layers: MapLayerState, track: Boolean,
-    memory: Boolean, unwalked: Boolean, modifier: Modifier,
+    memory: Boolean, unwalked: Boolean, basemap: Basemap, modifier: Modifier,
 ) {
     Column(
         modifier.widthIn(max = 220.dp).background(Gen.Bg.copy(alpha = 0.78f), RoundedCornerShape(10.dp)).padding(8.dp),
@@ -633,11 +748,12 @@ private fun Legend(
         }
         Text(
             (if (layers.contours) "Contours every %.0f m · ".format(s.contourM) else "") +
-                "relief ×%.1f".format(Terrain3D.EXAGGERATION),
+                "relief ×%.1f".format(s.exaggeration),
             color = Gen.TextDim, fontSize = 11.sp,
         )
         // The draped basemap's attribution, owed because the snapshot is drawn without it.
-        if (mode == TerrainTextures.Mode.MAP) Text(Basemap.DARK.attribution, color = Gen.TextDim, fontSize = 10.sp)
+        if (mode == TerrainTextures.Mode.MAP && basemap.attribution.isNotEmpty()) Text(basemap.attribution, color = Gen.TextDim, fontSize = 10.sp)
+        Text("Tap the ground for details · tap here to hide", color = Gen.TextDim, fontSize = 10.sp)
     }
 }
 
@@ -722,6 +838,8 @@ private fun ringSegments(center: Pair<Double, Double>, s: Terrain3D.Scene): List
 }
 
 private const val RING_STEP_M = 50.0
+/** A touch released within this, without moving past the slop, is a tap (P.1 inspect). */
+private const val TAP_MS = 400L
 private const val TAG = "Terrain3D"
 private const val DEFAULT_PITCH = 55f
 /** Until the view is measured: a typical portrait phone's width, for the first level choice. */

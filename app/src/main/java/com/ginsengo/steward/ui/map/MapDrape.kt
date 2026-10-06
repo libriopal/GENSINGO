@@ -80,7 +80,7 @@ object MapDrape {
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
     /**
-     * Renders [styleUri] over (north, west, south, east) and returns exactly [sizePx] x
+     * Renders [styleUri] (a style URL, or a style JSON: P.1's USGS rasters) over (north, west, south, east) and returns exactly [sizePx] x
      * [sizePx] ARGB pixels, north up, or null on failure or after [timeoutMs].
      *
      * Suspends instead of blocking: MapSnapshotter is @UiThread and calls back on the main
@@ -94,6 +94,8 @@ object MapDrape {
         north: Double, west: Double, south: Double, east: Double,
         sizePx: Int,
         timeoutMs: Long,
+        /** The highest zoom asked of the style: the saved offline region's for the dark map (P.1: 15 for USGS rasters). */
+        maxZoom: Double = MAX_ZOOM,
     ): IntArray? {
         if (sizePx <= 0 || !(north > south) || !(east > west)) return null
         val app = context.applicationContext ?: context
@@ -101,7 +103,7 @@ object MapDrape {
         val lat = (north + south) / 2
         // Width along the centre parallel: the same metres MapCamera and the texture use.
         val widthM = (east - west) / 360.0 * MapCamera.EARTH_CIRCUMFERENCE * cos(Math.toRadians(lat))
-        val logical = logicalSize(sizePx, density, widthM, lat)
+        val logical = logicalSize(sizePx, density, widthM, lat, maxZoom)
         val bounds = LatLngBounds.Builder()
             .include(LatLng(north, west))
             .include(LatLng(south, east))
@@ -139,7 +141,7 @@ object MapDrape {
                     // Off, so neither is baked onto the ground; the 3D legend owes the attribution.
                     .withLogo(false)
                     .withAttribution(false)
-                    .withStyle(styleUri),
+                    .let { o -> if (styleUri.trimStart().startsWith("{")) o.withStyleJson(styleUri) else o.withStyle(styleUri) },
             )
         }.getOrElse {
             Log.w(TAG, "drape: snapshotter not created (${it.javaClass.simpleName})")

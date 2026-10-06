@@ -1,6 +1,11 @@
 package com.ginsengo.steward.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -75,7 +80,6 @@ import com.ginsengo.steward.research.Provider
 import com.ginsengo.steward.research.ResearchPrompt
 import com.ginsengo.steward.research.SuggestionAssembler
 import com.ginsengo.steward.terrain.GinsengSuitability
-import com.ginsengo.steward.ui.map.DARK_STYLE
 import com.ginsengo.steward.ui.map.SceneLayer
 import kotlin.math.roundToInt
 
@@ -96,6 +100,9 @@ fun MainScreen(vm: FieldViewModel) {
     val verdict by vm.verdict.collectAsState()
     val toast by vm.toast.collectAsState()
     val permission by vm.permission.collectAsState()
+    val pin by vm.searchPin.collectAsState()
+    val results by vm.searchResults.collectAsState()
+    val searching by vm.searching.collectAsState()
 
     var sheet by remember { mutableStateOf(Sheet.NONE) }
     var habitatStatus by remember { mutableStateOf("") }
@@ -111,8 +118,8 @@ fun MainScreen(vm: FieldViewModel) {
             me = me, camera = vm.camera,
             track = track, finds = finds, suggestions = suggestions,
             layers = layers, weights = weights, demStore = vm.container.demTiles,
-            // The dark map on the ground, unless switched off or in the battery mode (J24).
-            styleUri = if (layers.drape && !lighter) DARK_STYLE else null,
+            // The chosen map on the ground, unless "Terrain only" or in the battery mode (J24).
+            basemap = if (lighter) com.ginsengo.steward.ui.map.Basemap.NONE else layers.basemap,
             onStatus = { habitatStatus = it },
             modifier = Modifier.fillMaxSize(),
             radiusCenter = run?.let { it.centerLat to it.centerLng },
@@ -122,10 +129,27 @@ fun MainScreen(vm: FieldViewModel) {
             lighter = lighter,
             // No square at the fallback start position, far from the owner: wait for the first fix.
             waitForFix = permission && me == null,
+            pin = pin,
+            onLegendChange = { vm.setLayers(layers.copy(legend = it)) },
         )
 
-        // ---- status line
+        // ---- search (P.1) and the status line
         Column(Modifier.statusBarsPadding().padding(10.dp).align(Alignment.TopStart)) {
+            SearchBar(searching, pin != null || results != null, onSearch = vm::search, onClear = vm::clearSearch)
+            results?.let { res ->
+                Column(
+                    Modifier.fillMaxWidth().padding(top = 4.dp).background(Gen.Surface.copy(alpha = 0.97f), RoundedCornerShape(12.dp))
+                        .padding(vertical = 4.dp),
+                ) {
+                    res.places.forEach { place ->
+                        Text(place.name, color = Gen.Text, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth().clickable { vm.goTo(place) }.padding(horizontal = 12.dp, vertical = 8.dp))
+                    }
+                    val note = res.error ?: if (res.places.isEmpty()) "Nothing found." else res.source
+                    Text(note, color = Gen.TextDim, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+                }
+            }
+            Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Chip(me?.let { "GPS ±${it.accuracyM.roundToInt()} m" } ?: if (permission) "GPS…" else "No location permission",
                     if (me != null) Gen.Text else Gen.Amber)
@@ -148,7 +172,7 @@ fun MainScreen(vm: FieldViewModel) {
             val line = busy ?: toast ?: habitatStatus.takeIf { it.isNotBlank() }
             if (line != null) {
                 Spacer(Modifier.height(4.dp))
-                Chip(line, Gen.TextDim)
+                Chip(line, Gen.TextDim, maxLines = 2)
             }
         }
 
@@ -191,12 +215,41 @@ fun MainScreen(vm: FieldViewModel) {
 }
 
 @Composable
-private fun Chip(text: String, color: Color) {
+private fun Chip(text: String, color: Color, maxLines: Int = Int.MAX_VALUE) {
     Text(
-        text, color = color, fontSize = 12.sp,
+        text, color = color, fontSize = 12.sp, maxLines = maxLines, overflow = TextOverflow.Ellipsis,
         modifier = Modifier.background(Gen.Bg.copy(alpha = 0.78f), RoundedCornerShape(10.dp))
             .padding(horizontal = 8.dp, vertical = 4.dp),
     )
+}
+
+/** P.1: address, place or coordinate search, Google-Maps-style, over the map. */
+@Composable
+private fun SearchBar(searching: Boolean, active: Boolean, onSearch: (String) -> Unit, onClear: () -> Unit) {
+    var q by remember { mutableStateOf("") }
+    val focus = LocalFocusManager.current
+    Row(
+        Modifier.fillMaxWidth().background(Gen.Surface.copy(alpha = 0.95f), RoundedCornerShape(24.dp)).padding(start = 14.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.Search, null, tint = Gen.TextDim, modifier = Modifier.size(20.dp))
+        androidx.compose.foundation.text.BasicTextField(
+            value = q, onValueChange = { q = it }, singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(color = Gen.Text, fontSize = 15.sp),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(Gen.Accent),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onSearch(q); focus.clearFocus() }),
+            modifier = Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 12.dp)
+                .semantics { contentDescription = "Search address, place or coordinates" },
+            decorationBox = { inner ->
+                if (q.isEmpty()) Text("Search address, place or lat, lng", color = Gen.TextDim, fontSize = 15.sp)
+                inner()
+            },
+        )
+        if (searching) Text("…", color = Gen.TextDim, fontSize = 16.sp, modifier = Modifier.padding(8.dp))
+        else if (q.isNotEmpty() || active) Text("✕", color = Gen.TextDim, fontSize = 16.sp,
+            modifier = Modifier.clickable { q = ""; onClear(); focus.clearFocus() }.padding(8.dp))
+    }
 }
 
 @Composable
@@ -365,7 +418,25 @@ private fun LayersSheet(vm: FieldViewModel, verdict: FindLearner.Verdict?, onClo
                     " (${if (verdict?.adopted == true) "learned weights" else "published weights"})" else ""
                 Toggle(label, layer.shown(layers)) { vm.setLayers(layer.set!!(layers, it)) }
             }
-            Toggle("Roads & names on the ground (dark map)", layers.drape) { vm.setLayers(layers.copy(drape = it)) }
+            Spacer(Modifier.height(10.dp))
+            Text("Map on the ground", style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                com.ginsengo.steward.ui.map.Basemap.entries.forEach { b ->
+                    FilterChip(selected = layers.basemap == b, onClick = { vm.setLayers(layers.copy(basemap = b)) }, label = { Text(b.label) })
+                }
+            }
+            Text("Streets is saved for offline use with \"Save 10 miles\"; Satellite and Topo (USGS) need a connection.",
+                color = Gen.TextDim, fontSize = 11.sp)
+            Text("Relief", style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                com.ginsengo.steward.ui.map.RELIEF_CHOICES.forEach { f ->
+                    FilterChip(selected = layers.relief == f, onClick = { vm.setLayers(layers.copy(relief = f)) },
+                        label = { Text(if (f == f.toInt().toFloat()) "${f.toInt()}×" else "$f×") })
+                }
+            }
+            Text("Height exaggeration of the 3D ground; 1× is true scale. Changing it rebuilds the view.",
+                color = Gen.TextDim, fontSize = 11.sp)
+            Toggle("Legend on the map", layers.legend) { vm.setLayers(layers.copy(legend = it)) }
             Text("Heat opacity", color = Gen.TextDim, fontSize = 12.sp)
             Slider(layers.heatmapOpacity, { vm.setLayers(layers.copy(heatmapOpacity = it)) }, valueRange = 0.2f..1f)
             Text("Green: terrain model (research-grade estimate; cannot see soil calcium or canopy). " +
