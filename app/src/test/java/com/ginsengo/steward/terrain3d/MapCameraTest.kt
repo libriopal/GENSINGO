@@ -16,8 +16,9 @@ import kotlin.math.cos
  * arithmetic. A reference implementation written by the same author from the same
  * understanding is the self-witness failure mode: it agrees precisely when I am wrong.
  *
- * The remaining gap (does this match MapLibre *specifically*?) is closed at runtime by
- * [AlignmentCheck] against MapLibre's own `toScreenLocation`, which no offline test can do.
+ * The remaining gap (does this match MapLibre *specifically*?) was closed at runtime by
+ * `AlignmentCheck` until wave M.1, when the flat map went and nothing drawn by MapLibre's camera
+ * was left to match.
  */
 class MapCameraTest {
 
@@ -314,62 +315,6 @@ class MapCameraTest {
     }
 }
 
-/**
- * The alignment witness itself must be capable of reporting failure. An instrument that
- * always says "aligned" is not measuring anything.
- */
-class AlignmentCheckTest {
-
-    private fun camera() = MapCamera(36.2, -81.67, 14.0, 0.0, 0.0, 1080, 1920)
-
-    @Test
-    fun agreesWithItself() {
-        val c = camera()
-        val probes = AlignmentCheck.probesFor(36.25, -81.72, 36.15, -81.62)
-        val r = AlignmentCheck.run(c, probes) { lat, lng -> c.project(lat, lng) }
-        assertTrue("a perfect witness must report aligned", r.aligned)
-        assertEquals(0f, r.meanErrorPx, 1e-3f)
-        assertTrue(r.samples > 0)
-    }
-
-    /** NEGATIVE CONTROL: a witness that disagrees must be reported as misaligned. */
-    @Test
-    fun detectsAShiftedProjection() {
-        val c = camera()
-        val probes = AlignmentCheck.probesFor(36.25, -81.72, 36.15, -81.62)
-        val r = AlignmentCheck.run(c, probes) { lat, lng ->
-            c.project(lat, lng)?.let { floatArrayOf(it[0] + 9f, it[1]) }
-        }
-        assertTrue("a 9 px shift must fail the check", !r.aligned)
-        assertEquals(9f, r.meanErrorPx, 0.01f)
-    }
-
-    /** A scale error shows up away from the centre even though the centre still matches. */
-    @Test
-    fun detectsAScaleErrorThatPreservesTheCentre() {
-        val c = camera()
-        val probes = AlignmentCheck.probesFor(36.25, -81.72, 36.15, -81.62)
-        val r = AlignmentCheck.run(c, probes) { lat, lng ->
-            c.project(lat, lng)?.let {
-                floatArrayOf(
-                    540f + (it[0] - 540f) * 1.05f,
-                    960f + (it[1] - 960f) * 1.05f,
-                )
-            }
-        }
-        assertTrue("a 5% scale error must fail the check", !r.aligned)
-    }
-
-    @Test
-    fun noUsableSamplesIsNotReportedAsAligned() {
-        val c = camera()
-        val r = AlignmentCheck.run(c, AlignmentCheck.probesFor(36.25, -81.72, 36.15, -81.62)) { _, _ -> null }
-        assertTrue("zero samples must not count as aligned", !r.aligned)
-        assertEquals(0, r.samples)
-    }
-}
-
-/** The 3D view's camera looks at the ground under the user, not at sea level (Phase 8 device run). */
 class GroundedCameraTest {
     @Test
     fun aPointAtGroundHeightUnderTheTargetIsAtTheScreenCentre() {
@@ -393,12 +338,12 @@ class GroundedCameraTest {
     }
 
     /**
-     * The cross-fade's relief scale (Handoff): a vertex 400 m above the target plane is drawn
-     * where [MapCamera.project] draws it at relief x 400 m, and at relief 0 on the plane itself,
-     * where the 2D map draws the ground. Witness: [MapCamera.project], the alignment path.
+     * A vertex 400 m above the target plane is drawn where [MapCamera.project] draws it at
+     * 400 m: the mesh path and the markers' path agree off the plane too. (Until M.1 this also
+     * scaled the relief for the cross-fade, which went with the flat map.)
      */
     @Test
-    fun reliefScalesHeightsAboveTheTargetPlane() {
+    fun aVertexAboveThePlaneIsDrawnWhereProjectDrawsIt() {
         val build = 14.0
         val cam = MapCamera(35.56, -83.0, 14.6, 30.0, 55.0, 1080, 2400)
         val b = MapCamera(35.56, -83.0, build, 0.0, 0.0, 1000, 1000)
@@ -408,15 +353,16 @@ class GroundedCameraTest {
         val x = b.worldX(lng) - originX; val y = b.worldY(lat) - originY
         val aboveM = 400.0
         val z = groundZ + aboveM * b.pixelsPerMeter
-        for (relief in listOf(0.0, 0.37, 1.0)) {
-            val m = cam.mvpForMeshBuiltAt(build, originX, originY, groundZ, relief)
-            val cw = m[3] * x + m[7] * y + m[11] * z + m[15]
-            val sx = ((m[0] * x + m[4] * y + m[8] * z + m[12]) / cw + 1) / 2 * 1080
-            val sy = (1 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / cw) / 2 * 2400
-            val want = cam.project(lat, lng, relief * aboveM)!!
-            org.junit.Assert.assertEquals("x at relief $relief", want[0].toDouble(), sx, 0.05)
-            org.junit.Assert.assertEquals("y at relief $relief", want[1].toDouble(), sy, 0.05)
-        }
+        val m = cam.mvpForMeshBuiltAt(build, originX, originY, groundZ)
+        val cw = m[3] * x + m[7] * y + m[11] * z + m[15]
+        val sx = ((m[0] * x + m[4] * y + m[8] * z + m[12]) / cw + 1) / 2 * 1080
+        val sy = (1 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / cw) / 2 * 2400
+        val want = cam.project(lat, lng, aboveM)!!
+        org.junit.Assert.assertEquals(want[0].toDouble(), sx, 0.05)
+        org.junit.Assert.assertEquals(want[1].toDouble(), sy, 0.05)
+        // Drawn at the plane instead, it would land elsewhere: the check can fail.
+        val flat = cam.project(lat, lng, 0.0)!!
+        org.junit.Assert.assertTrue(kotlin.math.hypot(flat[0] - sx, flat[1] - sy) > 20)
     }
 }
 

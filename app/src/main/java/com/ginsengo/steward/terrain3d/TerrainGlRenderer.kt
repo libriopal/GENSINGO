@@ -27,6 +27,8 @@ class TerrainGlRenderer : GLTextureView.Renderer {
     /** Latest mesh / texture, kept for re-upload after a context loss. */
     private val mesh = AtomicReference<TerrainMesh.Mesh?>(null)
     private val texture = AtomicReference<Texture?>(null)
+    private val memory = AtomicReference<Memory?>(null)
+    @Volatile private var memoryDirty = false
     private val cameraState = AtomicReference<Frame?>(null)
     @Volatile private var meshDirty = false
     @Volatile private var textureDirty = false
@@ -47,11 +49,18 @@ class TerrainGlRenderer : GLTextureView.Renderer {
 
     class Texture(val argb: IntArray, val size: Int)
 
+    /** The travel memory mask (TravelMask.rg): two bytes per texel, [size] square. */
+    class Memory(val rg: ByteArray, val size: Int)
+
     data class Frame(
         val mvp: FloatArray,
         /** Eye depth where haze begins and where it is full. */
         val hazeStart: Float,
         val hazeEnd: Float,
+        /** Draw where you've been (J31). */
+        val visitedOn: Boolean = false,
+        /** Grey out ground you have walked, leaving colour on unwalked ground (J20). */
+        val unwalkedOn: Boolean = false,
     ) {
         override fun equals(other: Any?) = this === other
         override fun hashCode() = System.identityHashCode(this)
@@ -62,6 +71,7 @@ class TerrainGlRenderer : GLTextureView.Renderer {
     private var ebo = 0
     private var vao = 0
     private var tex = 0
+    private var memTex = 0
     private var indexCount = 0
     private var hasTexture = false
 
@@ -70,11 +80,14 @@ class TerrainGlRenderer : GLTextureView.Renderer {
     private var uLightDir = -1
     private var uHazeColour = -1
     private var uHaze = -1
+    private var uMemory = -1
+    private var uMemoryOn = -1
 
     fun submitMesh(m: TerrainMesh.Mesh?) { mesh.set(m); meshDirty = true }
     fun hasMesh(m: TerrainMesh.Mesh): Boolean = mesh.get() === m
     fun submitTexture(t: Texture?) { texture.set(t); textureDirty = true }
     fun submitFrame(frame: Frame?) = cameraState.set(frame)
+    fun submitMemory(m: Memory?) { memory.set(m); memoryDirty = true }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         val h = TerrainShaders.HAZE_RGB
@@ -94,17 +107,23 @@ class TerrainGlRenderer : GLTextureView.Renderer {
         uLightDir = GLES30.glGetUniformLocation(program, "u_lightDir")
         uHazeColour = GLES30.glGetUniformLocation(program, "u_hazeColour")
         uHaze = GLES30.glGetUniformLocation(program, "u_haze")
+        uMemory = GLES30.glGetUniformLocation(program, "u_memory")
+        uMemoryOn = GLES30.glGetUniformLocation(program, "u_memoryOn")
 
         val buf = IntArray(1)
         GLES30.glGenVertexArrays(1, buf, 0); vao = buf[0]
         GLES30.glGenBuffers(1, buf, 0); vbo = buf[0]
         GLES30.glGenBuffers(1, buf, 0); ebo = buf[0]
         GLES30.glGenTextures(1, buf, 0); tex = buf[0]
+        GLES30.glGenTextures(1, buf, 0); memTex = buf[0]
+        // Until a mask arrives the shader samples an empty one: nothing remembered, nothing greyed.
+        uploadMemory(Memory(ByteArray(2), 1))
         indexCount = 0
         hasTexture = false
         // A new context has nothing in it: whatever was last submitted goes up again.
         meshDirty = mesh.get() != null
         textureDirty = texture.get() != null
+        memoryDirty = memory.get() != null
         programReady = true
         lastError = null
     }
@@ -119,6 +138,7 @@ class TerrainGlRenderer : GLTextureView.Renderer {
 
         if (meshDirty) { meshDirty = false; mesh.get()?.let { uploadMesh(it) } }
         if (textureDirty) { textureDirty = false; texture.get()?.let { uploadTexture(it) } }
+        if (memoryDirty) { memoryDirty = false; memory.get()?.let { uploadMemory(it) } }
 
         val frame = cameraState.get() ?: return
         if (indexCount == 0 || !hasTexture) return
@@ -134,6 +154,11 @@ class TerrainGlRenderer : GLTextureView.Renderer {
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, tex)
         GLES30.glUniform1i(uColour, 0)
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE1)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, memTex)
+        GLES30.glUniform1i(uMemory, 1)
+        GLES30.glUniform2f(uMemoryOn, if (frame.visitedOn) 1f else 0f, if (frame.unwalkedOn) 1f else 0f)
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
 
         GLES30.glBindVertexArray(vao)
         GLES30.glDrawElements(GLES30.GL_TRIANGLES, indexCount, GLES30.GL_UNSIGNED_INT, 0)
@@ -210,6 +235,22 @@ class TerrainGlRenderer : GLTextureView.Renderer {
             Log.e(TAG, lastError!!)
         }
         hasTexture = err == GLES30.GL_NO_ERROR
+    }
+
+    /** Two bytes a texel (R, G), linear filtering so the memory's edges are soft, not blocky. */
+    private fun uploadMemory(m: Memory) {
+        val buf = ByteBuffer.allocateDirect(m.rg.size).order(ByteOrder.nativeOrder())
+        buf.put(m.rg).position(0)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, memTex)
+        GLES30.glPixelStorei(GLES30.GL_UNPACK_ALIGNMENT, 1)
+        GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RG8, m.size, m.size, 0,
+            GLES30.GL_RG, GLES30.GL_UNSIGNED_BYTE, buf)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
+        GLES30.glPixelStorei(GLES30.GL_UNPACK_ALIGNMENT, 4)
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0)
     }
 
     private fun buildProgram(): Int? {

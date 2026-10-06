@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -124,3 +125,29 @@ interface ResearchRunDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(run: ResearchRun)
 }
+
+/** The travel memory (J31). An abstract class: Room's transactions need method bodies. */
+@Dao
+abstract class VisitedDao {
+
+    @Query("INSERT OR IGNORE INTO visited_cells (cell, firstAt, lastAt) VALUES (:cell, :time, :time)")
+    protected abstract suspend fun insert(cell: Long, time: Long)
+
+    @Query("UPDATE visited_cells SET lastAt = :time WHERE cell IN (:cells) AND lastAt < :time")
+    protected abstract suspend fun touch(cells: List<Long>, time: Long)
+
+    /** Remembers [cells] as visited at [time]: new ones added, known ones' last visit moved on. */
+    @Transaction
+    open suspend fun add(cells: LongArray, time: Long) {
+        for (c in cells) insert(c, time)
+        cells.toList().chunked(500).forEach { touch(it, time) }
+    }
+
+    /** Every cell with a key in [lo]..[hi] (a band of rows: TravelCells.band). */
+    @Query("SELECT cell FROM visited_cells WHERE cell BETWEEN :lo AND :hi")
+    abstract suspend fun between(lo: Long, hi: Long): List<Long>
+
+    @Query("SELECT COUNT(*) FROM visited_cells")
+    abstract suspend fun count(): Int
+}
+

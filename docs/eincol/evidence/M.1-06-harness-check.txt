@@ -1,0 +1,8 @@
+$ python3 tools/mutate.py --check
+all 114 mutations apply
+exit 0
+
+Negative control: two mutants appended in memory, one at a deleted file, one with text that is not there and a test class that does not exist:
+Z9: app/src/main/java/com/ginsengo/steward/terrain3d/Handoff.kt does not exist
+Z8: old text found 0x in app/src/main/java/com/ginsengo/steward/field/FieldPower.kt
+Z8: no test class com.ginsengo.steward.field.NoSuchTest

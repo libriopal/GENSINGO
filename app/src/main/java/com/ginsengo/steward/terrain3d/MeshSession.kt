@@ -21,20 +21,28 @@ class MeshSession(private val budget: MemoryBudget?) {
     @Volatile var weightsKey: Int = 0
         private set
 
-    /** The 2D map's style rendered onto the square, while the budget leaves it. */
+    /** Whether the square was built in the battery mode (J24): built otherwise, it is rebuilt. */
+    @Volatile var lighter: Boolean = false
+        private set
+
+    /** The dark map style rendered onto the square, while the budget leaves it. */
     @Volatile var drape: IntArray? = null
 
     /** True once the camera was fitted to the square in this visit: a rotation must not refit it. */
     @Volatile var fitted: Boolean = false
 
-    /** The view built [s]: it replaces the previous square, which goes back to the budget. */
+    /**
+     * The view built [s]: it replaces the previous square, which goes back to the budget. The full
+     * scene replacing its own relief-first scene (the same mosaic, J30) keeps the drape.
+     */
     @Synchronized
-    fun adopt(s: Terrain3D.Scene, weights: Int) {
+    fun adopt(s: Terrain3D.Scene, weights: Int, lighter: Boolean = false) {
         if (scene === s) return
-        dropDrape()
+        if (scene?.mosaic !== s.mosaic) dropDrape()
         scene?.release()
         scene = s
         weightsKey = weights
+        this.lighter = lighter
         budget?.let { s.useBudget(it) }
     }
 
@@ -44,7 +52,8 @@ class MeshSession(private val budget: MemoryBudget?) {
         val s = scene ?: return
         dropDrape()
         drape = px
-        budget?.put(BUDGET_DRAPE, { key -> if (key === s) { synchronized(this) { if (scene === s) drape = null }; onEvicted() } }, s, px.size * 4L)
+        val square = s.mosaic
+        budget?.put(BUDGET_DRAPE, { key -> if (key === square) { synchronized(this) { if (scene?.mosaic === square) drape = null }; onEvicted() } }, square, px.size * 4L)
     }
 
     /** Leaving 3D: everything back to the budget. */
@@ -58,7 +67,7 @@ class MeshSession(private val budget: MemoryBudget?) {
 
     private fun dropDrape() {
         val s = scene
-        if (s != null) budget?.remove(BUDGET_DRAPE, s)
+        if (s != null) budget?.remove(BUDGET_DRAPE, s.mosaic)
         drape = null
     }
 

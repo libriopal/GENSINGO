@@ -16,8 +16,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         Find::class,
         Suggestion::class,
         ResearchRun::class,
+        VisitedCell::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -29,6 +30,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun findDao(): FindDao
     abstract fun suggestionDao(): SuggestionDao
     abstract fun researchRunDao(): ResearchRunDao
+    abstract fun visitedDao(): VisitedDao
 
     companion object {
         @Volatile
@@ -103,6 +105,28 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) = upgradeTo5(db)
         }
 
-        val MIGRATIONS = arrayOf(MIGRATION_1_5, MIGRATION_4_5)
+        /** Schema 6's new table, byte-for-byte as Room generates it (pinned by MigrationSqlTest). */
+        const val CREATE_VISITED_CELLS =
+            "CREATE TABLE IF NOT EXISTS `visited_cells` (`cell` INTEGER NOT NULL, `firstAt` INTEGER NOT NULL, `lastAt` INTEGER NOT NULL, PRIMARY KEY(`cell`))"
+
+        /**
+         * Every stored track point becomes travel memory (J31), on the same grid the app writes
+         * from then on: TravelCells.SQL_KEY is TravelCells.key in SQLite. Points vaguer than the
+         * recorder's own limit are left out, as it leaves them out.
+         */
+        const val BACKFILL_VISITED_CELLS =
+            "INSERT OR IGNORE INTO `visited_cells` (`cell`, `firstAt`, `lastAt`) " +
+                "SELECT " + com.ginsengo.steward.field.TravelCells.SQL_KEY + ", MIN(`time`), MAX(`time`) " +
+                "FROM `track_points` WHERE `accuracyM` <= 30 GROUP BY 1"
+
+        /** Schema 5 → 6: the travel memory (owner directive, wave M.1). Nothing existing changes. */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(CREATE_VISITED_CELLS)
+                db.execSQL(BACKFILL_VISITED_CELLS)
+            }
+        }
+
+        val MIGRATIONS = arrayOf(MIGRATION_1_5, MIGRATION_4_5, MIGRATION_5_6)
     }
 }

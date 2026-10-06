@@ -1,0 +1,8 @@
+B.1's tools/mutate.py checked against B.1's own tree (git show 9ee7dfd:<file>), before any M.1 change.
+A mutation is stale when its file is missing or its old text is not found exactly once.
+
+P6: old text found 0x in app/src/main/java/com/ginsengo/steward/research/RadiusScan.kt (candidates outside the radius)
+H2: old text found 0x in app/src/main/java/com/ginsengo/steward/terrain3d/TerrainTextures.kt (the 3D habitat colour is not the 2D heatmap colour)
+H4: old text found 0x in app/src/main/java/com/ginsengo/steward/terrain3d/TerrainTextures.kt (weak ground fades to black instead of bare relief)
+
+3 stale of 96 at 9ee7dfd

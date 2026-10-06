@@ -136,3 +136,16 @@ data class ResearchRun(
     val weights: String,
     val durationMs: Long,
 )
+
+/**
+ * One cell of the travel memory (owner directive J31): somewhere the owner has been, on the
+ * 1/10,000° grid of [com.ginsengo.steward.field.TravelCells] (about 11 m × 9 m here). Written from
+ * every fix the app receives, on screen or recording in the pocket, and never deleted by the app.
+ */
+@Entity(tableName = "visited_cells")
+data class VisitedCell(
+    @PrimaryKey val cell: Long,
+    val firstAt: Long,
+    val lastAt: Long,
+)
+

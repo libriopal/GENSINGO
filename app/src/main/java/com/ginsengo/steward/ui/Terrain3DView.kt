@@ -3,6 +3,7 @@ package com.ginsengo.steward.ui
 import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -37,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -44,7 +46,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -57,7 +58,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -80,7 +80,12 @@ import com.ginsengo.steward.terrain.SuitabilityRasterizer
 import com.ginsengo.steward.terrain3d.CameraMath
 import com.ginsengo.steward.terrain3d.DepthRange
 import com.ginsengo.steward.terrain3d.GestureMath
-import com.ginsengo.steward.terrain3d.Handoff
+import com.ginsengo.steward.terrain3d.SquareLevel
+import com.ginsengo.steward.terrain3d.TravelMask
+import com.ginsengo.steward.terrain3d.CameraState
+import com.ginsengo.steward.field.BatteryMode
+import com.ginsengo.steward.field.FramePacer
+import com.ginsengo.steward.field.TravelSource
 import com.ginsengo.steward.terrain3d.MeshSession
 import com.ginsengo.steward.terrain3d.Occlusion
 import com.ginsengo.steward.perf.MemoryBudget
@@ -105,36 +110,31 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * The map in 3D: the same place, layers and camera as the 2D map (one-map blueprint), on
- * real terrain about 3 km square at the best elevation the tiles offer (3.9 m cells at zoom 15).
+ * The one map (owner directive, wave M.1): real terrain in 3D, built as one square at a time around
+ * the camera, at the elevation zoom its own zoom calls for ([SquareLevel]: 3 km at 3.9 m cells when
+ * close, up to 48 km at ~61 m when zoomed out, enough for the whole 10-mile radius).
  *
- * - **One camera.** It starts from the 2D map's camera ([camera]) and reports where it ends up
- *   ([onCamera]), so switching back lands the map on the same view.
- * - **Moves like the map.** One finger drags the ground under it (the touched point on the
- *   terrain stays under the finger, [CameraMath.pan]); two fingers pinch to zoom, twist to
- *   rotate, and slide up or down to tilt. When a gesture ends the camera is put back on the
- *   ground without moving the eye ([CameraMath.reanchor]), and when its centre has left the
- *   built square the terrain is rebuilt there.
- * - **Same layers.** The Layers sheet's habitat, creeks, contours, finds, suggestions and track
- *   apply here. The 2D map's own basemap is drawn on the ground by MapLibre ([MapDrape]) when
- *   its style is available; otherwise the terrain is coloured by habitat, or by elevation when
- *   the habitat layer is off.
+ * - **One camera.** The app moves it (the first fix, recentre, "Show on map", the compass); the
+ *   gestures here report it. When a gesture ends the camera is put back on the ground without
+ *   moving the eye ([CameraMath.reanchor]); when its centre has left the square, or its zoom calls
+ *   for another level, the square is rebuilt there.
+ * - **Relief first** (J30): the mesh and its relief colour show as soon as the tiles are read; the
+ *   habitat scores and the creeks follow on the same mesh. The old square stays until then.
+ * - **Gestures:** one finger drags the ground under it ([CameraMath.pan]); two fingers pinch to
+ *   zoom, twist to rotate and slide to tilt, on MapLibre's own constants ([GestureMath], A17).
+ * - **Layers:** habitat, creeks, contours and hillshade are baked into the ground's texture; where
+ *   you've been and the J20 grey-out come from the travel memory's own mask ([TravelMask]), so a
+ *   new step does not re-bake the colour; finds, suggestions, the track and you are drawn on top.
  *
- * - **One surface with the map** (exe.md A8). It draws into a TextureView ([GLTextureView]), so it
- *   can sit over the 2D map's TextureView and fade: a GLSurfaceView there blacked the screen
- *   (Phase 5, measured). [reveal] is MainScreen's cross-fade: from 0 to [Handoff.COVERED] the
- *   view fades in with its relief held under the measured hand-off ([Handoff.relief]), so the
- *   terrain never disagrees visibly with the map it covers; to [Handoff.RISEN] the relief rises
- *   the rest of the way. Gestures belong to this view only once it has risen.
- *
- * Battery: RENDERMODE_WHEN_DIRTY, a frame only when the camera moves, new colour arrives or the
- * relief changes; terrain is built once per square, colour re-baked only when a layer or the
- * basemap changes.
+ * Battery (J32, J24): a frame only when something drawn changed, at most one per
+ * [BatteryMode.FRAME_MS] ([FramePacer]; 20 a second in the battery mode, with half the mesh, a
+ * quarter of the texture and no map snapshot); the GL thread pauses with the screen; nothing is
+ * built while a gesture runs, and nothing at all before the first fix ([waitForFix]).
  */
 @Composable
 fun Terrain3DView(
     me: FieldLocation?,
-    /** The one camera (exe.md A1). This view mirrors it: gestures report, the app moves it. */
+    /** The one camera (exe.md A1): gestures report it, the app moves it. */
     camera: SharedCamera,
     track: List<TrackPoint>,
     finds: List<Find>,
@@ -142,55 +142,53 @@ fun Terrain3DView(
     layers: MapLayerState,
     weights: DoubleArray,
     demStore: DemTileStore,
-    /** The 2D map's style to drape, or null when there is none to drape (offline fallback, Topo). */
+    /** The dark map's style to drape, or null for none (switched off, offline, or the battery mode). */
     styleUri: String?,
     onStatus: (String) -> Unit,
     modifier: Modifier = Modifier,
     /** The scan's centre: its radius ring is drawn where it crosses the square. */
     radiusCenter: Pair<Double, Double>? = null,
-    /** MainScreen's cross-fade, 0..[Handoff.RISEN] (see above). */
-    reveal: Float = Handoff.RISEN,
-    /**
-     * True once the terrain is built under the camera, fitted, grounded and drawn at least once:
-     * MainScreen starts the cross-fade only then, so the fade never shows an empty surface.
-     */
-    onReady: (Boolean) -> Unit = {},
-    /**
-     * The built square for this visit to 3D, held by the ViewModel (A16): a rotation picks it up
-     * instead of rebuilding it. MainScreen ends the session when the user leaves 3D.
-     */
+    /** The built square, held by the ViewModel (A16): a rotation picks it up instead of rebuilding it. */
     session: MeshSession = remember { MeshSession(null) },
     /** The app's memory budget (A13): emptied, and the build tried once more, when a build runs out of memory. */
     budget: MemoryBudget? = null,
+    /** The travel memory (J31): what it holds over a square, and what this process has added since. */
+    travel: TravelSource? = null,
+    /** The battery mode (J24): lighter mesh and texture, no map snapshot, 20 frames a second. */
+    lighter: Boolean = false,
+    /** True until the first fix: nothing is built at the start position's fallback, far from the owner. */
+    waitForFix: Boolean = false,
 ) {
     val context = LocalContext.current
     val renderer = remember { TerrainGlRenderer() }
     val glRef = remember { arrayOfNulls<GLTextureView>(1) }
-    val tolerancePx = Handoff.TOLERANCE_DP * LocalDensity.current.density
-    val interactive = reveal >= Handoff.RISEN
     val textMeasurer = rememberTextMeasurer()
     val status by rememberUpdatedState(onStatus)
     val currentLayers by rememberUpdatedState(layers)
 
     var size by remember { mutableStateOf(0 to 0) }
+    fun viewportW() = size.first.takeIf { it > 0 } ?: DEFAULT_VIEWPORT_W
     // The shared camera, as Compose state: every report or move redraws.
     val snap by camera.state.collectAsState()
     val cam = snap.camera
     // This view's side of the epoch rule: app moves are applied once; its own reports never.
     val follower = remember { SharedCamera.Follower(camera.state.value.epoch) }
     // A square held from before a rotation (A16), if it still covers the camera.
-    val held = remember { session.scene?.takeIf { it.contains(camera.camera.lat, camera.camera.lng) } }
-    // Zoom is fitted to the 3D range once the square's size is known (once per visit, not per rotation).
+    val held = remember { session.scene?.takeIf { it.contains(camera.camera.lat, camera.camera.lng) && session.lighter == lighter } }
     var fitted by remember { mutableStateOf(held != null && session.fitted) }
     var scene by remember { mutableStateOf(held) }
     var buildAt by remember { mutableStateOf(camera.camera.let { it.lat to it.lng }) }
+    // The square's elevation zoom (SquareLevel): chosen from the camera's zoom.
+    var level by remember {
+        mutableIntStateOf(held?.level ?: SquareLevel.forZoom(camera.camera.zoom, camera.camera.lat, DEFAULT_VIEWPORT_W, null))
+    }
     // True when the user dragged the camera off the square (settle onto the new ground keeping
     // the eye); false after an app move, which teleports (ground on the new centre instead).
     var pannedOut by remember { mutableStateOf(false) }
     // The camera looks at the plane through the ground under its centre, in metres (see
     // MapCamera.mvpForMeshBuiltAt); fixed during a gesture, re-based when it ends.
     var anchorM by remember { mutableDoubleStateOf(held?.elevationAt(camera.camera.lat, camera.camera.lng) ?: Double.NaN) }
-    var drape by remember { mutableStateOf(held?.let { h -> session.drape?.let { h to it } }) }
+    var drape by remember { mutableStateOf(held?.let { h -> session.drape?.let { h.mosaic to it } }) }
     var sceneNote by remember { mutableStateOf(held?.describe() ?: "") }
     var drapeNote by remember { mutableStateOf("") }
     // Set (once, on the main thread) when the GL thread first draws terrain.
@@ -200,6 +198,16 @@ fun Terrain3DView(
         val posted = java.util.concurrent.atomic.AtomicBoolean(false)
         renderer.onTerrainDrawn = { if (posted.compareAndSet(false, true)) main.post { glDrawn = true } }
         onDispose { renderer.onTerrainDrawn = null }
+    }
+
+    // Frames on demand, paced (J32): the last request of a gesture is always drawn.
+    val pacer = remember { FramePacer(BatteryMode.FRAME_MS) }
+    pacer.minIntervalMs = if (lighter) BatteryMode.FRAME_MS_SAVER else BatteryMode.FRAME_MS
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    fun requestFrame() {
+        val wait = pacer.request(SystemClock.uptimeMillis())
+        if (wait == 0L) glRef[0]?.requestRender()
+        else if (wait > 0) mainHandler.postDelayed({ pacer.trailingDrawn(SystemClock.uptimeMillis()); glRef[0]?.requestRender() }, wait)
     }
 
     // The GL thread must pause and resume with the screen, or it keeps a context (and a
@@ -220,92 +228,101 @@ fun Terrain3DView(
     // Published on every change, even to the same text: "Tracing creeks…" must always be replaced.
     fun publish() { if (sceneNote.isNotEmpty()) status(sceneNote + drapeNote) }
 
-    // App moves of the shared camera (the first fix, recentre, "Show on map", the switch, this
-    // view's own fit and compass): ground the camera on its new centre, or build the square
-    // there when the centre is outside the one on screen.
+    /** Rebuilds when the camera's centre has left the square or its zoom calls for another level. */
+    fun rebuildIfNeeded(c: CameraState) {
+        val want = SquareLevel.forZoom(c.zoom, c.lat, viewportW(), scene?.level)
+        val sc = scene
+        if (sc == null || !sc.contains(c.lat, c.lng) || want != sc.level) { level = want; buildAt = c.lat to c.lng }
+    }
+
+    // App moves of the shared camera (the first fix, recentre, "Show on map", the compass): ground
+    // the camera on its new centre, or build the square there.
     LaunchedEffect(snap.epoch) {
         val moved = follower.take(snap) ?: return@LaunchedEffect
         val c = moved.camera
-        val sc = scene
         pannedOut = false
-        sc?.elevationAt(c.lat, c.lng)?.let { anchorM = it }
-        if (sc == null || !sc.contains(c.lat, c.lng)) buildAt = c.lat to c.lng
+        scene?.elevationAt(c.lat, c.lng)?.let { anchorM = it }
+        rebuildIfNeeded(c)
     }
 
-    // Before it has risen (warming under the map, or fading) the user is moving the 2D map, whose
-    // pans are reports, not app moves: the square follows the camera there, and the ground plane
-    // stays the ground under its centre, so the relief rises around the point the user is on.
-    val outside = scene?.contains(cam.lat, cam.lng) == false
-    LaunchedEffect(outside, interactive) {
-        if (outside && !interactive) camera.camera.let { buildAt = it.lat to it.lng }
-    }
-    LaunchedEffect(cam.lat, cam.lng, scene, interactive) {
-        if (!interactive) scene?.elevationAt(cam.lat, cam.lng)?.let { anchorM = it }
-    }
-
-    // ---- terrain: built around the camera's centre, once per elevation tile (~1 km).
+    // ---- terrain: relief first, then habitat and creeks on the same mesh (J30).
     val (bLat, bLng) = buildAt
-    val buildKey = "${DemTileStore.lonToTileX(bLng, 15)}:${DemTileStore.latToTileY(bLat, 15)}"
-    LaunchedEffect(buildKey, weights.contentHashCode()) {
+    val buildKey = "$level:${DemTileStore.lonToTileX(bLng, level)}:${DemTileStore.latToTileY(bLat, level)}"
+    LaunchedEffect(buildKey, weights.contentHashCode(), lighter, waitForFix) {
+        if (waitForFix && scene == null) { status("Waiting for a GPS fix…"); return@LaunchedEffect }
         val have = scene
-        if (have != null && have === session.scene && have.contains(bLat, bLng) && session.weightsKey == weights.contentHashCode()) {
+        if (have != null && have === session.scene && !have.quick && have.level == level && have.contains(bLat, bLng) &&
+            session.weightsKey == weights.contentHashCode() && session.lighter == lighter) {
             publish(); return@LaunchedEffect          // the square held across a rotation (A16)
         }
+        val t0 = SystemClock.elapsedRealtime()
         status("Loading elevation…")
-        val area = loadArea(demStore, bLat, bLng)
+        val area = loadArea(demStore, bLat, bLng, level)
         if (area == null) {
             status("No elevation tiles here yet. Connect once, or save the area for offline use.")
             return@LaunchedEffect
         }
-        status("Tracing creeks and colouring the ground…")
-        val s = withContext(Dispatchers.Default) {
-            afterTrimIfOutOfMemory(budget, "3D build") { Terrain3D.build(area.first, weights) }
-        }
-        if (s == null) { status("Could not build the 3D terrain here."); return@LaunchedEffect }
-        // Colour first, then mesh and colour together: the new ground never wears the old
-        // square's texture. (The colour effect below finds this texture in the scene's cache.)
+        val gridCap = if (lighter) BatteryMode.GRID_CAP else Terrain3D.MAX_GRID
+        val textureCap = if (lighter) BatteryMode.TEXTURE_CAP else TerrainTextures.MAX_SIZE
         val l = currentLayers
-        val px = withContext(Dispatchers.Default) {
-            afterTrimIfOutOfMemory(budget, "3D colour") {
-                s.texture(if (SceneLayer.HABITAT.shown(l)) TerrainTextures.Mode.HABITAT else TerrainTextures.Mode.ELEVATION,
-                    MeshLayers.baked(l))
+        val quick = withContext(Dispatchers.Default) {
+            afterTrimIfOutOfMemory(budget, "3D relief") {
+                val q = Terrain3D.buildQuick(area.first, gridCap = gridCap, textureCap = textureCap)
+                q to q.texture(if (SceneLayer.HABITAT.shown(l)) TerrainTextures.Mode.HABITAT else TerrainTextures.Mode.ELEVATION, MeshLayers.baked(l))
             }
         }
-        if (px == null) { status("Could not colour the 3D terrain here (out of memory)."); return@LaunchedEffect }
-        renderer.submitMesh(s.mesh)
-        renderer.submitTexture(TerrainGlRenderer.Texture(px, s.textureSize))
-        drape = null
-        session.adopt(s, weights.contentHashCode())     // the old square goes back to the budget (A13)
-        scene = s
+        if (quick == null) { status("Could not build the 3D terrain here."); return@LaunchedEffect }
+        val q = quick.first
+        // Colour first, then mesh and colour together: the new ground never wears the old square's texture.
+        renderer.submitMesh(q.mesh)
+        renderer.submitTexture(TerrainGlRenderer.Texture(quick.second, q.textureSize))
+        if (drape?.first !== q.mosaic) drape = null
+        session.adopt(q, weights.contentHashCode(), lighter)     // the old square goes back to the budget (A13)
+        scene = q
         val c = camera.camera
         val (vw, vh) = size
         if (pannedOut && fitted && !anchorM.isNaN() && vw > 0 && vh > 0) {
-            // The user dragged off the old square: put the camera on the new ground without
-            // moving the eye, as after a gesture (off the old square the ground under it was
-            // unknown, so re-anchoring could not run when the gesture ended).
-            val (next, ground) = Terrain3D.settle(c, vw, vh, s, anchorM)
+            // The user dragged off the old square: put the camera on the new ground without moving
+            // the eye, as after a gesture.
+            val (next, ground) = Terrain3D.settle(c, vw, vh, q, anchorM)
             camera.report(next); anchorM = ground
         } else {
-            anchorM = s.elevationAt(c.lat, c.lng) ?: ((s.mesh.minElevationM + s.mesh.maxElevationM) / 2.0)
+            anchorM = q.elevationAt(c.lat, c.lng) ?: ((q.mesh.minElevationM + q.mesh.maxElevationM) / 2.0)
         }
         pannedOut = false
-        sceneNote = s.describe() + area.second
+        sceneNote = q.describe() + area.second
         publish()
+        //noinspection LogNotTimber
+        Log.i(TAG, "relief: level ${q.level} in ${SystemClock.elapsedRealtime() - t0} ms")
+        // The habitat scores and the creeks, on the same mesh: the camera and its anchor stay put.
+        val tpi = SquareLevel.tpiRadiusM(q.level, bLat, viewportW())
+        val full = withContext(Dispatchers.Default) {
+            afterTrimIfOutOfMemory(budget, "3D build") {
+                Terrain3D.build(area.first, weights, tpiRadiusM = tpi, gridCap = gridCap, textureCap = textureCap, mesh = q.mesh)
+            }
+        }
+        if (full == null) { status(q.describe().replace("colouring the habitat…", "could not colour the habitat here")); return@LaunchedEffect }
+        session.adopt(full, weights.contentHashCode(), lighter)
+        scene = full
+        sceneNote = full.describe() + area.second
+        publish()
+        //noinspection LogNotTimber
+        Log.i(TAG, "habitat: level ${full.level} in ${SystemClock.elapsedRealtime() - t0} ms")
     }
 
-    // ---- the 2D map's basemap, drawn by MapLibre for this square, under the app's layers.
-    LaunchedEffect(scene, styleUri) {
+    // ---- the dark map, drawn by MapLibre for this square, under the app's layers (once per square).
+    val square = scene?.mosaic
+    LaunchedEffect(square, styleUri) {
         val s = scene ?: return@LaunchedEffect
-        // No style to drape (Topo, or the 2D map's offline fallback): take the old drape off
-        // too, or the Dark map would stay on the ground under the Topo choice.
         if (styleUri == null) { drape = null; drapeNote = ""; publish(); return@LaunchedEffect }
+        if (drape?.first === s.mosaic) return@LaunchedEffect
         MapDrape.installRequestCounter()   // debug builds only: the device gate's instrument
         drapeNote = " · drawing the map on the ground…"
         publish()
         val px = MapDrape.render(context, styleUri, s.north, s.west, s.south, s.east, s.textureSize, DRAPE_TIMEOUT_MS)
-        if (scene !== s) return@LaunchedEffect
+        if (scene?.mosaic !== s.mosaic) return@LaunchedEffect
         if (px != null) {
-            drape = s to px; drapeNote = " · map on the ground"
+            drape = s.mosaic to px; drapeNote = " · map on the ground"
             // Under the shared budget (A13): evicted, the ground is coloured without the map.
             session.keepDrape(px) { drape = null }
         }
@@ -317,7 +334,7 @@ fun Terrain3DView(
     LaunchedEffect(scene) { scene?.let { if (!renderer.hasMesh(it.mesh)) renderer.submitMesh(it.mesh) } }
 
     // ---- colour: re-baked only when the layers, the basemap or the terrain change.
-    val drapePx = drape?.takeIf { it.first === scene }?.second
+    val drapePx = drape?.takeIf { it.first === scene?.mosaic }?.second
     val mode = when {
         drapePx != null -> TerrainTextures.Mode.MAP
         SceneLayer.HABITAT.shown(layers) -> TerrainTextures.Mode.HABITAT
@@ -328,76 +345,93 @@ fun Terrain3DView(
         val s = scene ?: return@LaunchedEffect
         val px = withContext(Dispatchers.Default) { s.texture(mode, texLayers, drapePx) }
         renderer.submitTexture(TerrainGlRenderer.Texture(px, s.textureSize))
-        glRef[0]?.requestRender()
+        requestFrame()
     }
 
-    // ---- camera: fitted once to the 3D range (in an effect: never written during
+    // ---- the travel memory over this square (J31) and its 15 m buffer for J20.
+    val memoryOn = MeshLayers.onMemory(SceneLayer.VISITED, layers)
+    val unwalkedOn = MeshLayers.onMemory(SceneLayer.UNWALKED, layers)
+    val noTravel = remember { kotlinx.coroutines.flow.MutableStateFlow(0) }
+    val travelVersion by (travel?.version ?: noTravel).collectAsState()
+    var mask by remember { mutableStateOf<TravelMask?>(null) }
+    var maskSquare by remember { mutableStateOf<DemTileStore.Mosaic?>(null) }
+    var maskSeen by remember { mutableIntStateOf(0) }
+    LaunchedEffect(square, travel) {
+        val s = scene ?: return@LaunchedEffect
+        val t = travel ?: return@LaunchedEffect
+        val seen = t.version.value
+        val m = withContext(Dispatchers.IO) {
+            TravelMask(s.north, s.west, s.south, s.east, s.widthM).also {
+                it.markAll(t.cellsIn(s.north, s.west, s.south, s.east))
+                it.markAll(t.recentSince(0))
+            }
+        }
+        if (scene?.mosaic !== s.mosaic) return@LaunchedEffect
+        mask = m; maskSquare = s.mosaic; maskSeen = seen
+    }
+    LaunchedEffect(mask, travelVersion, unwalkedOn) {
+        val m = mask ?: return@LaunchedEffect
+        val t = travel ?: return@LaunchedEffect
+        // Steps arrive every few seconds while walking: coalesced, at most one upload per burst.
+        if (maskSeen < travelVersion) kotlinx.coroutines.delay(MEMORY_COALESCE_MS)
+        val fresh = t.recentSince(maskSeen)
+        maskSeen = t.version.value
+        m.markAll(fresh)
+        val rg = withContext(Dispatchers.Default) { m.rg(if (unwalkedOn) m.dilated() else null) }
+        renderer.submitMemory(TerrainGlRenderer.Memory(rg, m.size))
+        requestFrame()
+    }
+
+    // ---- camera: brought into the one map's range once (in an effect: never written during
     // composition), then drawn every time it changes.
     LaunchedEffect(scene, size.first) {
         val s0 = scene ?: return@LaunchedEffect
         if (fitted || size.first <= 0) return@LaunchedEffect
-        val fit = fitZoomFor(s0, size.first)
         fitted = true
         session.fitted = true
-        // Animated: until the fade the 2D map is what the user sees, and it glides into range.
-        camera.move(CameraMath.to3d(camera.camera, fit - 1.5, fit + 3.5), animate = !interactive)
+        val lat = (s0.north + s0.south) / 2
+        camera.move(CameraMath.to3d(camera.camera, SquareLevel.minZoom(lat, size.first), SquareLevel.maxZoom(lat, size.first)))
     }
     val (w, h) = size
     val s = scene
     val view = cam.takeIf { fitted && w > 0 && h > 0 && !anchorM.isNaN() }
     val mc = view?.let { CameraMath.mapCamera(it, w, h) }
-    // The hand-off, measured for this camera over this ground (exe.md A7), and where the fade is.
-    // Measured only while a fade can use it: once risen the relief is 1 whatever the hand-off,
-    // and measuring on every gesture frame would be work for nothing.
-    val measuring = reveal < Handoff.RISEN
-    val handoff = remember(view, anchorM, s, w, h, tolerancePx, measuring) {
-        if (measuring && mc != null && s != null) Handoff.relief(mc, Handoff.samples(s, anchorM), tolerancePx.toDouble()) else 0.0
-    }
-    val blend = Handoff.blend(reveal, handoff)
-    val relief = blend.relief
     val ready = s != null && mc != null && glDrawn && s.contains(cam.lat, cam.lng)
-    val currentOnReady by rememberUpdatedState(onReady)
     LaunchedEffect(ready) {
-        currentOnReady(ready)
-        // The device gate's measurement of A7 (no position in it): the hand-off this view fades at.
+        // The device gate's measurement (no position in it).
         // The app logs through android.util.Log throughout (Timber is not a dependency).
         //noinspection LogNotTimber
-        if (ready) Log.i(TAG, "ready: hand-off relief %.3f at pitch %.0f (tolerance %.1f px)".format(handoff, cam.pitch, tolerancePx) +
+        if (ready) Log.i(TAG, "ready: level ${s?.level} (%.1f km) at pitch %.0f".format((s?.widthM ?: 0.0) / 1000, cam.pitch) +
             " · depth ${DepthFallbackChooser.chosenBits} bits" + (if (s?.hasHoles == true) " · holes (no elevation)" else "") +
-            (budget?.let { " · " + it.report() } ?: ""))
+            (if (lighter) " · battery mode" else "") + (budget?.let { " · " + it.report() } ?: ""))
     }
-    // Gone means not ready: the next visit builds anew and must not fade in before it has drawn.
-    DisposableEffect(Unit) { onDispose { currentOnReady(false) } }
     // A GL frame only when what it draws changed: a GPS fix or a track point recomposes this
     // screen (the markers are on the Compose canvas), and must not redraw the terrain.
-    remember(view, anchorM, s, w, h, relief) {
+    remember(view, anchorM, s, w, h, memoryOn, unwalkedOn) {
         if (mc != null && s != null) {
             renderer.submitFrame(
                 TerrainGlRenderer.Frame(
                     mvp = mc.mvpForMeshBuiltAt(Terrain3D.BUILD_ZOOM, s.mesh.originWorldX, s.mesh.originWorldY,
-                        groundZ = anchorM * s.mesh.pixelsPerMeter * Terrain3D.EXAGGERATION, relief = relief,
+                        groundZ = anchorM * s.mesh.pixelsPerMeter * Terrain3D.EXAGGERATION,
                         // Depth precision from the ground in view (exe.md B7), not a fixed 48 px.
-                        nearPx = DepthRange.near(mc, Terrain3D.highestAbovePlanePx(s, anchorM, mc.zoom, relief))),
+                        nearPx = DepthRange.near(mc, Terrain3D.highestAbovePlanePx(s, anchorM, mc.zoom, 1.0))),
                     hazeStart = (mc.cameraToCenterDistance * 1.1).toFloat(),
                     hazeEnd = (mc.cameraToCenterDistance * 3.6).toFloat(),
+                    visitedOn = memoryOn,
+                    unwalkedOn = unwalkedOn,
                 )
             )
-            glRef[0]?.requestRender()
+            requestFrame()
         }
         0
     }
 
-    // The track line, decimated once per change of track or terrain, not per frame. VISITED is
-    // drawn as this line too (MeshLayers): the 2D heatmap's blur has no 3D size.
+    // The track line, decimated once per change of track or terrain, not per frame.
     val trackLines = remember(track, s) { s?.let { trackSegments(track, it) } ?: emptyList() }
-    val showTrack = MeshLayers.onCanvas(SceneLayer.TRACK, layers) || MeshLayers.onCanvas(SceneLayer.VISITED, layers)
+    val showTrack = MeshLayers.onCanvas(SceneLayer.TRACK, layers)
     val ringLines = remember(radiusCenter, s) { if (s != null && radiusCenter != null) ringSegments(radiusCenter, s) else emptyList() }
 
-    // At reveal 0 the view is warming UNDER the map (MainScreen's zIndex), drawn opaque: a layer at
-    // alpha 0 may not be drawn at all, and a TextureView that is never drawn never gets its surface,
-    // so the GL thread would never start and the fade would wait for a frame that cannot come.
-    val alpha = if (reveal <= 0f) 1f else blend.alpha
-    Box(modifier.graphicsLayer { this.alpha = alpha }.background(Color(0xFF0E191E)).onSizeChanged { size = it.width to it.height }) {
+    Box(modifier.background(Color(0xFF0E191E)).onSizeChanged { size = it.width to it.height }) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
@@ -414,7 +448,7 @@ fun Terrain3DView(
         Canvas(
             Modifier
                 .fillMaxSize()
-                .then(if (!interactive) Modifier else Modifier.pointerInput(Unit) {
+                .pointerInput(Unit) {
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
                         var moved = false
@@ -439,13 +473,12 @@ fun Terrain3DView(
                                         moved = true
                                     }
                                 } else if (down.size >= 2) {
-                                    val fit = fitZoomFor(s0, vw)
-                                    // The 2D map's own gesture constants (GestureMath, A17).
+                                    val lat = c0.lat
+                                    // MapLibre's own gesture constants (GestureMath, A17); the zoom range is the
+                                    // one map's, across every level (SquareLevel).
                                     val zoom = c0.zoom + GestureMath.zoomDelta(event.calculateZoom())
                                     camera.report(c0.copy(
-                                        // A re-anchored camera may sit past the pinch range; it is
-                                        // kept, not snapped, and only pinching further is refused.
-                                        zoom = zoom.coerceIn(min(fit - 1.5, c0.zoom), max(fit + 3.5, c0.zoom)),
+                                        zoom = zoom.coerceIn(min(SquareLevel.minZoom(lat, vw), c0.zoom), max(SquareLevel.maxZoom(lat, vw), c0.zoom)),
                                         bearing = ((c0.bearing + GestureMath.bearingDelta(event.calculateRotation())) % 360.0 + 360.0) % 360.0,
                                         pitch = (c0.pitch + GestureMath.pitchDelta(event.calculatePan().y)).coerceIn(15.0, 80.0),
                                     ))
@@ -461,16 +494,16 @@ fun Terrain3DView(
                             if (s1 != null && vw > 0 && vh > 0) {
                                 val (done, ground) = Terrain3D.settle(c1, vw, vh, s1, anchorM)
                                 camera.report(done); anchorM = ground
-                                if (!s1.contains(done.lat, done.lng)) { buildAt = done.lat to done.lng; pannedOut = true }
+                                if (!s1.contains(done.lat, done.lng)) pannedOut = true
+                                rebuildIfNeeded(done)
                             }
                         }
                     }
-                })
+                }
         ) {
             if (mc == null || s == null) return@Canvas
             val anchor = anchorM
-            // Heights as the mesh draws them now: scaled by the fade's relief.
-            val lift = Terrain3D.EXAGGERATION * relief
+            val lift = Terrain3D.EXAGGERATION
             fun at(lat: Double, lng: Double): Offset? {
                 val e = s.elevationAt(lat, lng) ?: return null
                 val p = mc.project(lat, lng, (e - anchor) * lift) ?: return null
@@ -493,7 +526,7 @@ fun Terrain3DView(
                 }
             }
             val dark = Color(0xE6061008)
-            // SceneLayer order, bottom to top: the track (and visited), finds, ring, suggestions, you.
+            // SceneLayer order, bottom to top: the track, finds, ring, suggestions, you.
             if (showTrack && trackLines.isNotEmpty()) {
                 lines(trackLines, Color(0xCC6FB7FF), Stroke(4f, cap = StrokeCap.Round, join = StrokeJoin.Round))
             }
@@ -502,7 +535,6 @@ fun Terrain3DView(
             val heightAt = { la: Double, lo: Double -> ((s.elevationAt(la, lo) ?: anchor) - anchor) * lift }
             val topM = (s.mesh.maxElevationM - anchor) * lift
             fun seen(lat: Double, lng: Double): Float {
-                if (lift <= 0.0) return 1f
                 val e = s.elevationAt(lat, lng) ?: return 1f
                 return if (Occlusion.hidden(mc, lat, lng, (e - anchor) * lift, heightAt, topM)) HIDDEN_ALPHA else 1f
             }
@@ -513,7 +545,6 @@ fun Terrain3DView(
                 drawCircle(Color(0xFFFFB02E), 6.5f, o, alpha = a)
             }
             if (MeshLayers.onCanvas(SceneLayer.RING, layers) && ringLines.isNotEmpty()) {
-                // The 2D ring's colour and dash (FieldMap: #E6F4EC at 45%, dashes 2:2 line widths).
                 lines(ringLines, Color(0x73E6F4EC), Stroke(3f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f))))
             }
             if (MeshLayers.onCanvas(SceneLayer.SUGGESTIONS, layers)) suggestions.forEach { sg ->
@@ -547,19 +578,22 @@ fun Terrain3DView(
             },
             containerColor = Gen.SurfaceHigh, contentColor = Gen.Text,
             // Above the screen's side buttons, clear of the status chips.
-            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp).offset(y = (-100).dp)
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 10.dp).offset(y = (-50).dp)
                 .semantics { contentDescription = "Face north and reset the view" },
         ) { Icon(Icons.Filled.Navigation, null, modifier = Modifier.rotate(-cam.bearing.toFloat())) }
 
         if (s != null) Legend(
-            s, mode, layers, showTrack && trackLines.isNotEmpty(),
+            s, mode, layers, showTrack && trackLines.isNotEmpty(), memoryOn, unwalkedOn,
             Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 12.dp, bottom = 96.dp),
         )
     }
 }
 
 @Composable
-private fun Legend(s: Terrain3D.Scene, mode: TerrainTextures.Mode, layers: MapLayerState, track: Boolean, modifier: Modifier) {
+private fun Legend(
+    s: Terrain3D.Scene, mode: TerrainTextures.Mode, layers: MapLayerState, track: Boolean,
+    memory: Boolean, unwalked: Boolean, modifier: Modifier,
+) {
     Column(
         modifier.widthIn(max = 220.dp).background(Gen.Bg.copy(alpha = 0.78f), RoundedCornerShape(10.dp)).padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -586,10 +620,16 @@ private fun Legend(s: Terrain3D.Scene, mode: TerrainTextures.Mode, layers: MapLa
             Spacer(Modifier.size(6.dp))
             Text("Creeks, from elevation", color = Gen.TextDim, fontSize = 11.sp)
         }
+        if (memory) Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(18.dp).height(10.dp).background(Gen.Text.copy(alpha = 0.5f)))
+            Spacer(Modifier.size(6.dp))
+            Text("Where I've been (every fix, map open or Track on)", color = Gen.TextDim, fontSize = 11.sp)
+        }
+        if (unwalked) Text("Grey: within 15 m of where I've been", color = Gen.TextDim, fontSize = 11.sp)
         if (track) Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(18.dp).height(3.dp).background(Color(0xFF6FB7FF)))
             Spacer(Modifier.size(6.dp))
-            Text("Where you've walked", color = Gen.TextDim, fontSize = 11.sp)
+            Text("Track line", color = Gen.TextDim, fontSize = 11.sp)
         }
         Text(
             (if (layers.contours) "Contours every %.0f m · ".format(s.contourM) else "") +
@@ -602,16 +642,16 @@ private fun Legend(s: Terrain3D.Scene, mode: TerrainTextures.Mode, layers: MapLa
 }
 
 /**
- * The best area the cached tiles allow: zoom 15, then 14, then 13, each needing its whole
- * interior; failing that, the most complete one, with a note. Missing halo tiles are
- * edge-extended by the store and do not block a build.
+ * The best square the cached tiles allow for [level]: that level, then the two coarser ones, each
+ * needing its whole interior; failing that, the most complete one, with a note. Missing halo tiles
+ * are edge-extended by the store and do not block a build.
  */
-private suspend fun loadArea(demStore: DemTileStore, lat: Double, lng: Double): Pair<DemTileStore.Mosaic, String>? {
+private suspend fun loadArea(demStore: DemTileStore, lat: Double, lng: Double, level: Int): Pair<DemTileStore.Mosaic, String>? {
     var best: DemTileStore.Mosaic? = null
-    for (z in Terrain3D.ZOOMS) {
+    for (z in level downTo maxOf(SquareLevel.COARSEST, level - 2)) {
         val b = Terrain3D.areaBounds(lat, lng, z)
         val m = demStore.grid(b[0], b[1], b[2], b[3], z, haloTiles = 1) ?: continue
-        if (m.missingInterior == 0) return m to ""
+        if (m.missingInterior == 0) return m to (if (z != level) " · zoom-$z elevation (zoom $level not saved here)" else "")
         if (best == null || m.missingInterior < best.missingInterior) best = m
     }
     val m = best ?: return null
@@ -673,9 +713,9 @@ private fun ringSegments(center: Pair<Double, Double>, s: Terrain3D.Scene): List
     val out = ArrayList<DoubleArray>()
     var run = ArrayList<Double>()
     fun flush() { if (run.size >= 6) out += run.toDoubleArray(); run = ArrayList() }
-    for (p in ring(center.first, center.second, RadiusScan.RADIUS_M, vertices).coordinates()) {
-        val e = s.elevationAt(p.latitude(), p.longitude())
-        if (e == null) flush() else { run += p.latitude(); run += p.longitude(); run += e }
+    for ((la, lo) in ring(center.first, center.second, RadiusScan.RADIUS_M, vertices)) {
+        val e = s.elevationAt(la, lo)
+        if (e == null) flush() else { run += la; run += lo; run += e }
     }
     flush()
     return out
@@ -684,6 +724,10 @@ private fun ringSegments(center: Pair<Double, Double>, s: Terrain3D.Scene): List
 private const val RING_STEP_M = 50.0
 private const val TAG = "Terrain3D"
 private const val DEFAULT_PITCH = 55f
+/** Until the view is measured: a typical portrait phone's width, for the first level choice. */
+private const val DEFAULT_VIEWPORT_W = 1080
+/** Steps arrive every few seconds while walking: the memory's upload waits this long for more. */
+private const val MEMORY_COALESCE_MS = 1_500L
 /** A marker behind a ridge (A18): still there, plainly behind. */
 private const val HIDDEN_ALPHA = 0.35f
 private const val DRAPE_TIMEOUT_MS = 25_000L

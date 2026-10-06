@@ -10,6 +10,7 @@ to it and never paraphrases a result it does not link.
 | A.2 | A7, A8, A9, A10 (+ A11 at 50°; its 60° shot blocked(device)) · A5+A6, A12 blocked(owner) · registered I18–I21 · drafted J15–J19 | `eincol/A.2` (+ fast-forward of the session branch) | see `docs/eincol/waves/A.2.md` | build **exit 0** · lint **exit 0** (0 errors, 80 warnings, none above baseline; copied file exempt by name) · test **exit 0**, 367 per variant | S1–S10: **10/10 killed** (S4 after its oracle was retargeted) | aosp AVD, API 34 x86_64, swiftshader: order check, warming (12 min of usable map), ready log ×3, **the fade in recorded** (flat terrain aligned with the map mid-fade), risen, return; tilt injection failed | `A.2-01…08`, `A.2-device-01…15`, `A.2-device-warming.mp4`, `A.2-device-fade-in.mp4`, `A.2-device-fade-out.mp4` |
 | A.3 | A13, A15, A17, A11 (from A.2) · I18, I19, I21 · A18 partial · A16 blocked(device) · A14 blocked(owner) · registered I22 · drafted J20–J24 | `eincol/A.3` (+ fast-forward of the session branch) | see `docs/eincol/waves/A.3.md` | build **exit 0** · lint **exit 0** (0 errors, 79 warnings, none above baseline) · test **exit 0**, 388 per variant | U1–U10: **10/10 killed** (U2 after its tests were moved into the named class) | aosp AVD, API 34 x86_64, three runs: the dot back (I21), no tile ids (I19), 3D at a logged 60° with an occluded marker (A11, A18), budget counters and trim (A13); found and fixed an out-of-memory crash and a rotation kill; the emulator cannot rotate this app | `A.3-01…12`, `A.3-device-01…04`, `A.3-device-run1-04`, `-05` |
 | B.1 | B1, B2, B4, B5, B6, B7 · I10, I11 · I20 partial · B3 struck · registered I23 · drafted J25–J29 · recorded the owner's approval of J20, J21, J23, J24 | `eincol/B.1` (+ fast-forward of the session branch) | see `docs/eincol/waves/B.1.md` | build **exit 0** · lint **exit 0** (0 errors, 79 warnings, none above baseline) · test **exit 0**, 403 per variant | X1–X12: **12/12 killed** (X6 retargeted, X12 added after the device run) | aosp AVD, API 34 x86_64, a cached tile removed: before (A.3 build) the flat slab with an invented creek and two walls culled; after, the hole, the hatch, the legend rows, 80° clean; run 1 found the north and west walls dropped by a missing halo (fixed); run 2 (final code) all four walls drawn from every side | `B.1-02…05`, `B.1-07…11`, `B.1-device-before-02…05`, `B.1-device-after-01…07`, `B.1-device-after2-02…05` |
+| M.1 | the owner's directive J30, J31, J32 + J.2 (J20, J21, J23, J24) · A6 by J30 · A5, A12, A14, I22 struck by it · I20 more (`--check`) · B12 reworded · drafted J33–J37 | `eincol/M.1` (+ fast-forward of the session branch) | see `docs/eincol/waves/M.1.md` | build **exit 0** · lint **exit 0** (0 errors, 54 warnings, none above baseline) · test **exit 0**, 437 per variant | Y1–Y23 + 32 earlier mutants on changed files: **55/55 killed** | aosp AVD, API 34 x86_64: upgrade 5 → 6 over the B.1 build, and on its own file put back to 5 with 310 track points (144/144 cells); opens in 3D, relief at 52–88 s, habitat at 471 s; the 48 km square with the ring and ten suggestions; a walk's wash; "Back to start: 199 m S"; battery mode at 15 %; 0 tile ids, 0 coordinates in the log. Found three defects (a wrong first landing never corrected, the wash in the creeks' blue, drains covering the 48 km square): fixed (their device re-check deferred by the owner for the APK) | `M.1-01…11`, `M.1-device-01…07` |
 
 ---
 
@@ -284,3 +285,46 @@ jvm:           16-bit depth step at the far ground, pitch 15-80: 0.11-1.70 m (te
 mutants:       X1 … X12 -> killed 12 / 12
 ```
 
+## M.1 — 2026-10-06 · one map, in 3D: travel memory, battery
+
+Full record: `docs/eincol/waves/M.1.md`. In brief:
+
+- **The owner's directive:** *"add a persistent gps travel memory layer that shows everywhere you
+  have been and remove the 2d map make 3d the main map with full battery optimisation"*, run with
+  the approved J.2 (J20, J21, J23, J24).
+- **One map** (J30): the flat map, its switch and the cross-fade are deleted (709 + 127 + 89 lines
+  and their tests). The 3D view opens first and builds its square at the zoom the camera needs:
+  3 km at 3.9 m cells down to 48 km at 62 m cells, which holds the whole 10-mile radius. Relief
+  shows first, the habitat colour after, on the same mesh.
+- **Travel memory** (J31): every fix the app receives (map open, or Track recording) is kept as a
+  ~10 m cell in a new table (schema 6); recorded tracks are folded in at upgrade with one SQL
+  statement whose key is proved equal to the app's own. Drawn by the GPU from a small mask, so a
+  new cell does not re-bake the ground texture. No background location: the memory fills only
+  from fixes the app already receives.
+- **Battery** (J32, J24): the on-screen GPS request now follows the real battery, charger and
+  stillness (it was a high-accuracy fix every 3 s for as long as the map was open; still, it is
+  now one every 15 s); frames paced to 30 a second; memory writes batched; a battery mode at the
+  owner's threshold (default 25 %) with half the mesh, a quarter of the texture, no map snapshot
+  and 20 frames a second, and a chip saying so. No saving is claimed in numbers (C18).
+- **J20** greys ground within 15 m of where you have been; **J21** "Back to start: 1.2 km NE"
+  while recording; **J23** nothing animates any more, kept so by a source scan.
+- **What the device caught:** a wrong first landing is never corrected (a cell-tower first fix now
+  lands only provisionally); the wash was the creeks' blue (now pale); the 48 km square was covered
+  in drains drawn 11× too wide (lines under a quarter texel are left out).
+- **The mutation harness** gained `--check`, which found three mutants (P6, H2, H4) silently stale
+  since earlier waves.
+- **Drafted this iteration (owner directive):** J33 when you last walked it; J34 how much of this
+  cove you have walked; J35 ground on screen at once after a restart; J36 walk the gaps; J37
+  battery left at today's real rate.
+
+```
+device:  schema before 5 · track points 0 · schema after open 6
+device:  relief: level 15 in 51803 ms (run 1, after "Centre on me") · relief: level 15 in 88067 ms (run 2)
+device:  habitat: level 15 in 470710 ms · ready: level 15 (3.0 km) at pitch 50 · depth 24 bits · holes (no elevation)
+device:  walk of 50 fixes -> 56 cells · "● REC 0.20 km" · "Back to start: 199 m S"
+device:  pinch out -> relief: level 11 in 26407 ms · habitat: level 11 in 138624 ms (47.8 x 47.8 km)
+device:  15 %, discharging -> rebuilt in 32 s · "Battery saver: lighter 3D (15 %)" · relief 18765 ms · habitat 91385 ms
+device:  upgrade with 310 track points (308 within 30 m) -> 144 cells = SQLite's count; 0 missing; first/last 144/144; synthetic 136 = Python's 136
+device:  lines with a z/x/y shape: 0 · lines with a coordinate shape: 0
+mutants: 55 run (Y1-Y23 + every earlier mutant on a changed file) -> killed 55 / 55; --check: all 114 apply
+```

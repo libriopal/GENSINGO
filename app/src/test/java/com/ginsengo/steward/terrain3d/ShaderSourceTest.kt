@@ -93,4 +93,22 @@ class ShaderSourceTest {
             assertTrue("uniform $it is queried by the renderer but not declared", src.contains(it))
         }
     }
+
+    /**
+     * The travel memory's wash (J31) is Gen.Text (#E6F4EC) and far from every water colour: the
+     * M.1 device run drew it in the creeks' blue, and a walk along a hollow read as a creek.
+     */
+    @Test
+    fun whereYouveBeenIsNotTheColourOfACreek() {
+        val m = Regex("""mix\(base, vec3\(([\d.]+), ([\d.]+), ([\d.]+)\), mem\.r""").find(TerrainShaders.FRAGMENT)
+        assertTrue("the memory wash is not found in the fragment shader", m != null)
+        val wash = m!!.groupValues.drop(1).map { it.toDouble() }
+        fun rgb(c: Int) = listOf((c shr 16 and 255) / 255.0, (c shr 8 and 255) / 255.0, (c and 255) / 255.0)
+        rgb(0xE6F4EC).zip(wash).forEach { (want, got) -> assertEquals(want, got, 0.002) }
+        val others = TerrainTextures.WATER.values.map { rgb(it.rgb) } + listOf(rgb(0x6FB7FF), rgb(0x00FF88))
+        for (o in others) {
+            val d = kotlin.math.sqrt(o.zip(wash).sumOf { (a, b) -> (a - b) * (a - b) })
+            assertTrue("wash $wash is within $d of $o", d > 0.3)
+        }
+    }
 }

@@ -1,0 +1,9 @@
+# M.1 test on the final tree: ./gradlew :app:test (debug, release and field variants) (2026-10-06)
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 3m 7s
+93 actionable tasks: 18 executed, 75 up-to-date
+EXIT 0
+testDebugUnitTest: 437 tests, 0 failed, 1 skipped
+testReleaseUnitTest: 437 tests, 0 failed, 1 skipped
+testFieldUnitTest: 437 tests, 0 failed, 1 skipped

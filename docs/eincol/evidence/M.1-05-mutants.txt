@@ -1,0 +1,115 @@
+('P6', 'candidates outside the radius', 'KILLED', 30)
+('W1', 'screen-off does not batch', 'KILLED', 26)
+('W2', 'low battery still auto-researches', 'KILLED', 24)
+('H2', 'the 3D habitat colour is not the 2D heatmap colour', 'KILLED', 29)
+('H3', 'the 3D view scores the ground its own way again', 'KILLED', 27)
+('H4', 'weak ground fades to black instead of bare relief', 'KILLED', 28)
+('H5', 'contours only ever darken (vanish on dark ground)', 'KILLED', 27)
+('D2', 'no migration from the field-tested build', 'KILLED', 35)
+('D3', 'imported patches are demoted to LEGACY', 'KILLED', 36)
+('A1', 'the map drape is ignored (MAP mode bakes the relief)', 'KILLED', 39)
+('A2', 'the snapshot asks for zooms the saved region lacks', 'KILLED', 33)
+('B1', '3D pan ignores the terrain height', 'KILLED', 25)
+('B2', '3D pan ignores the bearing', 'KILLED', 25)
+('B3', 'no ray march when the height iteration does not settle', 'KILLED', 24)
+('O1', 're-anchoring moves the target but not the zoom (the picture jumps)', 'KILLED', 23)
+('O2', "the 3D square's edges are interpolated linearly in latitude", 'KILLED', 27)
+('O5', 'after a gesture the ground plane moves by the exaggerated height', 'KILLED', 27)
+('Q1', 'camera sign flip: bearing reversed in the mesh matrix only (exe.md I3)', 'KILLED', 27)
+('Q5', 'a gesture report bumps the epoch (views chase their own gestures)', 'KILLED', 25)
+('O4', '3D elevation read half a cell off', 'KILLED', 27)
+('S5', 'a draped layer drawn over the mesh instead of on it', 'KILLED', 25)
+('S6', 'the 3D ignores the Hillshade switch (registry)', 'KILLED', 24)
+('S7', 'the 3D bake shades whatever the switch says', 'KILLED', 29)
+('S8', 'the 3D habitat ignores Heat opacity', 'KILLED', 28)
+('S9', 'a layer declares a depth its 3D renderer does not honour', 'KILLED', 28)
+('S10', 'one switch moves two layers', 'KILLED', 25)
+('U2', 'a stale fix uses up the landing', 'KILLED', 25)
+('U5', 'the budget evicts the most recently used', 'KILLED', 29)
+('U6', 'the budget evicts what is on screen', 'KILLED', 31)
+('U8', 'the markers drawn on top, ignoring their occlusion', 'KILLED', 28)
+('U9', 'the eye on the wrong side of the target', 'KILLED', 28)
+('U10', 'a trim ignores how hard the system asked', 'KILLED', 29)
+('Y1', "the square ignores the camera's zoom (always the 3 km one)", 'KILLED', 28)
+('Y2', 'no hysteresis: a camera at a boundary rebuilds back and forth', 'KILLED', 25)
+('Y3', 'fixes are dots: no cells filled between them', 'KILLED', 31)
+('Y4', "the upgrade's backfill rounds where the app floors (another grid)", 'KILLED', 45)
+('Y5', 'the memory mask upside down (rows run north)', 'KILLED', 36)
+('Y6', 'the map open on a still phone keeps a fix every 3 s', 'KILLED', 27)
+('Y7', 'the pacer drops the last frame of a gesture', 'KILLED', 30)
+('Y8', 'the J20 buffer is zero (walked means only the exact cell)', 'KILLED', 27)
+('Y9', 'the way back leads to the last point, not the start', 'KILLED', 29)
+('Y10', 'an animation re-added to the UI (J23)', 'KILLED', 29)
+('Y11', 'the battery mode ignores the charger', 'KILLED', 26)
+('Y12', 'the backfill keeps fixes the recorder would refuse', 'KILLED', 41)
+('Y13', 'the J20 buffer is a square, not a disk', 'KILLED', 33)
+('Y14', 'a vague fix becomes the start of the next line', 'KILLED', 32)
+('Y15', 'the recorder writes on every fix', 'KILLED', 32)
+('Y16', 'a 60 m canopy fix paints ground never stood on', 'KILLED', 32)
+('Y17', 'a late batch moves a visit back in time', 'KILLED', 40)
+('Y18', 'the still-viewing plan drops to cell-tower accuracy', 'KILLED', 32)
+('Y19', 'the travel memory re-bakes the colour texture', 'KILLED', 26)
+('Y20', "the schema-6 table differs from Room's", 'KILLED', 36)
+('Y22', "where you've been drawn in the creeks' blue again", 'KILLED', 37)
+('Y23', 'every water line drawn on the 48 km square, however thin', 'KILLED', 31)
+('Y21', 'a cell-tower first fix lands the one map for good', 'KILLED', 28)
+
+| ID | Mutation | Result |
+|---|---|---|
+| P6 | candidates outside the radius | KILLED |
+| W1 | screen-off does not batch | KILLED |
+| W2 | low battery still auto-researches | KILLED |
+| H2 | the 3D habitat colour is not the 2D heatmap colour | KILLED |
+| H3 | the 3D view scores the ground its own way again | KILLED |
+| H4 | weak ground fades to black instead of bare relief | KILLED |
+| H5 | contours only ever darken (vanish on dark ground) | KILLED |
+| D2 | no migration from the field-tested build | KILLED |
+| D3 | imported patches are demoted to LEGACY | KILLED |
+| A1 | the map drape is ignored (MAP mode bakes the relief) | KILLED |
+| A2 | the snapshot asks for zooms the saved region lacks | KILLED |
+| B1 | 3D pan ignores the terrain height | KILLED |
+| B2 | 3D pan ignores the bearing | KILLED |
+| B3 | no ray march when the height iteration does not settle | KILLED |
+| O1 | re-anchoring moves the target but not the zoom (the picture jumps) | KILLED |
+| O2 | the 3D square's edges are interpolated linearly in latitude | KILLED |
+| O5 | after a gesture the ground plane moves by the exaggerated height | KILLED |
+| Q1 | camera sign flip: bearing reversed in the mesh matrix only (exe.md I3) | KILLED |
+| Q5 | a gesture report bumps the epoch (views chase their own gestures) | KILLED |
+| O4 | 3D elevation read half a cell off | KILLED |
+| S5 | a draped layer drawn over the mesh instead of on it | KILLED |
+| S6 | the 3D ignores the Hillshade switch (registry) | KILLED |
+| S7 | the 3D bake shades whatever the switch says | KILLED |
+| S8 | the 3D habitat ignores Heat opacity | KILLED |
+| S9 | a layer declares a depth its 3D renderer does not honour | KILLED |
+| S10 | one switch moves two layers | KILLED |
+| U2 | a stale fix uses up the landing | KILLED |
+| U5 | the budget evicts the most recently used | KILLED |
+| U6 | the budget evicts what is on screen | KILLED |
+| U8 | the markers drawn on top, ignoring their occlusion | KILLED |
+| U9 | the eye on the wrong side of the target | KILLED |
+| U10 | a trim ignores how hard the system asked | KILLED |
+| Y1 | the square ignores the camera's zoom (always the 3 km one) | KILLED |
+| Y2 | no hysteresis: a camera at a boundary rebuilds back and forth | KILLED |
+| Y3 | fixes are dots: no cells filled between them | KILLED |
+| Y4 | the upgrade's backfill rounds where the app floors (another grid) | KILLED |
+| Y5 | the memory mask upside down (rows run north) | KILLED |
+| Y6 | the map open on a still phone keeps a fix every 3 s | KILLED |
+| Y7 | the pacer drops the last frame of a gesture | KILLED |
+| Y8 | the J20 buffer is zero (walked means only the exact cell) | KILLED |
+| Y9 | the way back leads to the last point, not the start | KILLED |
+| Y10 | an animation re-added to the UI (J23) | KILLED |
+| Y11 | the battery mode ignores the charger | KILLED |
+| Y12 | the backfill keeps fixes the recorder would refuse | KILLED |
+| Y13 | the J20 buffer is a square, not a disk | KILLED |
+| Y14 | a vague fix becomes the start of the next line | KILLED |
+| Y15 | the recorder writes on every fix | KILLED |
+| Y16 | a 60 m canopy fix paints ground never stood on | KILLED |
+| Y17 | a late batch moves a visit back in time | KILLED |
+| Y18 | the still-viewing plan drops to cell-tower accuracy | KILLED |
+| Y19 | the travel memory re-bakes the colour texture | KILLED |
+| Y20 | the schema-6 table differs from Room's | KILLED |
+| Y22 | where you've been drawn in the creeks' blue again | KILLED |
+| Y23 | every water line drawn on the 48 km square, however thin | KILLED |
+| Y21 | a cell-tower first fix lands the one map for good | KILLED |
+
+killed 55 / 55

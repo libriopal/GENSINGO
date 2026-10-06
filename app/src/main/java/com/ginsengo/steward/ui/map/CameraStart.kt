@@ -60,13 +60,21 @@ object CameraStart {
      * the landing, so the first fresh fix still lands. After the landing nothing jumps
      * again (following is animated, [shouldAnimateFollow]). [landed] is what has happened so far;
      * the result is what this fix does. A clock-skewed fix from the future counts as fresh.
+     *
+     * A fresh fix vaguer than [FINAL_ACCURACY_M] (a phone's first fix is often a cell-tower one,
+     * kilometres off) lands only provisionally too (M.1): since the 3D square is the only map, a
+     * landing there builds 3 km of ground in the wrong place, and the GPS fix that follows a few
+     * seconds later would never move it.
      */
-    fun landing(fixAgeMs: Long, landed: Landing): Landing = when {
+    fun landing(fixAgeMs: Long, landed: Landing, accuracyM: Float = 0f): Landing = when {
         landed == Landing.FINAL -> Landing.NONE
-        fixAgeMs <= FRESH_FIX_MS -> Landing.FINAL
+        fixAgeMs <= FRESH_FIX_MS && accuracyM <= FINAL_ACCURACY_M -> Landing.FINAL
         landed == Landing.NONE -> Landing.PROVISIONAL
         else -> Landing.NONE
     }
+
+    /** A fix this good lands on the right 3 km square however it errs. */
+    const val FINAL_ACCURACY_M = 200f
 
     /** After the first landing, following is a smooth animation and may be switched off. */
     fun shouldAnimateFollow(hasFix: Boolean, alreadyCentred: Boolean, following: Boolean): Boolean =

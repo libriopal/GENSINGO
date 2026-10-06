@@ -1,0 +1,6 @@
+# M.1 build on the final tree: ./gradlew :app:assembleDebug (2026-10-06)
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 2s
+39 actionable tasks: 3 executed, 36 up-to-date
+EXIT 0

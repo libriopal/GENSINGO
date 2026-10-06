@@ -43,10 +43,12 @@ import kotlin.math.tan
  *
  *  1. Offline: geometric invariants that hold for ANY correct implementation of this
  *     projection, not for a re-derivation of my own arithmetic (see MapCameraTest).
- *  2. On device: [AlignmentCheck] projects known coordinates through this matrix and
- *     compares against MapLibre's own `Projection.toScreenLocation`. That is a genuinely
- *     independent implementation of the same transform, and if the residual is too large
- *     the overlay hides itself rather than drawing a misaligned mesh.
+ *  2. On device, until wave M.1: `AlignmentCheck` projected known coordinates through this
+ *     matrix and compared them against MapLibre's own `Projection.toScreenLocation`. It went
+ *     with the flat map (J30): nothing on screen is drawn by MapLibre's camera any more, so
+ *     there is nothing to align with; the map snapshot draped on the ground registers by its
+ *     geographic bounds, not by a camera. The offline invariants and the conformance test
+ *     between the mesh path and [project] (CameraConformanceTest) remain.
  */
 class MapCamera(
     val centerLat: Double,
@@ -104,9 +106,10 @@ class MapCamera(
      * It has to stay double for [project]. The translation column carries the camera centre
      * in world pixels, which is ~33.5 million at zoom 17, and float32's step size there is
      * 4 world pixels. Because world pixels shrink as zoom grows, that works out at a
-     * constant ~1.9 m of ground error at EVERY zoom level — enough to consume a third of
-     * [AlignmentCheck]'s tolerance and occasionally trip it for no reason. The instrument
-     * would have been reporting its own rounding as a map misalignment.
+     * constant ~1.9 m of ground error at EVERY zoom level — enough to consume a third of the
+     * former on-device alignment check's tolerance and occasionally trip it for no reason: the
+     * instrument would have been reporting its own rounding as a map misalignment. The markers
+     * drawn through [project] still need it.
      */
     private fun vpMatrixDouble(): DoubleArray {
         var m = perspective(FOV, viewportWidth.toDouble() / viewportHeight, nearZ, farZ)
@@ -159,11 +162,6 @@ class MapCamera(
      */
     fun mvpForMeshBuiltAt(
         buildZoom: Double, originX: Double, originY: Double, groundZ: Double = 0.0,
-        /**
-         * Heights above the target plane scaled by this, 0..1: at 0 the mesh lies flat on the
-         * plane the 2D map draws, which is where the cross-fade between them starts ([Handoff]).
-         */
-        relief: Double = 1.0,
         /** The near plane: [DepthRange.near] for the ground in view, else MapLibre's [nearZ]. */
         nearPx: Double = nearZ,
     ): FloatArray {
@@ -175,7 +173,6 @@ class MapCamera(
         m = m * rotateZ(angle)
         m = m * translate(originX * k - centerX, originY * k - centerY, 0.0)
         m = m * scale(k, k, k)
-        m = m * scale(1.0, 1.0, relief)
         // [groundZ] (build-zoom pixels) is lowered to the camera's target plane, so the camera
         // looks at the ground under the user rather than at sea level beneath it: with ~1 km
         // of exaggerated elevation in between, the model floated in the top half of the screen.
@@ -189,8 +186,7 @@ class MapCamera(
 
     /**
      * Projects a geographic position to screen pixels, or null when it falls behind the
-     * camera. Used by [AlignmentCheck] and by nothing else — the GPU does this for real
-     * geometry.
+     * camera. The 3D view's markers and the pan maths use it; the GPU does this for the mesh.
      */
     fun project(lat: Double, lng: Double, elevationM: Double = 0.0): FloatArray? =
         projectWith(vpMatrixDouble(), lat, lng, elevationM)

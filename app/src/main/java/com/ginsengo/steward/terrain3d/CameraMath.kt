@@ -3,7 +3,8 @@ package com.ginsengo.steward.terrain3d
 import kotlin.math.abs
 
 /**
- * Camera maths shared by the 2D map and the 3D view (blueprint docs/blueprints/one-map.md, WP-B).
+ * The 3D view's camera maths (blueprint docs/blueprints/one-map.md, WP-B); the 2D conversions
+ * went with the flat map in M.1.
  * Pure JVM code: no Android, no MapLibre.
  */
 object CameraMath {
@@ -11,15 +12,8 @@ object CameraMath {
     /** Fixed-point steps that move the touched point onto the terrain (blueprint §G, claim 4). */
     const val HEIGHT_ITERATIONS = 4
 
-    /** Entering 3D, a flatter camera is raised to this pitch so the relief reads as relief. */
+    /** A flatter camera is raised to this pitch on the one map, so the relief reads as relief. */
     const val MIN_3D_PITCH = 45.0
-
-    /** MapLibre 13.6.1 `MapLibreConstants.MAXIMUM_TILT` (javap): the 2D map cannot tilt further. */
-    const val MAX_2D_PITCH = 60.0
-
-    /** MapLibre 13.6.1 `MapLibreConstants.MINIMUM_ZOOM` / `MAXIMUM_ZOOM` (javap). */
-    const val MAP_MIN_ZOOM = 0.0
-    const val MAP_MAX_ZOOM = 25.5
 
     fun mapCamera(cam: CameraState, viewportW: Int, viewportH: Int): MapCamera =
         MapCamera(cam.lat, cam.lng, cam.zoom, cam.bearing, cam.pitch, viewportW, viewportH)
@@ -166,23 +160,9 @@ object CameraMath {
     fun clampCentre(cam: CameraState, north: Double, west: Double, south: Double, east: Double): CameraState =
         cam.copy(lat = cam.lat.coerceIn(south, north), lng = cam.lng.coerceIn(west, east))
 
-    /** Into 3D: same centre and bearing, zoom clamped to the 3D view's range, pitch at least 45. */
-    fun to3d(cam2d: CameraState, minZoom: Double, maxZoom: Double): CameraState = cam2d.copy(
-        zoom = cam2d.zoom.coerceIn(minZoom, maxZoom),
-        pitch = maxOf(cam2d.pitch, MIN_3D_PITCH),
-    )
-
-    /**
-     * The 2D/3D switch as a camera rule (exe.md A1): same place, same bearing; [to3d] raises a flat
-     * camera to [MIN_3D_PITCH] (the 3D view then fits its own zoom range), [to2d] brings pitch back
-     * within what MapLibre can draw.
-     */
-    fun forView(cam: CameraState, view3d: Boolean): CameraState =
-        if (view3d) to3d(cam, MAP_MIN_ZOOM, MAP_MAX_ZOOM) else to2d(cam)
-
-    /** Back to 2D: same centre and bearing, zoom clamped to MapLibre's range, pitch at most 60. */
-    fun to2d(cam3d: CameraState): CameraState = cam3d.copy(
-        zoom = cam3d.zoom.coerceIn(MAP_MIN_ZOOM, MAP_MAX_ZOOM),
-        pitch = minOf(cam3d.pitch, MAX_2D_PITCH),
+    /** Into the one map's range: same centre and bearing, zoom clamped, pitch at least [MIN_3D_PITCH]. */
+    fun to3d(cam: CameraState, minZoom: Double, maxZoom: Double): CameraState = cam.copy(
+        zoom = cam.zoom.coerceIn(minZoom, maxZoom),
+        pitch = maxOf(cam.pitch, MIN_3D_PITCH),
     )
 }

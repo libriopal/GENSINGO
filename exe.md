@@ -441,7 +441,7 @@ Purpose: make the mesh backend correct before anyone claims it is fast.
 | B9 | GL context loss handled | Loss → rebuild → resume without a crash or a black map | Device: background the app under memory pressure, return |
 | B10 | Render-target resize | Rotation, multi-window and foldable changes resize cleanly | Device: rotate and split-screen; no stretched or clipped frame |
 | B11 | Shader failure surfaced | A compile/link failure shows a message, never a silent black pane | Inject a bad shader in a test build; UI reports it |
-| B12 | Black-frame guard | If the mesh backend draws nothing, the flat map is shown instead | Mutant: force an empty draw → fallback engages |
+| B12 | Black-frame guard | If the mesh draws nothing, the screen says so and offers a retry, never a silent black pane (reworded in M.1: the flat map it fell back to is gone, J30) | Mutant: force an empty draw → the message and retry appear |
 | B13 | Tile failure is visible | A failed terrain tile offers retry, never an empty void | Airplane mode mid-load; retry succeeds on reconnect |
 | B14 | Exaggeration in one place | Mesh and analysis either agree or the difference is stated on screen | Change exaggeration → analysis unchanged, and the UI says so |
 | B15 | Hillshade from the same normals | No double shading; hillshade and mesh agree | Screenshot: shading direction matches the sun indicator |
@@ -625,12 +625,12 @@ counter-candidate runs with **every** wave; the rest are assigned as their phase
 | I17 | **Pre-existing lint error (found at bootstrap)** | `StateFlowValueCalledInComposition` at `ui/MainScreen.kt:120` is gone: the 3D view no longer reads `vm.camera.value` during composition | `./gradlew :app:lint` reports 0 errors. Expected to close inside A.1, whose `CameraState` replaces that line; if A.1 leaves it, I17 runs on its own |
 | I18 | **A stale last-known fix captures the first-fix landing** | The first-fix jump (`FieldViewModel.onFix`, `CameraStart.landing`) waits for a fresh fix; a cached last-known location (Play services' `lastLocation`, possibly hours old and far away) lands only provisionally and does not consume it | A test feeding an old, distant fix and then a fresh one lands on the fresh one. *Re-diagnosed in A.3:* the emulator's "California" landing was its default GPS position delivered live (the AOSP image has no Play services, so `lastKnown` is empty), not this defect; the device half needs a Play-services phone |
 | I19 | **A DEM tile id in logcat locates the user (found in A.2)** | `DemTileStore` no longer logs `z/x/y` (a z15 tile is ~1 km): failures are counted and logged without the tile id (invariant: privacy, coarse cell only) | Grep: no tile coordinates in any log call; a log-capture test of a failed fetch contains no digits of the tile id |
-| I20 | **The mutation harness can leave a live mutant, or aim at the wrong class (found in A.2, A.3; B.1 hit the id trap twice more: V1–V5 and W1–W2 were taken. Partial in B.1: duplicate ids refused, SIGTERM restores; the test-class check is still open)** | `tools/mutate.py` refuses duplicate mutant ids (A.2 reused R1–R10, which ran the old hydrology R1–R3 instead), restores the file on SIGINT/SIGTERM (a killed run left `RadiusScan.kt` mutated; caught by `git status`), and checks that each named test class contains tests at all and fails on the mutant for a reason it names: twice (S4 in A.2, U2 in A.3) the killing test sat in a second class of the same file and never ran | Two mutants with one id fail before any edit; `kill -TERM` mid-run leaves `git status` clean; a mutant whose class holds no test that touches the mutated code is reported, not counted |
+| I20 | **The mutation harness can leave a live mutant, or aim at the wrong class (found in A.2, A.3; B.1 hit the id trap twice more: V1–V5 and W1–W2 were taken. Partial in B.1: duplicate ids refused, SIGTERM restores. M.1: `--check` fails on a mutant whose file is gone, whose text no longer matches exactly once, or whose named test class does not exist; it found P6, H2 and H4 stale since earlier waves, reported INVALID by every run and never noticed. Still open: a named class that exists but holds no test touching the mutated code)** | `tools/mutate.py` refuses duplicate mutant ids (A.2 reused R1–R10, which ran the old hydrology R1–R3 instead), restores the file on SIGINT/SIGTERM (a killed run left `RadiusScan.kt` mutated; caught by `git status`), and checks that each named test class contains tests at all and fails on the mutant for a reason it names: twice (S4 in A.2, U2 in A.3) the killing test sat in a second class of the same file and never ran | Two mutants with one id fail before any edit; `kill -TERM` mid-run leaves `git status` clean; a mutant whose class holds no test that touches the mutated code is reported, not counted |
 | I21 | **Your position is not drawn on the 2D map (found in A.2, pre-existing)** | The flat map shows the `g-me-layer` dot wherever the GPS chip shows a fix. On the emulator it was missing in every kept 2D screenshot of the A.1 and A.2 builds (`A.2-device-02`, `-03`, `-05`, `-10`, `-12`: after "Centre on me" the map centres on the fix and no dot is drawn), yet a screenshot of a superseded A.2 build (deleted with that run's evidence) showed it, so it is intermittent. Suspect: `pushData` records the position key before the source accepts the data, so a push lost to a style (re)load is never retried while the phone stands still (the GPS drops repeats under 2 m) | A test (or a device run) in which the style loads after the first fix still draws the dot; on device, after "Centre on me", the dot sits at the screen centre. A field defect: fix before F.1 |
 | I22 | **MapLibre's renderer finalizer can outlast Android's 10 s watchdog (found in A.3)** | When a map is destroyed under load its renderer is released by a finalizer; on A.3's device run that took over 10 s and Android killed the app (`FinalizerWatchdogDaemon: MapRendererFactory$1.finalize() timed out`). Rotation no longer destroys the map (A16); finishing the activity still does: the map should be released deterministically before the view is dropped, not left to the finalizer | A device run that leaves and re-enters the app under load ten times without a watchdog kill; logcat shows the renderer destroyed on the main thread, not in `FinalizerDaemon` |
 | I23 | **Scores near a hole lean on the store's stand-in (found in B.1)** | B.1 stops missing elevation being drawn, scored or ranked, and a cell is scored only when its 3×3 slope stencil is real. But position on slope (TPI, a disk of 120–1,500 m) and wetness (upslope drainage) still read the edge-extended stand-in when a hole is within reach, so cells near a gap carry scores built partly from invented ground. They should be flagged on the map and in the list (reduced confidence) or not scored | A test with a hole whose stand-in is raised by 50 m: no reported score farther than one TPI radius from the hole changes, and every cell within it is flagged; a mutant that ignores the flag fails |
 
-### J — Owner-directed goal candidates · J1–J29 (J1–J9 at bootstrap, J10–J14 in A.1, J15–J19 in A.2, J20–J24 in A.3, J25–J29 in B.1)
+### J — Owner-directed goal candidates · J1–J37 (J1–J9 at bootstrap, J10–J14 in A.1, J15–J19 in A.2, J20–J24 in A.3, J25–J29 in B.1, J30–J32 the owner's M.1 directive, J33–J37 drafted in M.1)
 
 Purpose, in the owner's words: put a digger in an almost unfair position to find big ginseng and,
 hopefully, a honey hole. Drafted under the owner's standing rule that every iteration proposes at
@@ -638,7 +638,10 @@ least five ideas. Each is grounded in a bootstrap measurement or a cited study, 
 reuses before anything new is written. **Status: `proposed`** unless approved. The owner is the sole
 approver of scope (header), so none is scheduled until approved. **Approved 2026-10-06: J20, J21,
 J23, J24** (the owner's words: *"I approve of j20, 21, 23 and 24"*): `queued` as wave **J.2**, right
-after B.1. J22 was not approved and stays `proposed`. Recommended placement: wave **J.1 = J1–J4**
+after B.1. J22 was not approved and stays `proposed`. **Directed 2026-10-06: J30, J31, J32** (the
+owner's words: *"add a persistent gps travel memory layer that shows everywhere you have been and
+remove the 2d map make 3d the main map with full battery optimisation"*), run with J.2 as wave
+**M.1**. Recommended placement: wave **J.1 = J1–J4**
 right after F.1, because they feed the top-N engine; J5 and J6 with D.1; J7 with B.1; J8 and J9 are
 §9 decisions.
 
@@ -663,16 +666,24 @@ right after F.1, because they feed the top-N engine; J5 and J6 with D.1; J7 with
 | J17 | **The last 3D square stays warm** | Leaving 3D keeps the built scene (one square, its mesh and one texture) in the ViewModel under a memory ceiling, so returning to the same place is instant instead of a full rebuild (measured in A.2: 12 min on the unaccelerated emulator; seconds on a phone) | Re-entering 3D at the same tile shows the terrain without a "Tracing creeks…" status; a memory counter shows one scene held, released on trim-memory | `Terrain3D.Scene` as built; feeds A13 (one eviction policy) |
 | J18 | **Gesture injection for device gates** | A committed script drives two-finger tilt, pinch and rotate on the emulator's multitouch device (`sendevent`, protocol B), so the visual witnesses that need a gesture (A11 at 60°, A15, A17, A18) are reproducible by anyone | The script tilts the 3D view by a requested amount; the before/after screenshots differ in pitch as requested | Linux multitouch protocol B; the emulator's `virtio_input_multi_touch` device (found in A.2) |
 | J19 | **A paper backup of the day's plan** | One button writes the day's top places (rank, bearing and distance from the car, elevation band, the cove's contour snippet) to a local PDF the owner can print or keep offline: a dead phone on a ridge still has the plan. Owner-initiated, on the device, no network | The PDF lists exactly the engine's places in rank order with their stored factors; a reorder mutant fails | Android `PdfDocument` (platform API, no dependency); the engine's output (F-group) and `terrain/ContourLines.kt` |
-| J20 | **Strong ground you have not walked** | A layer: habitat cells above the owner's threshold minus the ground within ~15 m of every recorded track (the "visited" data already stored). The digger sees at a glance which strong slopes are still unsearched: the honey hole is more likely where nobody (including the owner) has looked | On a synthetic landscape with one strong patch half crossed by a track, exactly the unwalked half is shown; a mutant that ignores the track shows all of it | `terrain/SuitabilityRasterizer.kt`, the stored `TrackPoint`s, the VISITED layer's data. On device, no network; no AI |
+| J20 | **Strong ground you have not walked** | A layer: habitat cells above the owner's threshold minus the ground within ~15 m of every recorded track (the "visited" data already stored). The digger sees at a glance which strong slopes are still unsearched: the honey hole is more likely where nobody (including the owner) has looked | On a synthetic landscape with one strong patch half crossed by a track, exactly the unwalked half is shown; a mutant that ignores the track shows all of it | `terrain/SuitabilityRasterizer.kt`, the stored `TrackPoint`s, the VISITED layer's data. On device, no network; no AI. **Built in M.1** on the travel memory (every fix, not only tracks), in the shader: `TravelMask`'s 15 m disk |
 | J21 | **The way back to the car** | A chip with the bearing and distance to where today's track began (or a pinned "car" point), always on screen while recording: in a hollow with no signal, the way out is the first safety feature a digger needs | Bearing and distance agree with the great-circle formula on fixtures (within 1° and 1 %); a mutant using the last point instead of the first fails | `android.location.Location.bearingTo`/`distanceTo` (platform), the recorder's session start. Local only |
 | J22 | **Photos of a find, location stripped** | A photo attached to a find, stored in app-private storage with its EXIF GPS tags removed (the find already carries its place; a shared photo must not), shown in the find sheet and usable as field truth (G1) | A fixture JPEG with GPS tags comes out with none and with its pixels unchanged; a mutant that keeps the tags fails | Platform `android.media.ExifInterface` (no dependency); the camera through the system picker (no permission). A Room column for the photo path: a migration (H9, §9 decision stated in the design) |
-| J23 | **Honour "remove animations"** | When the phone's animator scale is 0 (Accessibility → Remove animations), the 2D/3D switch cuts instead of fading and the relief appears at once; the map follows moves without animation | With the scale at 0 the transition completes in one frame; a mutant that ignores the setting animates | `Settings.Global.ANIMATOR_DURATION_SCALE` (platform); `MainScreen`'s reveal. Closes part of I16's accessibility gap |
-| J24 | **A battery field mode** | Below a battery level the owner sets (default 25 %), the habitat raster drops to the next coarser size, the 3D view is offered but not pre-warmed, and the map is capped at 20 fps, with a chip saying so | With the level faked below the threshold, the raster size and frame cap change and the chip shows; above it nothing changes (negative control) | `BatteryManager` (platform); `DemTileStore.rasterSizeFor`, `MapView.setMaximumFps`. Program B's "a phone on a ridge for four hours"; the real saving needs a real phone (C18) |
+| J23 | **Honour "remove animations"** | When the phone's animator scale is 0 (Accessibility → Remove animations), the 2D/3D switch cuts instead of fading and the relief appears at once; the map follows moves without animation | With the scale at 0 the transition completes in one frame; a mutant that ignores the setting animates | `Settings.Global.ANIMATOR_DURATION_SCALE` (platform); `MainScreen`'s reveal. Closes part of I16's accessibility gap. **Held by construction in M.1**: the cross-fade went with the flat map and nothing else animates; `NoAnimationTest` keeps it so |
+| J24 | **A battery field mode** | Below a battery level the owner sets (default 25 %), the habitat raster drops to the next coarser size, the 3D view is offered but not pre-warmed, and the map is capped at 20 fps, with a chip saying so | With the level faked below the threshold, the raster size and frame cap change and the chip shows; above it nothing changes (negative control) | `BatteryManager` (platform); `DemTileStore.rasterSizeFor`, `MapView.setMaximumFps`. Program B's "a phone on a ridge for four hours"; the real saving needs a real phone (C18). **Built in M.1 for the one 3D map**: half the mesh, a quarter of the texture, no map snapshot, 20 frames a second, a chip; also on with the phone's own battery saver |
 | J25 | **No holes on the ridge: a pre-trip check** | Before leaving signal, the saved area is checked tile by tile for elevation and map tiles; the missing ones are listed on a small map (B.1 now draws them as holes and hatch), and one tap fetches them while on Wi-Fi. The check runs offline against the cache | A fixture cache with two missing elevation tiles reports exactly those two; a mutant that checks only the area's centre tile fails | `DemTileStore`'s cache directory and B.1's `Mosaic.noData`; `ui/OfflineArea.kt` (program H). No new destination: the same tile servers, owner-initiated |
 | J26 | **Light left in this hollow** | While recording, a chip gives the time the sun drops behind the TERRAIN at the digger's spot (not the flat-horizon sunset): coves go dark long before the almanac says. Sun position from the NOAA solar equations, the horizon from the 3D square's elevation along the sun's azimuth | On a synthetic valley with a ridge rising 30° to the west, the terrain sunset precedes the astronomical one by the hour angle the equations give; a flat-horizon mutant returns the almanac time and fails | NOAA Global Monitoring Laboratory solar position equations (US government work, public domain); `Terrain3D.Scene.elevationAt`. On device, no network. A safety feature: a digger deep in a hollow loses light first |
 | J27 | **The climb before you walk it** | Pick a ranked place: an elevation profile from where you stand to it along the straight line and along the contour band (J11), with total climb, steepest pitch and the habitat score along the way | On an analytic plane the profile equals the plane's gradient times distance; a mutant that walks the line backwards (target to start) fails the climb sign | `Terrain3D.Scene.elevationAt`, `SuitabilityRasterizer.scoreGrid` (the cells the map draws), `Prospects.distanceMetres` |
 | J28 | **What your own patches have in common** | Two small roses on the finds screen: the aspects and slopes of the owner's finds against the area's background (the learner's own background sample), so the owner sees which slopes their patches favour, with counts, not a model. No AI, on device | Synthetic finds all on north-east aspects fill the NE petal 100 %; a mutant that draws the background as the finds fails | `learn/FindLearner.kt` samples, `RadiusScan.background` (B.1 keeps it off missing ground). Grounded in the owner's own observations (G1) rather than literature |
 | J29 | **Buzz on arrival** | With the phone in a pocket, it vibrates once on entering 30 m of a ranked place or a saved find, from the recorder's own fixes (no Play services geofencing) | A fixture track that crosses a place's 30 m circle buzzes once on entry and not again while inside; a mutant measuring distance in raw degrees fails at this latitude | `Prospects.distanceMetres`, the track recorder's fix stream, platform `Vibrator`. Local only |
+| J30 | **3D is the only map** (owner directive, M.1) | The flat map, its switch and the cross-fade are gone; the app opens in 3D; zoom levels (DEM zoom 15 down to 11: 3 km to 48 km squares) reach the whole 10-mile radius; relief shows before the habitat colour | `SquareLevelTest` (each level fits at the zoom that picks it; no flip at a boundary; the coarsest holds the radius); device: opens in 3D, pinch out builds a coarser square | `Terrain3D`, `DemTileStore` zooms 11–15 already saved offline |
+| J31 | **Persistent travel memory** (owner directive, M.1) | Every fix the app receives (map open, or Track recording) is remembered as ~10 m cells across sessions and drawn on the 3D ground; recorded tracks are folded in at upgrade | `TravelMemoryTest`, `TravelMigrationTest` (SQLite's key equals Kotlin's on 3,201 points; a schema-5 file opens at 6 with exactly its tracks' cells), `TravelMaskTest`; device: the wash after a walk | Room (schema 6), the renderer's second texture. No background location |
+| J32 | **Battery: GPS and frames from measurements** (owner directive, M.1) | The on-screen location request follows battery, charging and stillness (it was a high-accuracy fix every 3 s while the map was open); frames are paced; memory writes batched | `PowerPolicyTest` (still on screen → 15 s), `FieldPowerTest` (the pacer), `TravelMemoryTest` (batches) | `PowerPolicy` (already measurement-driven for Track). Savings unmeasured until a real phone (C18) |
+| J33 | **When you last walked it** | The travel memory drawn by recency: ground walked this season strong, ground walked in earlier seasons faint (ginseng re-sprouts each year; a slope searched three seasons ago is worth another look). Uses `lastAt`, already stored per cell | Cells with `lastAt` in this season draw at the strong alpha and older ones at the faint one; a mutant that ignores `lastAt` draws all alike | `visited_cells.lastAt` (M.1), `TravelMask`'s R channel as a level instead of on/off. On device |
+| J34 | **How much of this cove you have walked** | Each suggestion and each ranked place shows the share of its strong ground within 15 m of the travel memory ("walked 40 %"), and the list can hide places walked past a threshold (feeds F11) | A synthetic place half covered by the memory reports 50 % within one texel's share; a mutant without the 15 m buffer reports less | `TravelMask.dilated`, `RadiusScan` cells. On device, no network |
+| J35 | **Ground on screen at once, offline, after a restart** | The last square's relief mesh and texture are saved to app storage, so a cold start shows the terrain in under a second, before any build, with or without signal; replaced when a new square is built | A second cold start at the same place logs the square shown from storage before the build starts; a corrupted file is ignored and rebuilt (negative control) | `Terrain3D.Scene`, `MeshSession`; app-private files. Measured on the emulator first, the claim needs a phone (C11, C18) |
+| J36 | **Walk the gaps** | From where you stand, a loop through the largest strong patches you have not walked (J20's mask) and back to the track's start (J21), ordered by walking effort | On a synthetic landscape with three unwalked patches, the loop visits the two nearest-by-effort within the time asked; a mutant that ignores the memory routes through walked ground | J20's `TravelMask.unwalked`, J5's Tobler cost (when built), `WayBack`. On device |
+| J37 | **Battery left at today's real rate** | After 20 minutes of readings, a line in the Layers sheet: the measured drain per hour this session and the hours left at that rate, from the battery readings the app already takes every 30 s; nothing before the data exists, and never an assumed wattage | Fixture readings dropping 6 % over an hour give "6 %/h, about 10 h left at 60 %"; fewer than 20 minutes of readings give no figure; a mutant using one reading fails | `FieldViewModel.readBattery` (M.1). Replaces the invented "18+ hrs" figures removed earlier with a measured one |
 
 ### Register arithmetic
 
@@ -687,9 +698,9 @@ right after F.1, because they feed the top-N engine; J5 and J6 with D.1; J7 with
 | G — Truth and learning | G1–G12 | 12 | W7 |
 | H — Offline and release | H1–H14 | 14 | W8 |
 | I — Gaps and mutations | I1–I23 | 23 | every wave (I17 at bootstrap; I18–I21 in A.2; I22 in A.3; I23 in B.1) |
-| J — approved by the owner | J20, J21, J23, J24 | 4 | wave J.2 (approved 2026-10-06) |
-| **Total** | | **171** | |
-| J — Owner-directed goal candidates, proposed | J1–J19, J22, J25–J29 | 25 | not counted until the owner approves scope |
+| J — approved or directed by the owner | J20, J21, J23, J24, J30, J31, J32 | 7 | wave M.1 (2026-10-06) |
+| **Total** | | **174** | |
+| J — Owner-directed goal candidates, proposed | J1–J19, J22, J25–J29, J33–J37 | 30 | not counted until the owner approves scope |
 
 **Phase order and why.** A before B: everything draws through the one map, so building the renderer
 before the merge means building it twice. B before C: a reliable renderer can be profiled; a fast
@@ -704,53 +715,52 @@ per wave, always, recorded with its rejection.
 ## 12 — Wave state (rewritten at every wave close)
 
 **Bootstrap:** `done` 2026-10-03 at `c95815f`. See `docs/eincol/run-log.md` (BOOT).
-**Last wave:** `B.1` **archived** 2026-10-06 (`docs/eincol/waves/B.1.md`).
-**Cursor:** `J.2`, the owner's approved J20, J21, J23, J24 (approved 2026-10-06), placed before
-B.2 because all four are on-device field features that need nothing from B, C, D or F. After J.2
-the cursor returns to `W2 / B.2` (B8–B14).
-**Device:** the `aosp` AVD (API 34, x86_64, swiftshader, 4 GB / 4 cores, cold-booted again after the
-container restarted). Works: installs, taps, swipes, two-finger tilt, pinch and rotate through the
-emulator console, screenshots, `am send-trim-memory`, removing a cached tile as root. Does not: the
-network (this container's TLS proxy); rotating this app (the emulator host crashes, A.3); Play
-services (I18's device half). Its bluetooth stack crashes natively and takes the system services with
-it (B.1): bluetooth is disabled on the AVD, error dialogs are hidden (`hide_error_dialogs 1`), and
-Gradle must not run during a device run (the host's memory cgroup killed the emulator once). Performance claims still
-need a real phone (C18).
+**Last wave:** `M.1` **archived** 2026-10-06 (`docs/eincol/waves/M.1.md`): the owner's directive
+(J30 3D as the only map, J31 the travel memory, J32 battery) with the approved J.2 (J20, J21, J23,
+J24) in the same wave.
+**Cursor:** `W2 / B.2` (B8–B14). B12 was reworded in M.1: its fallback, the flat map, is gone.
+**Open from M.1:** the on-screen check of its three device-found fixes (a cell-tower first fix lands
+only provisionally; the pale wash; no sub-texel drains on the 48 km square), deferred by the owner
+for the APK: the first thing on the next device run, or on the owner's phone.
+**Device:** the `aosp` AVD (API 34, x86_64, swiftshader, 4 GB / 4 cores, cold-booted). Works:
+installs, taps, swipes, two-finger tilt, pinch and rotate through the emulator console, screenshots,
+`am send-trim-memory`, root (cached tiles, `sqlite3` on the app's database), `dumpsys battery`
+levels, GPS fixes by console. Does not: the network (this container's TLS proxy); rotating this app
+(the emulator host crashes, A.3); Play services (I18's device half). Its bluetooth stack crashes
+natively and takes the system services with it (B.1): bluetooth is disabled on the AVD, error
+dialogs are hidden (`hide_error_dialogs 1`), and Gradle must not run during a device run (the host's
+memory cgroup killed the emulator once). Performance and battery claims still need a real phone
+(C18).
 **Blocked:**
 - C1–C18 blocked(device: performance claims need a real phone, C18);
-- A5 + A6 blocked(owner): decision 3 below;
-- A12 blocked(owner): decision 4 below; and blocked(device) for its network-log check;
-- A14 blocked(owner): decision 1 below;
 - A16 blocked(device): the rotation check (the code is in: in-place rotation, the held square);
 - J8, J15 blocked(owner: new network destination or dataset); J9 blocked(owner: finds leave the device).
 
 **Struck:** B3 (quadtree LOD with stitching): the 3D view draws one uniform grid, so there is no
-depth boundary to stitch and its witness cannot be taken; B2's topology check holds the real mesh
-to "no crack, no T-junction". Re-opens if the view ever draws more than one mesh or any LOD.
+depth boundary to stitch; re-opens if the view ever draws more than one mesh or any LOD. **By the
+owner's M.1 directive (J30, no flat map):** A5 (tilt the flat map into 3D: nothing to tilt from),
+A12 (share the DEM cache with the flat map's hillshade: that layer is gone), A14 (one frame clock
+for two backends: one backend remains), I22 (the MapView renderer's finalizer: no MapView remains;
+MapDrape's snapshotter is cancelled explicitly). A7, A8 and A15 stay archived as history; their code
+(the measured hand-off, the cross-fade, continuity across it) was removed with the flat map.
 **Partial:** A18, statement 4 (a device toggle of every Layers switch in 3D); I20 (duplicate ids
-refused and SIGTERM restores, B.1; the test-class check is open).
+refused and SIGTERM restores, B.1; `--check` finds stale mutants and missing test classes, M.1; a
+class that exists but holds no test touching the mutated code is still not caught).
 
 **Owner decisions pending:**
-1. **A14 is infeasible as written** (one frame clock needs MapLibre `CustomLayer`, NDK). Proposed
-   replacement: "the hidden backend's render loop is paused, and both run only inside the hand-off
-   window". A.2 built most of it.
-2. The branch rule for waves: `eincol/<wave-id>` is pushed and the session branch is
+1. The branch rule for waves: `eincol/<wave-id>` is pushed and the session branch is
    fast-forwarded to it.
-3. **A5 + A6:** *"Should tilting the flat map to its 60° limit enter 3D (and the 3D view stop at
-   60° on the way back), so the 2D/3D button can be removed; or does the button stay?"*
-4. **A12:** *"Approve declaring `com.squareup.okhttp3:okhttp` (already inside the APK via MapLibre,
-   MapLibre's version: no new bytes) as a direct dependency, so one interceptor serves MapLibre's
-   hillshade tiles from the app's DEM cache?"*
-5. Scope for the J candidates still proposed: J1–J19, J22, J25–J29 (J1–J4 recommended as wave
-   J.1 after F.1).
+2. Scope for the J candidates still proposed: J1–J19, J22, J25–J29, J33–J37 (J1–J4 recommended
+   as wave J.1 after F.1; J33–J35 build directly on M.1's travel memory and squares).
+(Resolved by the M.1 directive: A14's replacement, A5 + A6, A12.)
 
-**Pre-existing, exempt by name:** the lint warnings remaining from `BOOT-lint-baseline.tsv` (79 now;
-none above its per-file counts); the copied `GLTextureView.java` (`app/lint.xml`); `MapLogging` and
+**Pre-existing, exempt by name:** the lint warnings remaining from `BOOT-lint-baseline.tsv` (none
+above its per-file counts); the copied `GLTextureView.java` (`app/lint.xml`); `MapLogging` and
 three log lines (`@SuppressLint`/`//noinspection`, named in the A.2/A.3 records).
-**Counts:** 27 archived (A1, A2, A3, A4, A7, A8, A9, A10, A11, A13, A15, A17, B1, B2, B4, B5, B6,
-B7, I2, I3, I4, I10, I11, I17, I18, I19, I21) · 23 blocked (C1–C18 device; A5, A6, A12, A14 owner;
-A16 device) · 2 partial (A18, I20) · 1 struck (B3) · 118 queued (including the approved J20, J21,
-J23, J24 and the new I23) · 25 proposed (J1–J19, J22, J25–J29). Total 171 + 25 proposed.
+**Counts:** 35 archived (A1, A2, A3, A4, A6, A7, A8, A9, A10, A11, A13, A15, A17, B1, B2, B4, B5,
+B6, B7, I2, I3, I4, I10, I11, I17, I18, I19, I21, J20, J21, J23, J24, J30, J31, J32) · 19 blocked
+(C1–C18, A16: device) · 2 partial (A18, I20) · 5 struck (B3, A5, A12, A14, I22) · 113 queued · 30
+proposed (J1–J19, J22, J25–J29, J33–J37). Total 174 + 30 proposed.
 
 | Wave | Program | Candidates | Status | Branch / commits | Evidence |
 |---|---|---|---|---|---|
@@ -759,8 +769,8 @@ J23, J24 and the new I23) · 25 proposed (J1–J19, J22, J25–J29). Total 171 +
 | A.2 | One map | A7–A10 (+ A11 at 50°); A5, A6, A12 blocked(owner); A11's 60° shot blocked(device) | **archived** | `eincol/A.2` | `docs/eincol/waves/A.2.md` |
 | A.3 | One map | A13, A15, A17 + A11 (from A.2); A18 partial; A16 blocked(device); A14 blocked(owner); I18, I19, I21 | **archived** | `eincol/A.3` | `docs/eincol/waves/A.3.md` |
 | B.1 | Reliability | B1, B2, B4, B5, B6, B7 (+ I10, I11; I20 partial); B3 struck; registered I23; drafted J25–J29 | **archived** | `eincol/B.1` | `docs/eincol/waves/B.1.md` |
-| J.2 | Goal (approved) | J20, J21, J23, J24 | queued (cursor) | — | — |
-| B.2 | Reliability | B8–B14 | queued | — | — |
+| M.1 | Owner directive + J.2 | J30, J31, J32 (directive) + J20, J21, J23, J24 (J.2); A6 by J30; A5, A12, A14, I22 struck by it; I20 more; drafted J33–J37 | **archived** | `eincol/M.1` | `docs/eincol/waves/M.1.md` |
+| B.2 | Reliability | B8–B14 | queued (cursor) | — | — |
 | B.3 | Reliability | B15–B20 | queued | — | — |
 | C.1 | Performance | C1–C6 | blocked(device) | — | — |
 | C.2 | Performance | C7–C12 | blocked(device) | — | — |

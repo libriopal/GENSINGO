@@ -1,0 +1,16 @@
+/tmp/claude-0/-home-user-GENSINGO/df087ab8-3f31-563e-a73c-fc476f61463e/scratchpad/deviceM1/points.sql: 1 file pushed, 0 skipped. 174.3 MB/s (18099 bytes in 0.000s)
+== back to schema 5
+schema: 5; tables: 0 visited_cells
+track points: 310, of them within 30 m: 308
+cells they should become (SQLite on the device, the migration's own key): 144
+cells by the app's own rule (floor), computed here: 136
+== the M.1 build opens it
+schema: 6
+visited cells: 144
+of them a stored track cell: 144
+stored track cells missing: 0
+cells from the two vague points that are not also a good point's: 0
+first/last times kept: 144
+done
+136
+10

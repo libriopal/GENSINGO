@@ -69,17 +69,4 @@ class SharedCameraTest {
         cam.move(start.copy(zoom = 16.0))
         assertNotNull(late.follower.take(cam.state.value))
     }
-
-    @Test
-    fun theSwitchKeepsThePlaceAndAdjustsOnlyWhatTheTargetViewCannotShow() {
-        val flat = CameraState(35.6, -83.0, 14.2, 37.0, 20.0)
-        val to3d = CameraMath.forView(flat, view3d = true)
-        assertEquals(flat.lat, to3d.lat, 0.0); assertEquals(flat.lng, to3d.lng, 0.0)
-        assertEquals(flat.zoom, to3d.zoom, 0.0); assertEquals(flat.bearing, to3d.bearing, 0.0)
-        assertEquals("a flat camera is raised so relief reads as relief", CameraMath.MIN_3D_PITCH, to3d.pitch, 0.0)
-        val steep = to3d.copy(pitch = 78.0)
-        val back = CameraMath.forView(steep, view3d = false)
-        assertEquals("MapLibre cannot tilt past 60", CameraMath.MAX_2D_PITCH, back.pitch, 0.0)
-        assertEquals(steep.copy(pitch = CameraMath.MAX_2D_PITCH), back)
-    }
 }

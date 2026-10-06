@@ -9,14 +9,16 @@ import com.ginsengo.steward.data.db.Find
 import com.ginsengo.steward.data.db.ResearchRun
 import com.ginsengo.steward.data.db.Suggestion
 import com.ginsengo.steward.data.db.TrackPoint
+import com.ginsengo.steward.field.BatteryMode
 import com.ginsengo.steward.field.FieldLocation
 import com.ginsengo.steward.field.FixAverager
 import com.ginsengo.steward.field.PowerPolicy
 import com.ginsengo.steward.field.TrackService
+import com.ginsengo.steward.field.TravelMemory
+import com.ginsengo.steward.prospect.Prospects
 import com.ginsengo.steward.learn.FindLearner
 import com.ginsengo.steward.research.Provider
 import com.ginsengo.steward.research.ResearchTrigger
-import com.ginsengo.steward.terrain3d.CameraMath
 import com.ginsengo.steward.terrain3d.MeshSession
 import com.ginsengo.steward.terrain3d.CameraState
 import com.ginsengo.steward.terrain3d.SharedCamera
@@ -81,20 +83,18 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
     val layers: StateFlow<MapLayerState> = _layers.asStateFlow()
     fun setLayers(s: MapLayerState) { _layers.value = s }
 
-    private val _view3d = MutableStateFlow(false)
-    val view3d: StateFlow<Boolean> = _view3d.asStateFlow()
-
     /**
-     * The one camera (exe.md A1): both views mirror it under [SharedCamera]'s epoch rule; neither
-     * keeps its own. Seeded where [CameraStart] says the map opens, then moved only here (app
-     * actions) or by the view under the user's finger (gestures).
+     * The one camera (exe.md A1): the 3D map mirrors it under [SharedCamera]'s epoch rule. Seeded
+     * where [CameraStart] says the map opens, then moved only here (app actions) or by the map under
+     * the user's finger (gestures).
      */
     val camera = SharedCamera(
         CameraStart.initial(null, null).let { CameraState(it.lat, it.lon, it.zoom, 0.0, CameraStart.START_TILT) }
     )
     /**
-     * The 3D view's built square for the current visit to 3D (A16): it survives a rotation, which
-     * recreates the views but not this ViewModel. Ended when the user is back on the map.
+     * The map's built square (A16): it survives a rotation, which recreates the views but not this
+     * ViewModel. Since the 3D view is the only map (owner directive, wave M.1) it lives as long as
+     * the screen does.
      */
     val meshSession = MeshSession(container.memoryBudget)
 
@@ -106,33 +106,13 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
     /** How far the first-fix landing has got (CameraStart.landing, I18). */
     private var landed = CameraStart.Landing.NONE
 
-    /**
-     * One switch, one camera: the view changes, the place does not ([CameraMath.to3d]/[to2d]).
-     *
-     * Into 3D the camera glides to a 3D pitch on the map the user is still looking at, while the
-     * terrain is built under it (MainScreen's cross-fade). Back to the map the camera is NOT moved
-     * here: [landFlat] moves it when the fade reaches the hand-off, under a 3D view that still
-     * covers the map, so the jump into the map's range is never seen.
-     */
-    fun setView3d(on: Boolean) {
-        if (_view3d.value == on) return
-        if (on) camera.move(CameraMath.forView(camera.camera, true), animate = true)
-        _view3d.value = on
-    }
-
-    /**
-     * Lands the camera within what the flat map draws, as an app move the map follows: it also
-     * brings the map, which ignored the 3D view's gestures under it, to where the user left the 3D.
-     */
-    fun landFlat() = camera.move(CameraMath.forView(camera.camera, false))
-
-    /** "Centre on me", in whichever view is showing. */
+    /** "Centre on me". */
     fun recenter() {
         val me = _location.value ?: return
         camera.move(camera.camera.copy(lat = me.lat, lng = me.lng), animate = true)
     }
 
-    /** "Show on map": fly to a suggestion, in whichever view is showing. */
+    /** "Show on map": go to a suggestion (the map builds the square there). */
     fun focusOn(s: Suggestion) {
         camera.move(
             camera.camera.copy(lat = s.lat, lng = s.lng, zoom = CameraStart.FOCUS_ZOOM, pitch = CameraStart.FOCUS_TILT),
@@ -150,29 +130,95 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ------------------------------------------------------------ battery (J32, J24)
+    /** What the phone reports about its battery, read while the map is on screen. */
+    data class Battery(val pct: Int?, val charging: Boolean, val systemSaver: Boolean)
+
+    private val _battery = MutableStateFlow(Battery(null, false, false))
+    val battery: StateFlow<Battery> = _battery.asStateFlow()
+
+    private val _saverPct = MutableStateFlow(container.settings.batterySaverPct)
+    /** J24: the owner's threshold for the battery mode. */
+    val saverPct: StateFlow<Int> = _saverPct.asStateFlow()
+    fun setSaverPct(pct: Int) {
+        val v = pct.coerceIn(BatteryMode.THRESHOLD_RANGE.first, BatteryMode.THRESHOLD_RANGE.last)
+        container.settings.batterySaverPct = v; _saverPct.value = v
+    }
+
+    /** J24: the 3D map runs lighter. */
+    val batteryMode: StateFlow<Boolean> = combine(_battery, _saverPct) { b, t -> BatteryMode.on(b.pct, b.charging, b.systemSaver, t) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    private fun readBattery() {
+        val app = getApplication<Application>()
+        val i = app.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+        val level = i?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = i?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1) ?: -1
+        val status = i?.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1) ?: -1
+        val pm = app.getSystemService(android.os.PowerManager::class.java)
+        _battery.value = Battery(
+            pct = if (level >= 0 && scale > 0) level * 100 / scale else null,
+            charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING || status == android.os.BatteryManager.BATTERY_STATUS_FULL,
+            systemSaver = pm?.isPowerSaveMode == true,
+        )
+    }
+
     // ------------------------------------------------------------ live location
     private var liveJob: Job? = null
+    private var tickJob: Job? = null
+    private var livePlan: PowerPolicy.Plan? = null
     private var firstFixHandled = false
+    // Stillness (J32): when the position last moved by more than its own accuracy.
+    private var movedAt = System.currentTimeMillis()
+    private var movedFrom: FieldLocation? = null
 
-    /** Called from onStart: the live position runs only while the map is on screen. */
+    /**
+     * Called from onStart: the live position runs only while the map is on screen, with the request
+     * [PowerPolicy] plans from the real battery, charging state and stillness (J32). It used to plan
+     * from constants: a high-accuracy fix every 3 s for as long as the map was open.
+     */
     fun onVisible() {
-        if (!container.location.hasPermission() || liveJob != null) return
-        val plan = PowerPolicy.plan(
-            tracking = false, screenOn = true, batteryPct = null, charging = false,
-            speedMps = null, stillForMs = 0L,
-        )
-        liveJob = viewModelScope.launch {
-            container.location.updates(plan)
-                .catch { /* permission revoked mid-session: keep the last fix */ }
-                .collect { onFix(it) }
+        if (!container.location.hasPermission()) return
+        readBattery()
+        if (liveJob == null) {
+            replanLive(force = true)
+            container.location.lastKnown { it?.let(::onFix) }
         }
-        container.location.lastKnown { it?.let(::onFix) }
+        // Stillness and the battery change with no fix arriving (a still phone gets none past the
+        // request's minimum distance): look again on a slow tick.
+        if (tickJob == null) tickJob = viewModelScope.launch {
+            while (true) { delay(REPLAN_TICK_MS); readBattery(); replanLive() }
+        }
     }
 
     /** Called from onStop. Tracking, if on, carries on in its own service. */
     fun onHidden() {
+        liveJob?.cancel(); liveJob = null
+        tickJob?.cancel(); tickJob = null
+        livePlan = null
+        container.travel.flush()
+    }
+
+    private fun livePlanNow(): PowerPolicy.Plan {
+        val b = _battery.value
+        return PowerPolicy.plan(
+            tracking = false, screenOn = true, batteryPct = b.pct, charging = b.charging,
+            speedMps = null, stillForMs = System.currentTimeMillis() - movedAt,
+        )
+    }
+
+    /** Swaps the location request when the plan changes; the same plan keeps the running one. */
+    private fun replanLive(force: Boolean = false) {
+        if (!container.location.hasPermission()) return
+        val next = livePlanNow()
+        if (!force && next == livePlan && liveJob != null) return
+        livePlan = next
         liveJob?.cancel()
-        liveJob = null
+        liveJob = viewModelScope.launch {
+            container.location.updates(next)
+                .catch { /* permission revoked mid-session: keep the last fix */ }
+                .collect { onFix(it) }
+        }
     }
 
     fun onPermissionResult(granted: Boolean) {
@@ -184,9 +230,17 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun onFix(loc: FieldLocation) {
         _location.value = loc
+        // Every fix the app receives is remembered (J31), in batches.
+        container.travel.record(TravelMemory.Fix(loc.lat, loc.lng, loc.accuracyM, loc.timestamp))
+        val from = movedFrom
+        if (from == null || Prospects.distanceMetres(from.lat, from.lng, loc.lat, loc.lng) > maxOf(loc.accuracyM.toDouble(), MOVED_M)) {
+            val wasStill = livePlan?.mode == PowerPolicy.Mode.VIEWING_STILL
+            movedFrom = loc; movedAt = System.currentTimeMillis()
+            if (wasStill) replanLive()
+        }
         // The first fresh fix JUMPS the camera (CameraStart: an animation can be interrupted, a jump
         // cannot); a stale last-known fix only lands provisionally, so it cannot steal that jump.
-        val action = CameraStart.landing(System.currentTimeMillis() - loc.timestamp, landed)
+        val action = CameraStart.landing(System.currentTimeMillis() - loc.timestamp, landed, loc.accuracyM)
         if (action != CameraStart.Landing.NONE) {
             landed = action
             camera.move(camera.camera.copy(lat = loc.lat, lng = loc.lng, zoom = CameraStart.FIELD_ZOOM))
@@ -314,6 +368,10 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         const val FIND_AVERAGE_MS = 20_000L
+        /** How often stillness and the battery are looked at again while the map is on screen. */
+        const val REPLAN_TICK_MS = 30_000L
+        /** Moving means more than this, or the fix's own accuracy, from where it last moved. */
+        const val MOVED_M = 10.0
         const val BURST_IDLE = -1
         const val BURST_DONE = -2
     }

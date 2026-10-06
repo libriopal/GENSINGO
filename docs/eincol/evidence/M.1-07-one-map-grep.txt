@@ -1,0 +1,5 @@
+$ grep -rnE "view3d|setView3d|landFlat|Show in 3D|Show flat map|FlatLayers|Handoff|AlignmentCheck|FieldMap\b" app/src/main --include=*.kt  (A6, J30: code, not comments)
+(lines above, if any, are code; comment-only mentions are excluded)
+
+$ grep -rn "MapView" app/src/main --include=*.kt
+(none: MapLibre remains only as MapDrape's snapshotter and OfflineArea)

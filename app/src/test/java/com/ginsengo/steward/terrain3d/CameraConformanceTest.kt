@@ -17,8 +17,8 @@ import kotlin.random.Random
  *    exaggerated build-zoom pixels) through [MapCamera.mvpForMeshBuiltAt], exactly what the vertex
  *    shader computes;
  *  - the **projection path**: [MapCamera.project] of the same geographic point at its drawn
- *    height. The 3D markers, the track line and the pan maths use this, and on the device
- *    `AlignmentCheck` holds it to MapLibre's own projection, so it also stands for the 2D map.
+ *    height. The 3D markers, the track line and the pan maths use this. (Until M.1 the device's
+ *    `AlignmentCheck` also held it to MapLibre's projection, for the flat map.)
  *
  * Ten sampled states (centre, zoom, bearing, pitch, ground plane), 25 vertices each, over a hilly
  * synthetic scene. **The oracle shows it can fail:** feeding the mesh path the previous state's

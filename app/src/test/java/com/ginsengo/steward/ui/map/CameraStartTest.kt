@@ -107,6 +107,18 @@ class CameraStartTest {
         assertEquals("a clock-skewed fix from the future counts as fresh",
             CameraStart.Landing.FINAL, CameraStart.landing(-5_000, CameraStart.Landing.NONE))
     }
+
+    /** M.1: a fresh cell-tower fix, kilometres off, must not build the one map's square there for good. */
+    @Test
+    fun aVagueFreshFixLandsOnlyProvisionally() {
+        val tower = CameraStart.landing(500, CameraStart.Landing.NONE, accuracyM = 1_500f)
+        assertEquals(CameraStart.Landing.PROVISIONAL, tower)
+        assertEquals("the GPS fix after it still lands", CameraStart.Landing.FINAL,
+            CameraStart.landing(500, tower, accuracyM = 8f))
+        assertEquals(CameraStart.Landing.FINAL, CameraStart.landing(0, CameraStart.Landing.NONE, CameraStart.FINAL_ACCURACY_M))
+        assertEquals(CameraStart.Landing.PROVISIONAL,
+            CameraStart.landing(0, CameraStart.Landing.NONE, CameraStart.FINAL_ACCURACY_M + 1f))
+    }
 }
 
 /**

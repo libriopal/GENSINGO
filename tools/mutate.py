@@ -11,12 +11,14 @@ expected to kill it. The harness:
   4. refuses to start when two mutations share an id (exe.md I20: A.2's R1-R10 ran the old
      hydrology R1-R3 instead, and B.1's first V1-V5 and W1-W2 collided again), and restores the
      mutated file when it is stopped by SIGTERM or SIGINT, not only when a test run ends (a
-     killed A.2 run left RadiusScan.kt mutated).
+     killed A.2 run left RadiusScan.kt mutated),
+  5. with --check, lists every mutation that no longer applies and exits 1 (wave M.1).
 
 A SURVIVED row is a candidate defect, not a verdict: it may be an equivalent mutant.
 Survivors are triaged by hand in EINCOL_REPORT.md Phase 7.
 
 Usage: tools/mutate.py [ID ...]      (no IDs = all)
+       tools/mutate.py --check        (exit 1 if any mutation no longer applies)
 """
 import collections
 import signal
@@ -67,7 +69,7 @@ MUTATIONS = [
      "if (exclude(lat, lng)) continue", "",
      [T + "research.RadiusScanRealTerrainTest"]),
     ("P6", "candidates outside the radius", M + "research/RadiusScan.kt",
-     "if (!inRadius(lat, lngOfCol(x.toDouble()))) continue", "",
+     "if (!inRadius(lat, lngOfCol(x.toDouble())) || !scorable(x, y)) continue", "if (!scorable(x, y)) continue",
      [T + "research.RadiusScanRealTerrainTest"]),
     ("P7", "candidates are not separated", M + "research/RadiusScan.kt",
      "if (picked.any { Prospects.distanceMetres(it.lat, it.lng, lat, lng) < minSeparationM }) continue", "",
@@ -136,13 +138,14 @@ MUTATIONS = [
      [T + "terrain.DrawnSurfaceTest"]),
     # --- 3D view and water (Phase 8)
     ("H2", "the 3D habitat colour is not the 2D heatmap colour", M + "terrain3d/TerrainTextures.kt",
-     "over(base, SuitabilityRasterizer.colourFor(score, MIN_SCORE))", "over(base, SuitabilityRasterizer.colourFor(score * 0.8, MIN_SCORE))",
+     "fade(SuitabilityRasterizer.colourFor(score, MIN_SCORE), layers.habitatOpacity)",
+     "fade(SuitabilityRasterizer.colourFor(score * 0.8, MIN_SCORE), layers.habitatOpacity)",
      [T + "terrain3d.Terrain3DTest"]),
     ("H3", "the 3D view scores the ground its own way again", M + "terrain3d/Terrain3D.kt",
-     "SuitabilityRasterizer.scoreGrid(mosaic, interior, TPI_RADIUS_M, weights)", "SuitabilityRasterizer.scoreGrid(mosaic, interior / 4, TPI_RADIUS_M, weights)",
+     "SuitabilityRasterizer.scoreGrid(mosaic, interior, tpiRadiusM, weights)", "SuitabilityRasterizer.scoreGrid(mosaic, interior / 4, tpiRadiusM, weights)",
      [T + "terrain3d.Terrain3DTest"]),
     ("H4", "weak ground fades to black instead of bare relief", M + "terrain3d/TerrainTextures.kt",
-     "val base = ramp(NEUTRAL_RAMP, t)", "val base = 0x000000",
+     "else ramp(NEUTRAL_RAMP, t)", "else 0x000000",
      [T + "terrain3d.Terrain3DTest"]),
     ("H5", "contours only ever darken (vanish on dark ground)", M + "terrain3d/TerrainTextures.kt",
      "if (luminance(px[i]) >= 80.0)", "if (true)",
@@ -162,7 +165,7 @@ MUTATIONS = [
     ("D1", "the separator becomes a space again", M + "data/db/Entities.kt",
      'const val SEPARATOR = "\\u001F"', 'const val SEPARATOR = " "', [T + "terrain.ConvertersTest", T + "data.MigrationTest"]),
     ("D2", "no migration from the field-tested build", M + "data/db/AppDatabase.kt",
-     "val MIGRATIONS = arrayOf(MIGRATION_1_5, MIGRATION_4_5)", "val MIGRATIONS = arrayOf(MIGRATION_4_5)",
+     "val MIGRATIONS = arrayOf(MIGRATION_1_5, MIGRATION_4_5, MIGRATION_5_6)", "val MIGRATIONS = arrayOf(MIGRATION_4_5, MIGRATION_5_6)",
      [T + "data.MigrationTest"]),
     ("H9", "the heatmap memo reuses the wrong cell's score", M + "terrain/SuitabilityRasterizer.kt",
      "(gx.toInt().coerceIn(1, g.w - 2) - ix0)", "(gx.toInt().coerceIn(1, g.w - 2) - ix0) / 2 * 2",
@@ -234,19 +237,10 @@ MUTATIONS = [
      [T + "terrain3d.SceneGeometryTest"]),
 
     # --- wave A.2: one surface (measured hand-off, cross-fade, scene description)
-    ("S1", "the fade raises full relief while the map still shows", M + "terrain3d/Handoff.kt",
-     "Blend(alpha = r, relief = r * h)", "Blend(alpha = r, relief = r.toDouble())",
-     [T + "terrain3d.HandoffTest"]),
-    ("S2", "the hand-off is a constant, not measured", M + "terrain3d/Handoff.kt",
-     "if (disagreementPx(mc, samples, m) <= tolerancePx) lo = m else hi = m",
-     "if (m <= 0.5) lo = m else hi = m",
-     [T + "terrain3d.HandoffTest"]),
-    ("S3", "the disagreement ignores the relief scale", M + "terrain3d/Handoff.kt",
-     "project(s.lat, s.lng, s.heightM * relief)", "project(s.lat, s.lng, s.heightM)",
-     [T + "terrain3d.HandoffTest"]),
-    ("S4", "the mesh ignores the relief scale", M + "terrain3d/MapCamera.kt",
-     "m = m * scale(1.0, 1.0, relief)", "m = m * scale(1.0, 1.0, 1.0)",
-     [T + "terrain3d.GroundedCameraTest"]),
+    # S1-S3 (Handoff: fade, measured hand-off, relief scale) were removed in wave M.1 with
+    # Handoff.kt: the flat map and the hand-off between the two maps no longer exist (J30).
+    # S4 (the mesh ignores the relief scale) was removed in wave M.1 with the parameter: the
+    # relief scale existed only for the cross-fade, which went with the flat map (J30).
     ("S5", "a draped layer drawn over the mesh instead of on it", M + "ui/map/SceneLayers.kt",
      "SceneLayer.CONTOURS, SceneLayer.WATER -> MeshDraw.BAKED",
      "SceneLayer.CONTOURS -> MeshDraw.BAKED\n        SceneLayer.WATER -> MeshDraw.CANVAS",
@@ -261,7 +255,7 @@ MUTATIONS = [
      "((c ushr 24) and 255) * opacity.coerceIn(0f, 1f)", "((c ushr 24) and 255) * 1f",
      [T + "terrain3d.Terrain3DTest"]),
     ("S9", "a layer declares a depth its 3D renderer does not honour", M + "ui/map/SceneLayers.kt",
-     "VISITED(Depth.ON_TOP,", "VISITED(Depth.DRAPED,",
+     "TRACK(Depth.ON_TOP,", "TRACK(Depth.DRAPED,",
      [T + "ui.map.SceneLayersTest"]),
     ("S10", "one switch moves two layers", M + "ui/map/SceneLayers.kt",
      "{ s, on -> s.copy(trackLine = on) }", "{ s, on -> s.copy(trackLine = on, visited = on) }",
@@ -272,14 +266,12 @@ MUTATIONS = [
      '.replace(SLASHED) { "${it.groupValues[1]}/x/y" }', ".replace(SLASHED) { it.value }",
      [T + "geo.LogRedactionTest"]),
     ("U2", "a stale fix uses up the landing", M + "ui/map/CameraStart.kt",
-     "fixAgeMs <= FRESH_FIX_MS -> Landing.FINAL", "fixAgeMs <= Long.MAX_VALUE -> Landing.FINAL",
+     "fixAgeMs <= FRESH_FIX_MS && accuracyM", "fixAgeMs <= Long.MAX_VALUE && accuracyM",
      [T + "ui.map.CameraStartTest"]),
     ("U3", "the 3D view tilts at its old 0.15 deg/px", M + "terrain3d/GestureMath.kt",
      "const val TILT_DEG_PER_PX = 0.1f", "const val TILT_DEG_PER_PX = 0.15f",
      [T + "terrain3d.GestureMathTest"]),
-    ("U4", "no pitch easing on the sink (the landing clamps)", M + "terrain3d/Handoff.kt",
-     "return pitch0 + (target - pitch0) * t", "return pitch0",
-     [T + "terrain3d.HandoffTest"]),
+    # U4 (Handoff's pitch easing) was removed in wave M.1 with Handoff.kt (J30).
     ("U5", "the budget evicts the most recently used", M + "perf/MemoryBudget.kt",
      ".sortedBy { it.lastUse }", ".sortedByDescending { it.lastUse }",
      [T + "perf.MemoryBudgetTest"]),
@@ -347,6 +339,86 @@ MUTATIONS = [
      "val ax = x0.coerceIn(haloPx, hiX); val bx = (x0 + 1).coerceIn(haloPx, hiX)",
      "val ax = x0; val bx = x0 + 1",
      [T + "terrain3d.NoDataTest"]),
+
+    # --- wave M.1: the one 3D map (J30), travel memory (J31), battery (J32, J24), J20, J21, J23
+    ("Y1", "the square ignores the camera's zoom (always the 3 km one)", M + "terrain3d/SquareLevel.kt",
+     "val ideal = (FINEST + (zoom - fitFinest)).roundToInt().coerceIn(COARSEST, FINEST)",
+     "val ideal = FINEST + 0 * (zoom - fitFinest).roundToInt()",
+     [T + "terrain3d.SquareLevelTest"]),
+    ("Y2", "no hysteresis: a camera at a boundary rebuilds back and forth", M + "terrain3d/SquareLevel.kt",
+     "return if (abs(zoom - fitCurrent) > 0.5 + HYSTERESIS) ideal else current",
+     "return if (abs(zoom - fitCurrent) >= 0.0) ideal else current",
+     [T + "terrain3d.SquareLevelTest"]),
+    ("Y3", "fixes are dots: no cells filled between them", M + "field/TravelMemory.kt",
+     "val n = ceil(d / STEP_M).toInt().coerceAtLeast(1)", "val n = 1",
+     [T + "field.TravelMemoryTest"]),
+    ("Y4", "the upgrade's backfill rounds where the app floors (another grid)", M + "field/TravelMemory.kt",
+     "CAST((`lat` + 90) * 10000 AS INTEGER) * 4000000", "CAST(ROUND((`lat` + 90) * 10000) AS INTEGER) * 4000000",
+     [T + "data.TravelMigrationTest"]),
+    ("Y5", "the memory mask upside down (rows run north)", M + "terrain3d/TravelMask.kt",
+     "private fun row(lat: Double) = (Projection.y(lat) - y0) / (y1 - y0) * size",
+     "private fun row(lat: Double) = (y1 - Projection.y(lat)) / (y1 - y0) * size",
+     [T + "terrain3d.TravelMaskTest"]),
+    ("Y6", "the map open on a still phone keeps a fix every 3 s", M + "field/PowerPolicy.kt",
+     "            if (!moving) {\n                // Looking at the map, standing still (J32).",
+     "            if (false) {\n                // Looking at the map, standing still (J32).",
+     [T + "field.PowerPolicyTest"]),
+    ("Y7", "the pacer drops the last frame of a gesture", M + "field/FieldPower.kt",
+     "        trailing = true\n        return wait", "        return -1",
+     [T + "field.FieldPowerTest"]),
+    ("Y8", "the J20 buffer is zero (walked means only the exact cell)", M + "terrain3d/TravelMask.kt",
+     "val bufferTexels: Int = (UNWALKED_BUFFER_M / (widthM / size)).roundToInt()",
+     "val bufferTexels: Int = 0 * (UNWALKED_BUFFER_M / (widthM / size)).roundToInt()",
+     [T + "terrain3d.TravelMaskTest"]),
+    ("Y9", "the way back leads to the last point, not the start", M + "field/FieldPower.kt",
+     ".minByOrNull { it.time }", ".maxByOrNull { it.time }",
+     [T + "field.FieldPowerTest"]),
+    ("Y10", "an animation re-added to the UI (J23)", M + "ui/map/Ring.kt",
+     "        Math.toDegrees(lat2) to Math.toDegrees(lng2)\n    }\n}\n",
+     "        Math.toDegrees(lat2) to Math.toDegrees(lng2)\n    }\n}\n\nprivate fun fade() = androidx.compose.animation.core.Animatable(0f)\n",
+     [T + "ui.NoAnimationTest"]),
+    ("Y11", "the battery mode ignores the charger", M + "field/FieldPower.kt",
+     "systemSaver || (!charging && batteryPct != null && batteryPct <= thresholdPct)",
+     "systemSaver || (batteryPct != null && batteryPct <= thresholdPct)",
+     [T + "field.FieldPowerTest"]),
+    ("Y12", "the backfill keeps fixes the recorder would refuse", M + "data/db/AppDatabase.kt",
+     "\"FROM `track_points` WHERE `accuracyM` <= 30 GROUP BY 1\"", "\"FROM `track_points` WHERE 1 GROUP BY 1\"",
+     [T + "data.TravelMigrationTest"]),
+    ("Y13", "the J20 buffer is a square, not a disk", M + "terrain3d/TravelMask.kt",
+     "if (xx < 0 || xx >= size || dx * dx + dy * dy > r2) continue", "if (xx < 0 || xx >= size) continue",
+     [T + "terrain3d.TravelMaskTest"]),
+    ("Y14", "a vague fix becomes the start of the next line", M + "field/TravelMemory.kt",
+     "if (fix.accuracyM <= TravelMemory.MAX_ACCURACY_M) prev = fix", "prev = fix",
+     [T + "field.TravelMemoryTest"]),
+    ("Y15", "the recorder writes on every fix", M + "field/TravelMemory.kt",
+     "flushNow = pending.size >= FLUSH_CELLS || clock() - lastFlush >= FLUSH_MS", "flushNow = true",
+     [T + "field.TravelMemoryTest"]),
+    ("Y16", "a 60 m canopy fix paints ground never stood on", M + "field/TravelMemory.kt",
+     "if (fix.accuracyM > MAX_ACCURACY_M) return LongArray(0)", "",
+     [T + "field.TravelMemoryTest"]),
+    ("Y17", "a late batch moves a visit back in time", M + "data/db/Daos.kt",
+     "WHERE cell IN (:cells) AND lastAt < :time", "WHERE cell IN (:cells)",
+     [T + "data.TravelMigrationTest"]),
+    ("Y18", "the still-viewing plan drops to cell-tower accuracy", M + "field/PowerPolicy.kt",
+     "mode = Mode.VIEWING_STILL,\n                    accuracy = Accuracy.HIGH,",
+     "mode = Mode.VIEWING_STILL,\n                    accuracy = Accuracy.BALANCED,",
+     [T + "field.PowerPolicyTest"]),
+    ("Y19", "the travel memory re-bakes the colour texture", M + "ui/map/SceneLayers.kt",
+     "SceneLayer.VISITED, SceneLayer.UNWALKED -> MeshDraw.MEMORY", "SceneLayer.VISITED, SceneLayer.UNWALKED -> MeshDraw.BAKED",
+     [T + "ui.map.SceneLayersTest"]),
+    ("Y20", "the schema-6 table differs from Room's", M + "data/db/AppDatabase.kt",
+     "`lastAt` INTEGER NOT NULL, PRIMARY KEY(`cell`))", "`lastAt` INTEGER, PRIMARY KEY(`cell`))",
+     [T + "data.TravelSchemaTest"]),
+    ("Y22", "where you've been drawn in the creeks' blue again", M + "terrain3d/TerrainShaders.kt",
+     "base = mix(base, vec3(0.902, 0.957, 0.925), mem.r", "base = mix(base, vec3(0.435, 0.718, 1.0), mem.r",
+     [T + "terrain3d.ShaderSourceTest"]),
+    ("Y23", "every water line drawn on the 48 km square, however thin", M + "terrain3d/TerrainTextures.kt",
+     "if (style.widthM / metresPerTexel < MIN_WATER_TEXELS) continue", "",
+     [T + "terrain3d.WaterLevelOfDetailTest"]),
+    ("Y21", "a cell-tower first fix lands the one map for good", M + "ui/map/CameraStart.kt",
+     "fixAgeMs <= FRESH_FIX_MS && accuracyM <= FINAL_ACCURACY_M -> Landing.FINAL",
+     "fixAgeMs <= FRESH_FIX_MS -> Landing.FINAL",
+     [T + "ui.map.CameraStartTest"]),
 ]
 
 
@@ -361,10 +433,39 @@ def run_tests(classes):
     return p.returncode, compile_error, time.time() - t0
 
 
+def stale():
+    """Mutations that can no longer run: the file is gone, the old text is not found exactly once,
+    or a named test class does not exist. Wave M.1 found P6, H2 and H4 stale since earlier waves:
+    each run reported them INVALID in its table and nothing failed, so three properties went
+    unguarded. `--check` fails on any of these before a run starts."""
+    import glob
+    import os
+    import re
+    classes = set()
+    for f in glob.glob("app/src/test/java/**/*.kt", recursive=True):
+        src = open(f, encoding="utf-8").read()
+        pkg = re.search(r"^package (\S+)", src, re.M).group(1)
+        classes.update(pkg + "." + c for c in re.findall(r"^class (\w+)", src, re.M))
+    out = []
+    for mid, _, path, old, _, tests in MUTATIONS:
+        if not os.path.exists(path):
+            out.append(f"{mid}: {path} does not exist")
+            continue
+        n = open(path, encoding="utf-8").read().count(old)
+        if n != 1:
+            out.append(f"{mid}: old text found {n}x in {path}")
+        out += [f"{mid}: no test class {t}" for t in tests if t not in classes]
+    return out
+
+
 def main():
     dup = [k for k, v in collections.Counter(m[0] for m in MUTATIONS).items() if v > 1]
     if dup:
         sys.exit(f"duplicate mutation ids {sorted(dup)}: rename before running (exe.md I20)")
+    if sys.argv[1:] == ["--check"]:
+        bad = stale()
+        print("\n".join(bad) or f"all {len(MUTATIONS)} mutations apply")
+        sys.exit(1 if bad else 0)
     # SIGTERM unwinds like Ctrl-C, so the finally below restores the file a mutant is in.
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     want = set(sys.argv[1:])

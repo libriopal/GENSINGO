@@ -28,6 +28,7 @@ object PowerPolicy {
 
     enum class Mode(val label: String) {
         VIEWING("Live"),
+        VIEWING_STILL("Live · still"),
         TRACKING_MOVING("Tracking"),
         TRACKING_STILL("Tracking · still"),
         LOW_BATTERY("Low battery"),
@@ -98,6 +99,21 @@ object PowerPolicy {
         }
         if (!tracking) {
             // Only reached with the screen on: with it off and tracking off, nothing runs.
+            if (!moving) {
+                // Looking at the map, standing still (J32). The request used to stay at a fix
+                // every 3 s for as long as the map was open. HIGH accuracy is kept: under canopy
+                // BALANCED falls back to cell towers, whose 500 m fixes would never show the
+                // owner walking off again, and the plan would stay here while they walked.
+                return Plan(
+                    mode = Mode.VIEWING_STILL,
+                    accuracy = Accuracy.HIGH,
+                    intervalMs = 15_000L,
+                    minIntervalMs = 10_000L,
+                    maxDelayMs = 0L,
+                    minDistanceM = 5f,
+                    allowAutoResearch = battery >= AUTO_RESEARCH_MIN_BATTERY_PCT,
+                )
+            }
             return Plan(
                 mode = Mode.VIEWING,
                 accuracy = Accuracy.HIGH,

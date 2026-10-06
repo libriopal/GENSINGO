@@ -79,6 +79,20 @@ class PowerPolicyTest {
         assertEquals(0L, p.maxDelayMs)
         assertTrue(p.intervalMs <= 5_000L)
     }
+
+    @Test
+    fun viewingStillSlowsTheRequestButKeepsGnss() {
+        // J32: the map open on a still phone used to ask for a fix every 3 s indefinitely.
+        val still = plan(tracking = false, speed = 0.0, still = PowerPolicy.STILL_AFTER_MS)
+        assertEquals(PowerPolicy.Mode.VIEWING_STILL, still.mode)
+        assertEquals(15_000L, still.intervalMs)
+        assertEquals("BALANCED under canopy is cell towers: walking off would never show", PowerPolicy.Accuracy.HIGH, still.accuracy)
+        assertEquals(0L, still.maxDelayMs)
+        // One millisecond short of the stillness window is still walking.
+        assertEquals(PowerPolicy.Mode.VIEWING, plan(tracking = false, speed = 0.0, still = PowerPolicy.STILL_AFTER_MS - 1).mode)
+        // Speed alone says moving, whatever the stillness clock says.
+        assertEquals(PowerPolicy.Mode.VIEWING, plan(tracking = false, speed = 1.0, still = PowerPolicy.STILL_AFTER_MS * 2).mode)
+    }
 }
 
 class TrackFilterTest {

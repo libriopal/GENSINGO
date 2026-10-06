@@ -104,6 +104,8 @@ class TrackService : Service() {
         }
         val app = application as GensingoApp
         if (accepted.isNotEmpty()) scope.launch { app.container.memory.storeTrack(accepted) }
+        // The travel memory remembers the walk too (J31): the same accepted fixes, as cells.
+        for (p in accepted) app.container.travel.record(TravelMemory.Fix(p.lat, p.lng, p.accuracyM, p.time))
         _state.value = State(true, sessionId, filter.distanceM, plan?.mode)
         replanIfNeeded()
         notifyProgress()
@@ -158,6 +160,7 @@ class TrackService : Service() {
         runCatching { client.removeLocationUpdates(callback) }
         runCatching { getSystemService(LocationManager::class.java)?.removeUpdates(platformListener) }
         runCatching { unregisterReceiver(screenReceiver) }
+        (application as GensingoApp).container.travel.flush()
         scope.cancel()
         _state.value = State(false, null, 0.0, null)
         super.onDestroy()

@@ -1,0 +1,17 @@
+== 6 (again). battery mode: 15 %, unplugged, discharging
+  AC powered: false   status: 3   level: 15 
+10:14:12 seen 'Terrain3D: relief:' (3)
+rebuilt 32 s after the level dropped (the app looks at the battery every 30 s)
+NOT seen 'battery mode'
+ 6300  6300 I Terrain3D: habitat: level 11 in 138624 ms
+ 6300  6300 I Terrain3D: relief: level 11 in 18765 ms
+ 6300  6300 I Terrain3D: habitat: level 11 in 91385 ms
+text="GPS ±N m"
+text="Battery saver: lighter 3D (15 %)"
+text="HD 3D · 62.2 m elevation · 47.8 × 47.8 km · 10695 km of creeks &amp; drains"
+10:26:05 shot M.1-device-06-battery-mode.png
+== back to normal: plugged in, 80 %
+10:26:47 seen 'Terrain3D: relief:' (4)
+text="GPS ±N m"
+text="Relief · 62.2 m elevation · 47.8 × 47.8 km · colouring the habitat… · map not cached here (Save 10 miles to have it offline)"
+done

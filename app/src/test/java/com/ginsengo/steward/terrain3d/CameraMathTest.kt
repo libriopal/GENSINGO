@@ -14,7 +14,7 @@ import kotlin.math.hypot
  * Acceptance tests for WP-B (docs/blueprints/one-map.md): the shared camera and 3D panning.
  *
  * THE WITNESS is [MapCamera.project], which existed before this work package and is itself
- * checked against MapLibre's own projection on the device ([AlignmentCheck]). Every "where is
+ * was checked against MapLibre's own projection on the device until M.1 (`AlignmentCheck`). Every "where is
  * the ground under the finger" question is answered here by solving `project(p, h) = finger`
  * with Newton's method, never by calling [MapCamera.unproject] or [CameraMath]: a reference
  * built from the code under test agrees with it precisely when it is wrong.
@@ -285,10 +285,10 @@ class CameraMathTest {
         }
     }
 
-    // ------------------------------------------------------------------ 6. to3d / to2d
+    // ------------------------------------------------------------------ 6. to3d (the one map's range)
 
     @Test
-    fun switchingViewsKeepsCentreAndBearingAndClampsZoomAndPitch() {
+    fun bringingACameraIntoRangeKeepsCentreAndBearingAndClampsZoomAndPitch() {
         val flat = CameraState(35.5612345678, -83.0012345678, 9.25, 213.7, 20.0)
         val a = CameraMath.to3d(flat, minZoom = 12.0, maxZoom = 17.0)
         assertEquals(flat.lat, a.lat, 0.0); assertEquals(flat.lng, a.lng, 0.0)
@@ -302,15 +302,6 @@ class CameraMathTest {
         assertEquals("a pitch above 45 is kept", 58.0, b.pitch, 0.0)
         assertEquals("an in-range zoom is kept", 14.4, CameraMath.to3d(flat.copy(zoom = 14.4), 12.0, 17.0).zoom, 0.0)
 
-        val tilted = CameraState(35.5698765432, -82.9987654321, 15.75, 301.25, 72.0)
-        val c = CameraMath.to2d(tilted)
-        assertEquals(tilted.lat, c.lat, 0.0); assertEquals(tilted.lng, c.lng, 0.0)
-        assertEquals(tilted.bearing, c.bearing, 0.0)
-        assertEquals("pitch capped at 60 for the 2D map", 60.0, c.pitch, 0.0)
-        assertEquals("an in-range zoom is kept", 15.75, c.zoom, 0.0)
-        assertEquals("a pitch under 60 is kept", 50.0, CameraMath.to2d(tilted.copy(pitch = 50.0)).pitch, 0.0)
-        assertEquals("zoom clamped to MapLibre's maximum", 25.5, CameraMath.to2d(tilted.copy(zoom = 30.0)).zoom, 0.0)
-        assertEquals("zoom clamped to MapLibre's minimum", 0.0, CameraMath.to2d(tilted.copy(zoom = -2.0)).zoom, 0.0)
     }
 
     private companion object {

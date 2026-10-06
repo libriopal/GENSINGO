@@ -1,0 +1,8 @@
+== 1. upgrade over the B.1 build
+schema before: 5
+track points before: 0
+cells they should become: 0
+Success
+== 2. opens in 3D
+schema after open: 6
+cells after the upgrade (before new fixes are flushed): 0

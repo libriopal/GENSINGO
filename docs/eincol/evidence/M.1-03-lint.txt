@@ -1,0 +1,10 @@
+# M.1 lint on the final tree: ./gradlew :app:lint (2026-10-06); run 1 found UseKtx in AppContainer.kt at 6 against a baseline of 5 (the new battery setting): all six writes moved to core-ktx's edit { }, run 2 below
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 42s
+29 actionable tasks: 11 executed, 18 up-to-date
+EXIT 0
+severity counts: {'Warning': 54}
+per (check, file) above the bootstrap baseline (BOOT-lint-baseline.tsv: severity, check, file, line, message):
+  none
+total now 54 baseline total 81

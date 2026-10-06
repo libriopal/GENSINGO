@@ -19,14 +19,15 @@ data class CameraState(
 )
 
 /**
- * The one camera (exe.md A1). Neither view stores a camera of its own: the 2D map and the 3D
- * view are mirrors of this state.
+ * The one camera (exe.md A1). The 3D view stores no camera of its own: it mirrors this state.
+ * (Until M.1 the 2D map mirrored it too; the rule below was written for two views and still holds
+ * for one.)
  *
  * THE EPOCH RULE, which is what stops two mirrors fighting:
  *  - [report]: the view under the user's finger says where it now looks. The state follows; the
  *    epoch does not change, so no view is told to move.
- *  - [move]: the app moves the camera (the first fix, recentre, "Show on map", the 2D/3D switch,
- *    the 3D fit or compass reset). The epoch changes, and every view applies it exactly once
+ *  - [move]: the app moves the camera (the first fix, recentre, "Show on map", the 3D fit or
+ *    compass reset). The epoch changes, and every view applies it exactly once
  *    ([Follower]).
  *
  * The rejected alternatives: re-applying every report makes a view chase its own gesture; letting

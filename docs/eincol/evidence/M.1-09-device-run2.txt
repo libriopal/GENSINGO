@@ -1,0 +1,57 @@
+== 2. opens in 3D
+schema after open: 6
+cells after the upgrade (before new fixes are flushed): 2
+09:40:14 tapped 'Centre on me'
+09:40:27 seen 'Terrain3D: relief:' (1)
+09:47:01 seen 'Terrain3D: habitat:' (1)
+09:47:14 seen 'Terrain3D: ready:' (1)
+ 6300  6300 I Terrain3D: relief: level 15 in 88067 ms
+ 6300  6300 I Terrain3D: ready: level 15 (3.0 km) at pitch 50 · depth 24 bits · holes (no elevation) · memory 37.8/38.0 MB (pinned 25.5) · dem 12.3 · scene 16.5 · textures 9.0 · evicted dem 14
+ 6300  6300 I Terrain3D: habitat: level 15 in 470710 ms
+wall clock from launch: 536 s
+text="GPS ±N m"
+text="HD 3D · 3.9 m elevation · 3.0 × 3.0 km · 35 km of creeks &amp; drains · 1 tile(s) without elevation, left as holes · map not cached here (Save 10 miles to have it offline)"
+09:48:17 shot M.1-device-01-opens-in-3d.png
+flat-map log lines: 0
+== 3. walk: the travel memory
+09:49:49 walked 30 steps of 10 m every 3 s
+09:50:49 walked 20 steps of 10 m every 3 s
+cells now: 56
+09:51:54 shot M.1-device-02-travel-memory.png
+== 4. Track and the way back
+09:52:29 tapped 'Track'
+09:53:54 walked 25 steps of 10 m every 3 s
+text="GPS ±N m"
+text="● REC 0.20 km"
+text="Back to start: 199 m S"
+text="HD 3D · 3.9 m elevation · 3.0 × 3.0 km · 35 km of creeks &amp; drains · 1 tile(s) without elevation, left as holes · map not cached here (Save 10 miles to have it offline)"
+09:54:50 shot M.1-device-03-way-back.png
+09:55:21 tapped 'Stop'
+== 5. Layers; only ground I haven't walked
+09:55:58 tapped 'Layers'
+09:56:36 shot M.1-device-04-layers-sheet.png
+09:57:08 tapped 'Only show ground I haven't walked'
+09:57:55 shot M.1-device-05-unwalked-only.png
+09:58:25 tapped 'Layers'
+09:59:03 tapped 'Only show ground I haven't walked'
+== 6. battery mode
+NOT seen 'Terrain3D: relief:'
+NOT seen 'battery mode'
+ 6300  6300 I Terrain3D: relief: level 15 in 88067 ms
+ 6300  6300 I Terrain3D: ready: level 15 (3.0 km) at pitch 50 · depth 24 bits · holes (no elevation) · memory 37.8/38.0 MB (pinned 25.5) · dem 12.3 · scene 16.5 · textures 9.0 · evicted dem 14
+ 6300  6300 I Terrain3D: habitat: level 15 in 470710 ms
+text="GPS ±N m"
+text="HD 3D · 3.9 m elevation · 3.0 × 3.0 km · 35 km of creeks &amp; drains · 1 tile(s) without elevation, left as holes · map not cached here (Save 10 miles to have it offline)"
+10:09:20 shot M.1-device-06-battery-mode.png
+== 7. pinch out: a coarser square
+pinch -240 sent
+pinch -200 sent
+10:10:46 seen 'Terrain3D: relief:' (2)
+10:12:38 seen 'Terrain3D: habitat:' (2)
+ 6300  6300 I Terrain3D: habitat: level 15 in 470710 ms
+ 6300  6300 I Terrain3D: relief: level 11 in 26407 ms
+ 6300  6300 I Terrain3D: habitat: level 11 in 138624 ms
+10:13:27 shot M.1-device-07-coarser-square.png
+lines with a z/x/y shape: 0
+lines with a coordinate shape: 0
+done

@@ -1,10 +1,10 @@
 package com.ginsengo.steward.perf
 
 /**
- * One memory ceiling for every large cache the app holds, in both views (exe.md A13).
+ * One memory ceiling for every large cache the app holds (exe.md A13).
  *
- * Since A.2 the 2D map stays alive under the 3D view, so the two paths' memory coexists: decoded
- * elevation tiles (read by both), the 3D square, its baked textures (16 MB each at 2048²), the
+ * Written when the 2D map stayed alive under the 3D view (A.2; the flat map went in M.1). What it
+ * budgets: decoded elevation tiles (read by the 3D build and the radius scan), the 3D square, its baked textures (16 MB each at 2048²), the
  * map snapshot draped on it. Each used to keep its own rule (24 tiles; 2 textures; whatever was
  * on screen), and nothing listened to the system asking for memory back.
  *

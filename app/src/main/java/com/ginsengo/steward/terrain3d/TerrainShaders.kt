@@ -50,6 +50,8 @@ in float v_depth;
 in float v_wall;
 
 uniform sampler2D u_colour;
+uniform sampler2D u_memory;  // travel memory over the same square: R where you've been, G that grown by 15 m
+uniform vec2 u_memoryOn;     // (draw where you've been, grey out walked ground)
 uniform vec3 u_lightDir;     // normalised, pointing towards the light
 uniform vec3 u_hazeColour;   // the sky the far ground fades into
 uniform vec2 u_haze;         // (start, end) in eye depth
@@ -58,6 +60,14 @@ out vec4 fragColor;
 
 void main() {
     vec3 base = texture(u_colour, v_uv).rgb;
+    vec2 mem = texture(u_memory, v_uv).rg;
+    // J20: ground within 15 m of where the owner has been is greyed, so the habitat colour is left
+    // only on ground they have not walked.
+    float grey = dot(base, vec3(0.299, 0.587, 0.114));
+    base = mix(base, vec3(grey * 0.55), mem.g * u_memoryOn.y);
+    // J31: where you've been, a pale wash of the app's text colour (Gen.Text, #E6F4EC): a trodden
+    // trail. Not blue: the creeks are blue, and a walk along a hollow read as a creek (M.1 device run).
+    base = mix(base, vec3(0.902, 0.957, 0.925), mem.r * u_memoryOn.x * 0.5);
     // Relief is baked into the texture at elevation resolution; this only adds the
     // perspective form of the mesh, gently, so it does not double the shading.
     float lambert = max(dot(normalize(v_normal), normalize(u_lightDir)), 0.0);

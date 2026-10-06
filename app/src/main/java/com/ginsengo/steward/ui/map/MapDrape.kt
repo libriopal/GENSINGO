@@ -36,10 +36,10 @@ import kotlin.math.roundToInt
 private const val TAG = "GensingoDrape"
 
 /**
- * The basemap for the 3D view: MapLibre's own render of the 2D map's style over the 3D
+ * The basemap for the 3D view: MapLibre's own render of the dark map style over the 3D
  * square, which [com.ginsengo.steward.terrain3d.TerrainTextures] bakes under the app's layers
  * (one-map blueprint, WP-A). The map library draws it, so roads, names and the offline cache
- * are the 2D map's, not a second renderer's.
+ * are MapLibre's, not a second renderer's. MapLibre is headless here: no map view is on screen.
  *
  * WHY THE PIXEL RATIO AND THE ZOOM CAP (audit of claim 2). The snapshot only works offline if
  * it asks for what "Save this area" stored: an offline region at zoom 8-14 at the SCREEN's

@@ -29,8 +29,6 @@ import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Terrain
-import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -68,25 +66,17 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ginsengo.steward.data.db.Suggestion
+import com.ginsengo.steward.field.BatteryMode
 import com.ginsengo.steward.field.FixAverager
+import com.ginsengo.steward.field.WayBack
 import com.ginsengo.steward.learn.FindLearner
 import com.ginsengo.steward.prospect.Prospects
 import com.ginsengo.steward.research.Provider
 import com.ginsengo.steward.research.ResearchPrompt
 import com.ginsengo.steward.research.SuggestionAssembler
 import com.ginsengo.steward.terrain.GinsengSuitability
-import com.ginsengo.steward.ui.map.Basemap
 import com.ginsengo.steward.ui.map.DARK_STYLE
-import com.ginsengo.steward.ui.map.FieldMap
 import com.ginsengo.steward.ui.map.SceneLayer
-import com.ginsengo.steward.terrain3d.Handoff
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.ui.zIndex
-import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import kotlin.math.roundToInt
 
 private enum class Sheet { NONE, SUGGEST, FIND, LAYERS }
@@ -100,53 +90,15 @@ fun MainScreen(vm: FieldViewModel) {
     val suggestions by vm.suggestions.collectAsState()
     val run by vm.latestRun.collectAsState()
     val layers by vm.layers.collectAsState()
-    val view3d by vm.view3d.collectAsState()
     val busy by vm.busy.collectAsState()
+    val lighter by vm.batteryMode.collectAsState()
+    val battery by vm.battery.collectAsState()
     val verdict by vm.verdict.collectAsState()
     val toast by vm.toast.collectAsState()
     val permission by vm.permission.collectAsState()
 
     var sheet by remember { mutableStateOf(Sheet.NONE) }
-    var mapStatus by remember { mutableStateOf("") }
-    var meshStatus by remember { mutableStateOf("") }
-    LaunchedEffect(view3d) { if (!view3d) meshStatus = "" }
-    val habitatStatus = if (view3d && meshStatus.isNotBlank()) meshStatus else mapStatus
-
-    // The cross-fade between the map and the 3D view (exe.md A8, Handoff.blend): 0 is the map;
-    // Handoff.COVERED, the 3D view covering it with its relief at the measured hand-off;
-    // Handoff.RISEN, full relief and the gestures on the 3D view. The fade starts only once the
-    // 3D view is built, fitted and drawn: until then the map stays, and stays usable.
-    // Saved across a rotation (A16): a risen 3D view comes back risen, but only with its square still
-    // held by the ViewModel; without one it warms under the map again rather than show nothing.
-    var savedReveal by rememberSaveable { mutableFloatStateOf(0f) }
-    val reveal = remember {
-        Animatable(if (view3d && savedReveal >= Handoff.RISEN && vm.meshSession.scene != null) Handoff.RISEN else 0f)
-    }
-    SideEffect { savedReveal = reveal.value }
-    var meshReady by remember { mutableStateOf(false) }
-    LaunchedEffect(view3d, meshReady) {
-        if (view3d) {
-            if (meshReady || reveal.value > 0f) reveal.animateTo(Handoff.RISEN, tween(REVEAL_MS, easing = LinearEasing))
-        } else if (reveal.value > 0f) {
-            if (reveal.value > Handoff.COVERED) {
-                // Sink to the hand-off relief, easing the pitch into the flat map's range on the way
-                // (Handoff.sinkPitch, A15): the landing below then moves nothing.
-                val pitch0 = vm.camera.camera.pitch
-                val from = reveal.value
-                reveal.animateTo(Handoff.COVERED, tween(SINK_MS, easing = LinearEasing)) {
-                    val p = Handoff.sinkPitch(pitch0, from, value)
-                    if (p != vm.camera.camera.pitch) vm.camera.report(vm.camera.camera.copy(pitch = p))
-                }
-            }
-            vm.landFlat()
-            reveal.animateTo(0f, tween(FADE_OUT_MS, easing = LinearEasing))
-        }
-        // Back on the map: the square and its memory go (A13, A16).
-        if (!view3d && reveal.value == 0f) vm.meshSession.end()
-    }
-    val revealed = reveal.value
-    // The 3D view drapes the 2D map's style only when that style actually loaded here.
-    var darkStyleLoaded by remember { mutableStateOf(false) }
+    var habitatStatus by remember { mutableStateOf("") }
     val weights = verdict?.active ?: GinsengSuitability.PRIOR_WEIGHTS
 
     LaunchedEffect(toast) {
@@ -154,35 +106,23 @@ fun MainScreen(vm: FieldViewModel) {
     }
 
     Box(Modifier.fillMaxSize().background(Gen.Bg)) {
-        // One stack: the map always; the 3D view over it while it shows, or under it (hidden,
-        // building) until it is ready to fade in. Both are TextureViews, so they stack and fade.
-        Box(Modifier.fillMaxSize()) {
-            FieldMap(
-                me = me, track = track, finds = finds, suggestions = suggestions,
-                radiusCenter = run?.let { it.centerLat to it.centerLng },
-                layers = layers, weights = weights, demStore = vm.container.demTiles,
-                camera = vm.camera,
-                onHabitatStatus = { mapStatus = it },
-                modifier = Modifier.fillMaxSize(),
-                onBasemap = { darkStyleLoaded = it },
-                active = revealed < Handoff.RISEN,
-            )
-            if (view3d || revealed > 0f) {
-                Terrain3DView(
-                    me = me, camera = vm.camera,
-                    track = track, finds = finds, suggestions = suggestions,
-                    layers = layers, weights = weights, demStore = vm.container.demTiles,
-                    styleUri = if (darkStyleLoaded && layers.basemap == Basemap.DARK) DARK_STYLE else null,
-                    onStatus = { meshStatus = it },
-                    modifier = Modifier.fillMaxSize().zIndex(if (revealed > 0f) 1f else -1f),
-                    radiusCenter = run?.let { it.centerLat to it.centerLng },
-                    reveal = revealed,
-                    onReady = { meshReady = it },
-                    session = vm.meshSession,
-                    budget = vm.container.memoryBudget,
-                )
-            }
-        }
+        // The one map (owner directive, wave M.1): the terrain in 3D, nothing under it.
+        Terrain3DView(
+            me = me, camera = vm.camera,
+            track = track, finds = finds, suggestions = suggestions,
+            layers = layers, weights = weights, demStore = vm.container.demTiles,
+            // The dark map on the ground, unless switched off or in the battery mode (J24).
+            styleUri = if (layers.drape && !lighter) DARK_STYLE else null,
+            onStatus = { habitatStatus = it },
+            modifier = Modifier.fillMaxSize(),
+            radiusCenter = run?.let { it.centerLat to it.centerLng },
+            session = vm.meshSession,
+            budget = vm.container.memoryBudget,
+            travel = vm.container.travelSource,
+            lighter = lighter,
+            // No square at the fallback start position, far from the owner: wait for the first fix.
+            waitForFix = permission && me == null,
+        )
 
         // ---- status line
         Column(Modifier.statusBarsPadding().padding(10.dp).align(Alignment.TopStart)) {
@@ -193,6 +133,17 @@ fun MainScreen(vm: FieldViewModel) {
                     Chip("● REC %.2f km".format(tracking.distanceM / 1000), Gen.Danger)
                 }
                 Chip(if (vm.container.isOnline()) "Online" else "Offline", Gen.TextDim)
+            }
+            // J21: the way back to where this track began, while it records.
+            val back = me?.let { WayBack.toStart(track, tracking.sessionId, it.lat, it.lng) }
+            if (tracking.recording && back != null) {
+                Spacer(Modifier.height(4.dp))
+                Chip("Back to start: " + WayBack.describe(back), Gen.Amber)
+            }
+            // J24: the battery mode says so, and why.
+            if (lighter) {
+                Spacer(Modifier.height(4.dp))
+                Chip("Battery saver: lighter 3D" + (battery.pct?.let { " ($it %)" } ?: ""), Gen.Amber)
             }
             val line = busy ?: toast ?: habitatStatus.takeIf { it.isNotBlank() }
             if (line != null) {
@@ -206,13 +157,6 @@ fun MainScreen(vm: FieldViewModel) {
             Modifier.align(Alignment.CenterEnd).padding(end = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // One switch between the two projections of the same map: the camera stays one
-            // camera (FieldViewModel.setView3d applies to3d/to2d to it).
-            SmallFloatingActionButton(
-                onClick = { vm.setView3d(!view3d) },
-                containerColor = Gen.SurfaceHigh, contentColor = Gen.Text,
-                modifier = Modifier.semantics { contentDescription = if (view3d) "Show flat map" else "Show in 3D" },
-            ) { Icon(if (view3d) Icons.Filled.Map else Icons.Filled.Terrain, null) }
             SmallFloatingActionButton(
                 onClick = { vm.recenter() },
                 containerColor = Gen.SurfaceHigh, contentColor = Gen.Text,
@@ -415,23 +359,29 @@ private fun LayersSheet(vm: FieldViewModel, verdict: FindLearner.Verdict?, onClo
     ModalBottomSheet(onDismissRequest = onClose, containerColor = Gen.Surface) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState())) {
             Text("Layers", style = MaterialTheme.typography.titleMedium)
-            // One row per switch in the scene description: each means the same in 2D and 3D.
+            // One row per switch in the scene description (SceneLayer.SHEET).
             for (layer in SceneLayer.SHEET) {
                 val label = SceneLayer.label(layer) + if (layer == SceneLayer.HABITAT)
                     " (${if (verdict?.adopted == true) "learned weights" else "published weights"})" else ""
                 Toggle(label, layer.shown(layers)) { vm.setLayers(layer.set!!(layers, it)) }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Basemap.entries.forEach { b ->
-                    FilterChip(selected = layers.basemap == b, onClick = { vm.setLayers(layers.copy(basemap = b)) }, label = { Text(b.label) })
-                }
-            }
+            Toggle("Roads & names on the ground (dark map)", layers.drape) { vm.setLayers(layers.copy(drape = it)) }
             Text("Heat opacity", color = Gen.TextDim, fontSize = 12.sp)
             Slider(layers.heatmapOpacity, { vm.setLayers(layers.copy(heatmapOpacity = it)) }, valueRange = 0.2f..1f)
             Text("Green: terrain model (research-grade estimate; cannot see soil calcium or canopy). " +
                     "Blue lines: creeks and drains traced from elevation, not surveyed; small ones may be dry. " +
-                    "Blue glow: where you've recorded a track. Amber: your finds.",
+                    "Pale wash: where you've been, from every fix this phone received while the map was open " +
+                    "or Track was recording (kept on this phone only). Amber: your finds.",
                 color = Gen.TextDim, fontSize = 11.sp)
+
+            Spacer(Modifier.height(14.dp))
+            Text("Battery", style = MaterialTheme.typography.titleSmall)
+            val saverPct by vm.saverPct.collectAsState()
+            Text("Lighter 3D below $saverPct % (unplugged), or when the phone's battery saver is on: " +
+                    "half the mesh, a smaller texture, no map on the ground, 20 frames a second.",
+                color = Gen.TextDim, fontSize = 12.sp)
+            Slider(saverPct.toFloat(), { vm.setSaverPct(it.roundToInt()) },
+                valueRange = BatteryMode.THRESHOLD_RANGE.first.toFloat()..BatteryMode.THRESHOLD_RANGE.last.toFloat(), steps = 7)
 
             Spacer(Modifier.height(14.dp))
             Text("Learning from your finds", style = MaterialTheme.typography.titleSmall)
@@ -513,7 +463,3 @@ private fun Toggle(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
     }
 }
 
-/** The cross-fade's timing: fade in and rise (0 → RISEN), sink to the hand-off, fade out. */
-private const val REVEAL_MS = 1_200
-private const val SINK_MS = 600
-private const val FADE_OUT_MS = 600

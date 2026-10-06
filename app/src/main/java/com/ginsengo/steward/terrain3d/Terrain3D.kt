@@ -52,10 +52,10 @@ object Terrain3D {
         return doubleArrayOf(north - eLat, west + eLng, south + eLat, east - eLng)
     }
 
-    /** Vertices per edge: one every two elevation cells, capped. */
-    fun gridFor(m: DemTileStore.Mosaic): Int {
+    /** Vertices per edge: one every two elevation cells, capped ([MAX_GRID]; lower in the battery mode, J24). */
+    fun gridFor(m: DemTileStore.Mosaic, cap: Int = MAX_GRID): Int {
         val interior = max(m.grid.w, m.grid.h) - 2 * m.haloPx
-        return min(MAX_GRID, interior / 2 + 1).coerceAtLeast(33)
+        return min(cap, interior / 2 + 1).coerceAtLeast(33)
     }
 
     /** Camera zoom at which the area's width fills [fraction] of the viewport. */
@@ -69,8 +69,15 @@ object Terrain3D {
         val ground: TerrainTextures.Ground,
         val mesh: TerrainMesh.Mesh,
         val creekKm: Double,
+        val textureSize: Int = TerrainTextures.sizeFor(mosaic),
+        /**
+         * Relief only (J30): the mesh and its elevation colour, before the habitat scores and the
+         * creeks are computed. Shown at once, then replaced by the full scene on the same mesh.
+         */
+        val quick: Boolean = false,
     ) {
-        val textureSize = TerrainTextures.sizeFor(mosaic)
+        /** The square's DEM zoom: its level (SquareLevel). */
+        val level: Int get() = mosaic.zoom
         private val iw = mosaic.grid.w - 2 * mosaic.haloPx
         private val ih = mosaic.grid.h - 2 * mosaic.haloPx
         val widthM = iw * mosaic.grid.cellSizeM
@@ -175,7 +182,9 @@ object Terrain3D {
         @Synchronized fun texturesHeld(): Int = baked.size
 
         fun describe(): String =
-            "HD 3D · %.1f m elevation · %.1f × %.1f km · %.0f km of creeks & drains"
+            if (quick) "Relief · %.1f m elevation · %.1f × %.1f km · colouring the habitat…"
+                .format(mosaic.grid.cellSizeM, widthM / 1000, heightM / 1000)
+            else "HD 3D · %.1f m elevation · %.1f × %.1f km · %.0f km of creeks & drains"
                 .format(mosaic.grid.cellSizeM, widthM / 1000, heightM / 1000, creekKm)
     }
 
@@ -188,17 +197,43 @@ object Terrain3D {
         mosaic: DemTileStore.Mosaic,
         weights: DoubleArray = GinsengSuitability.PRIOR_WEIGHTS,
         exaggeration: Float = EXAGGERATION,
+        /** Position-on-slope radius: the level's own (SquareLevel.tpiRadiusM), 300 m for the 3 km square. */
+        tpiRadiusM: Double = TPI_RADIUS_M,
+        gridCap: Int = MAX_GRID,
+        textureCap: Int = TerrainTextures.MAX_SIZE,
+        /** The quick scene's mesh, reused: the same ground, so the camera and its anchor stay put. */
+        mesh: TerrainMesh.Mesh? = null,
     ): Scene {
         val interior = max(mosaic.grid.w, mosaic.grid.h) - 2 * mosaic.haloPx
-        val scores = SuitabilityRasterizer.scoreGrid(mosaic, interior, TPI_RADIUS_M, weights)
+        val scores = SuitabilityRasterizer.scoreGrid(mosaic, interior, tpiRadiusM, weights)
         val hydro = Hydrology.of(mosaic.grid)
         val lines = hydro.lines(Hydrology.Kind.DRAINAGE)
         val ground = TerrainTextures.Ground(mosaic, scores, interior, lines, exaggeration.toDouble())
+        return Scene(mosaic, ground, mesh ?: meshFor(mosaic, exaggeration, gridCap), creekKm = interiorLengthM(mosaic, lines) / 1000,
+            textureSize = TerrainTextures.sizeFor(mosaic, textureCap))
+    }
+
+    /**
+     * Relief first (J30): the mesh and a texture of relief, hillshade and contours, without the
+     * habitat scores and the creeks, which are most of a build's time. What the one map shows a
+     * second or two after a fix, while [build] colours the same mesh.
+     */
+    fun buildQuick(
+        mosaic: DemTileStore.Mosaic,
+        exaggeration: Float = EXAGGERATION,
+        gridCap: Int = MAX_GRID,
+        textureCap: Int = TerrainTextures.MAX_SIZE,
+    ): Scene = Scene(
+        mosaic, TerrainTextures.Ground(mosaic, null, 0, emptyList(), exaggeration.toDouble()),
+        meshFor(mosaic, exaggeration, gridCap), creekKm = 0.0,
+        textureSize = TerrainTextures.sizeFor(mosaic, textureCap), quick = true,
+    )
+
+    private fun meshFor(mosaic: DemTileStore.Mosaic, exaggeration: Float, gridCap: Int): TerrainMesh.Mesh {
         val centreLat = (mosaic.northLat + mosaic.southLat) / 2
         val centreLng = (mosaic.westLon + mosaic.eastLon) / 2
         val cam = MapCamera(centreLat, centreLng, BUILD_ZOOM, 0.0, 0.0, 1000, 1000)
-        val mesh = TerrainMesh.build(mosaic, cam, gridFor(mosaic), exaggeration)
-        return Scene(mosaic, ground, mesh, creekKm = interiorLengthM(mosaic, lines) / 1000)
+        return TerrainMesh.build(mosaic, cam, gridFor(mosaic, gridCap), exaggeration)
     }
 
     /**

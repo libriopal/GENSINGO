@@ -18,7 +18,7 @@ import kotlin.math.sqrt
  * suitability computation, every ~60 m, with a ramp whose low end was near-black and an
  * alpha that faded weak ground to the black clear colour. The user reported the heatmap did
  * not work in 3D. Here the habitat colour is [SuitabilityRasterizer.colourFor] applied to
- * [SuitabilityRasterizer.scoreGrid]: the exact function and ramp the 2D heatmap draws, at
+ * [SuitabilityRasterizer.scoreGrid]: the exact function and ramp the radius scan ranks with, at
  * the elevation data's own resolution, composited over a neutral relief so weak ground reads
  * as bare terrain instead of black.
  *
@@ -27,10 +27,10 @@ import kotlin.math.sqrt
  * maps use), contour lines, and channels traced by [Hydrology].
  *
  * WHY THE BASEMAP IS BAKED IN (one-map blueprint, WP-A). MapLibre 13.6.1 has no terrain API,
- * so the 3D view cannot ask the map to drape itself. A MapSnapshotter render of the 2D map's
- * own style for the same north-up Web Mercator square lines up with this texture texel for
- * texel, so it becomes the base the app's layers are drawn over, and the 3D view shows the
- * roads and names the 2D map shows. Labels lie flat on the ground and may stretch on steep
+ * so the 3D view cannot ask the map to drape itself. A MapSnapshotter render of the dark map
+ * style for the same north-up Web Mercator square lines up with this texture texel for
+ * texel, so it becomes the base the app's layers are drawn over, and the 3D view shows its
+ * roads and names. Labels lie flat on the ground and may stretch on steep
  * slopes: better than none.
  */
 object TerrainTextures {
@@ -38,8 +38,7 @@ object TerrainTextures {
     enum class Mode { HABITAT, ELEVATION, MAP }
 
     /**
-     * Which of the app's own layers are baked in; the Layers sheet drives these, so the 3D view
-     * shows what the 2D map shows. The defaults are what the bake always drew before the toggles
+     * Which of the app's own layers are baked in; the Layers sheet drives these. The defaults are what the bake always drew before the toggles
      * existed, so a caller that passes none gets the old picture exactly. [habitat] has no
      * effect in [Mode.ELEVATION], whose base is the elevation tint.
      */
@@ -47,9 +46,9 @@ object TerrainTextures {
         val habitat: Boolean = true,
         val water: Boolean = true,
         val contours: Boolean = true,
-        /** The baked relief shading: the 2D map's hillshade layer, under the same switch. */
+        /** The baked relief shading, under the sheet's Hillshade switch. */
         val hillshade: Boolean = true,
-        /** The habitat colour's opacity: the sheet's "Heat opacity", as the 2D raster's opacity. */
+        /** The habitat colour's opacity: the sheet's "Heat opacity". */
         val habitatOpacity: Float = 1f,
     )
 
@@ -72,9 +71,10 @@ object TerrainTextures {
     const val MAX_SIZE = 2048
     const val MIN_SCORE = 0.35
 
-    fun sizeFor(m: DemTileStore.Mosaic): Int {
+    /** Two texels per elevation cell, at most [cap] (MAX_SIZE; the battery mode's smaller cap, J24). */
+    fun sizeFor(m: DemTileStore.Mosaic, cap: Int = MAX_SIZE): Int {
         val interior = max(m.grid.w, m.grid.h) - 2 * m.haloPx
-        return min(MAX_SIZE, 2 * interior)
+        return min(cap, 2 * interior)
     }
 
     /** A contour interval giving ~25-40 lines across the relief, from a list a map reader knows. */
@@ -209,6 +209,10 @@ object TerrainTextures {
             val ys = DoubleArray(n) { ((line.cells[it] / g.w - halo) + 0.5) / ih * size - 0.5 }
             smooth(xs); smooth(ys)
             val style = WATER.getValue(line.kind)
+            // A line far narrower than a texel is not drawn (M.1): on the 48 km square a 2.5 m
+            // drain was painted 1.2 texels (~28 m) wide, 11 times too wide, and the drains alone
+            // covered the ground in blue (device run). The lengths reported are unchanged.
+            if (style.widthM / metresPerTexel < MIN_WATER_TEXELS) continue
             val half = max(0.6, style.widthM / metresPerTexel / 2)
             for (k in 1 until n) {
                 // A channel across the store's flat stand-in is invented (B4): not drawn.
@@ -253,6 +257,9 @@ object TerrainTextures {
     // ------------------------------------------------------------------ colour helpers
 
     class WaterStyle(val rgb: Int, val alpha: Double, val widthM: Double)
+
+    /** The narrowest water line drawn, as a share of a texel ([drawChannels]). */
+    const val MIN_WATER_TEXELS = 0.25
 
     val WATER = mapOf(
         Hydrology.Kind.DRAINAGE to WaterStyle(0x7CCBF5, 0.55, 2.5),
