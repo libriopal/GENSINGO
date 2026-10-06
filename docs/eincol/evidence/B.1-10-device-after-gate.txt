@@ -1,0 +1,34 @@
+# B.1 device gate, AFTER run 1 (the B.1 build at 6866b6f, x86_64), aosp AVD, 2026-10-06
+# Found here: the north and west walls missing (halo tiles uncached there); fixed in 27fe090, re-run as after2
+
+== after: install
+Success
+that tile was not cached
+that tile was not cached
+that tile was not cached
+cached DEM tiles now: 172
+04:06:09 tapped 'Centre on me'
+04:07:31 shot B.1-device-after-01-2d-map.png
+== into 3D
+04:09:06 tapped 'Show in 3D'
+04:21:56 ready (1)
+10-06 04:21:52.937 11088 11088 I Terrain3D: ready: hand-off relief 0.056 at pitch 50 (tolerance 5.3 px) · depth 24 bits · holes (no elevation) · memory 37.8/38.0 MB (pinned 30.0) · dem 7.8 · scene 21.0 · textures 9.0 · evicted dem 49
+text="HD 3D · 3.9 m elevation · 3.0 × 3.0 km · 35 km of creeks &amp; drains · 1 tile(s) without elevation, left as holes"
+04:23:54 shot B.1-device-after-02-3d-bearing-0.png
+rotate 90 sent
+04:25:12 shot B.1-device-after-03-3d-turn-90.png
+rotate 90 sent
+04:26:29 shot B.1-device-after-04-3d-turn-180.png
+rotate 90 sent
+04:27:49 shot B.1-device-after-05-3d-turn-270.png
+rotate 90 sent
+== 80° pitch (the 3D view's limit)
+tilt -500 sent
+tilt -500 sent
+04:29:24 shot B.1-device-after-06-3d-pitch-80.png
+10-06 04:21:52.937 11088 11088 I Terrain3D: ready: hand-off relief 0.056 at pitch 50 (tolerance 5.3 px) · depth 24 bits · holes (no elevation) · memory 37.8/38.0 MB (pinned 30.0) · dem 7.8 · scene 21.0 · textures 9.0 · evicted dem 49
+== back to the map
+04:30:27 tapped 'Show flat map'
+04:32:17 shot B.1-device-after-07-back-on-map.png
+lines with a z/x/y shape: 0
+done

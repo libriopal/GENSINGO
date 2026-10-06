@@ -27,3 +27,12 @@
 | X11 | a tile with no real pixel counts as loaded | KILLED |
 
 killed 11 / 11
+
+# after the device run's finding (27fe090): python3 tools/mutate.py X6 X12  (X6 retargeted to the new line; X12 new)
+
+| ID | Mutation | Result |
+|---|---|---|
+| X6 | the mesh draws missing elevation as ground | KILLED |
+| X12 | an edge vertex judged on the halo (a missing halo tile takes the wall) | KILLED |
+
+killed 2 / 2

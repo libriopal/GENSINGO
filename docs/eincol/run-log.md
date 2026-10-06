@@ -9,6 +9,7 @@ to it and never paraphrases a result it does not link.
 | A.1 | A1, A2, A3, A4 · I2, I3 (=Q1), I4 (=Q2), I17 · drafted J10–J14 · A5, A6 re-queued to A.2 | `eincol/A.1` (+ fast-forward of the session branch) | see `docs/eincol/waves/A.1.md` | build **exit 0** · lint **exit 0** (0 errors, 78 warnings; I17 gone) · test **exit 0**, 355 per variant | Q1, Q2 (after the fix), Q3, Q4, Q5: **5/5 killed** | not required (non-visual wave, §13); A3's device check joins A.2 | `A.1-01…09`, `A.1-05-structural.txt` |
 | A.2 | A7, A8, A9, A10 (+ A11 at 50°; its 60° shot blocked(device)) · A5+A6, A12 blocked(owner) · registered I18–I21 · drafted J15–J19 | `eincol/A.2` (+ fast-forward of the session branch) | see `docs/eincol/waves/A.2.md` | build **exit 0** · lint **exit 0** (0 errors, 80 warnings, none above baseline; copied file exempt by name) · test **exit 0**, 367 per variant | S1–S10: **10/10 killed** (S4 after its oracle was retargeted) | aosp AVD, API 34 x86_64, swiftshader: order check, warming (12 min of usable map), ready log ×3, **the fade in recorded** (flat terrain aligned with the map mid-fade), risen, return; tilt injection failed | `A.2-01…08`, `A.2-device-01…15`, `A.2-device-warming.mp4`, `A.2-device-fade-in.mp4`, `A.2-device-fade-out.mp4` |
 | A.3 | A13, A15, A17, A11 (from A.2) · I18, I19, I21 · A18 partial · A16 blocked(device) · A14 blocked(owner) · registered I22 · drafted J20–J24 | `eincol/A.3` (+ fast-forward of the session branch) | see `docs/eincol/waves/A.3.md` | build **exit 0** · lint **exit 0** (0 errors, 79 warnings, none above baseline) · test **exit 0**, 388 per variant | U1–U10: **10/10 killed** (U2 after its tests were moved into the named class) | aosp AVD, API 34 x86_64, three runs: the dot back (I21), no tile ids (I19), 3D at a logged 60° with an occluded marker (A11, A18), budget counters and trim (A13); found and fixed an out-of-memory crash and a rotation kill; the emulator cannot rotate this app | `A.3-01…12`, `A.3-device-01…04`, `A.3-device-run1-04`, `-05` |
+| B.1 | B1, B2, B4, B5, B6, B7 · I10, I11 · I20 partial · B3 struck · registered I23 · drafted J25–J29 · recorded the owner's approval of J20, J21, J23, J24 | `eincol/B.1` (+ fast-forward of the session branch) | see `docs/eincol/waves/B.1.md` | build **exit 0** · lint **exit 0** (0 errors, 79 warnings, none above baseline) · test **exit 0**, 403 per variant | X1–X12: **12/12 killed** (X6 retargeted, X12 added after the device run) | aosp AVD, API 34 x86_64, a cached tile removed: before (A.3 build) the flat slab with an invented creek and two walls culled; after, the hole, the hatch, the legend rows, 80° clean; run 1 found the north and west walls dropped by a missing halo (fixed); run 2 (final code) all four walls drawn from every side | `B.1-02…05`, `B.1-07…11`, `B.1-device-before-02…05`, `B.1-device-after-01…07`, `B.1-device-after2-02…05` |
 
 ---
 
@@ -247,3 +248,39 @@ device: run 1  FinalizerWatchdogDaemon: MapRendererFactory$1.finalize() timed ou
 jvm:    way back from 75°: worst per-frame step 5.18 px, landing 0.0000 px
 mutants: U1 U2 U3 U4 U5 U6 U7 U8 U9 U10 -> killed 10 / 10
 ```
+
+## B.1 — 2026-10-06 · a mesh that can be believed
+
+Full record: `docs/eincol/waves/B.1.md`. In brief:
+
+- **The owner approved J20, J21, J23 and J24** (2026-10-06); they are wave J.2, the next cursor.
+- **The edge of the 3D model** (B1, B2): two of its four walls faced inward, so seen from the north
+  or the east the model had no near wall and the sky showed under its edge (seen on the device
+  before the fix). All four now face outward, held by an edge-use crack detector and a projection
+  check from eight bearings. B3 (stitched LOD) is struck: the view draws one uniform grid.
+- **Missing elevation** (B4, B5): a tile that could not be loaded used to be drawn as a flat slab,
+  painted as habitat, crossed by invented creeks, and could be ranked. It is now a hole in 3D and a
+  hatch on the 2D map, with a legend line saying so, and the ranking, the learner's background and
+  the creek search never use it.
+- **One slope** (B6): the 3D lighting now uses the habitat score's own Horn stencil.
+- **Depth** (B7): a near plane from the ground in view; a 16-bit depth buffer now resolves
+  0.11–1.70 m at the far ground instead of 13.5–17.5 m.
+- **What the device caught:** B4's first rule dropped the north and west walls when the halo tiles
+  there were not cached (fixed, with a test); the 2D raster takes 8 minutes on this emulator; the
+  host's memory cgroup killed the emulator when Gradle ran alongside it.
+- **Drafted this iteration (owner directive):** J25 no holes on the ridge; J26 light left in this
+  hollow; J27 the climb before you walk it; J28 what your own patches have in common; J29 buzz on
+  arrival.
+
+```
+device before: HD 3D · 3.9 m elevation · 3.0 × 3.0 km · 42 km of creeks & drains · 1 tile(s) missing, flattened
+device after:  HD 3D · 3.9 m elevation · 3.0 × 3.0 km · 35 km of creeks & drains · 1 tile(s) without elevation, left as holes
+device after:  Terrain3D: ready: hand-off relief 0.056 at pitch 50 (tolerance 5.3 px) · depth 24 bits · holes (no elevation) · memory 37.8/38.0 MB (pinned 30.0) · dem 7.8 · scene 21.0 · textures 9.0 · evicted dem 49
+device after:  7.8 m cells · 19/24 tiles · hatched: no elevation data · contours 20 m
+device:        habitat: rasterised 768x768 in 494172 ms (terrain analysis 205574 ms, scoring 280321 ms)
+device:        lines with a z/x/y shape in the app's log: 0 (every run)
+host:          Memory cgroup out of memory: Killed process 461 (qemu-system-x86)
+jvm:           16-bit depth step at the far ground, pitch 15-80: 0.11-1.70 m (terrain-aware) vs 13.5-17.5 m (fixed 48 px)
+mutants:       X1 … X12 -> killed 12 / 12
+```
+

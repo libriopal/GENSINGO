@@ -1,0 +1,22 @@
+# B.1 device gate, AFTER run 2 (the final B.1 build, 27fe090, x86_64), aosp AVD cold-booted again, bluetooth disabled, 2026-10-06
+# An earlier start of this gate (begun while the system services were down) kept running and tapped the same app
+# until it was stopped at 05:05; its lines are the ones from 04:55-04:57 below. The 3D build and every shot are this run's.
+
+== after2: install
+Success
+05:02:45 tapped 'Centre on me'
+== into 3D
+05:04:21 tapped 'Show in 3D'
+05:12:23 ready (1)
+10-06 05:12:08.896  3833  3833 I Terrain3D: ready: hand-off relief 0.056 at pitch 50 (tolerance 5.3 px) · depth 24 bits · holes (no elevation) · memory 37.8/38.0 MB (pinned 30.0) · dem 7.8 · scene 21.0 · textures 9.0 · evicted dem 49
+text="HD 3D · 3.9 m elevation · 3.0 × 3.0 km · 35 km of creeks &amp; drains · 1 tile(s) without elevation, left as holes"
+05:13:48 shot B.1-device-after2-02-3d-bearing-0.png
+rotate 90 sent
+05:14:42 shot B.1-device-after2-03-3d-turn-90.png
+rotate 90 sent
+05:15:35 shot B.1-device-after2-04-3d-turn-180.png
+rotate 90 sent
+05:16:27 shot B.1-device-after2-05-3d-turn-270.png
+rotate 90 sent
+lines with a z/x/y shape: 0
+done

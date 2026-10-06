@@ -1,0 +1,36 @@
+# B.1 device gate, BEFORE (the A.3 build, 8c6f5bf, x86_64) on the aosp AVD (API 34, swiftshader), 2026-10-06
+# scratchpad gateB1.sh <apk> before hole; earlier attempts stopped on stacked system ANR dialogs (then: settings put global hide_error_dialogs 1)
+
+== before: install
+Success
+that tile was not cached
+that tile was not cached
+that tile was not cached
+cached DEM tiles now: 172
+03:19:47 dismissed a system ANR dialog
+...
+== before: install
+Success
+that tile was not cached
+that tile was not cached
+that tile was not cached
+cached DEM tiles now: 172
+03:34:44 dismissed a system ANR dialog
+03:36:19 tapped 'Centre on me'
+== into 3D
+03:37:54 tapped 'Show in 3D'
+03:53:22 ready (1)
+10-06 03:53:06.323  7121  7121 I Terrain3D: ready: hand-off relief 0.056 at pitch 50 (tolerance 5.3 px) · memory 37.9/38.0 MB (pinned 28.9) · dem 9.0 · scene 19.9 · textures 9.0 · evicted dem 64
+text="HD 3D · 3.9 m elevation · 3.0 × 3.0 km · 42 km of creeks &amp; drains · 1 tile(s) missing, flattened"
+03:55:21 shot B.1-device-before-02-3d-bearing-0.png
+rotate 90 sent
+03:56:35 shot B.1-device-before-03-3d-turn-90.png
+rotate 90 sent
+03:57:56 shot B.1-device-before-04-3d-turn-180.png
+rotate 90 sent
+03:59:12 shot B.1-device-before-05-3d-turn-270.png
+rotate 90 sent
+lines with a z/x/y shape: 0
+done
+
+[exited with code 0]
