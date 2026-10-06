@@ -321,8 +321,8 @@ MUTATIONS = [
      "val wgt = if (c == 0) 1.0 else 0.0",
      [T + "terrain3d.MeshNormalsTest"]),
     ("X6", "the mesh draws missing elevation as ground", M + "terrain3d/TerrainMesh.kt",
-     "valid[j * n + i] = mosaic.hasData(x0, y0) &&",
-     "valid[j * n + i] = true || mosaic.hasData(x0, y0) &&",
+     "valid[j * n + i] = mosaic.displayable(x0, y0)",
+     "valid[j * n + i] = true",
      [T + "terrain3d.NoDataTest"]),
     ("X7", "the ranking scores missing elevation", M + "research/RadiusScan.kt",
      "if (!inRadius(lat, lngOfCol(x.toDouble())) || !scorable(x, y)) continue",
@@ -342,6 +342,10 @@ MUTATIONS = [
      [T + "terrain3d.NoDataTest"]),
     ("X11", "a tile with no real pixel counts as loaded", M + "terrain/DemTileStore.kt",
      "if (!loaded[ty * nx + tx] || holes == TILE * TILE) {", "if (!loaded[ty * nx + tx]) {",
+     [T + "terrain3d.NoDataTest"]),
+    ("X12", "an edge vertex judged on the halo (a missing halo tile takes the wall)", M + "terrain/DemTileStore.kt",
+     "val ax = x0.coerceIn(haloPx, hiX); val bx = (x0 + 1).coerceIn(haloPx, hiX)",
+     "val ax = x0; val bx = x0 + 1",
      [T + "terrain3d.NoDataTest"]),
 ]
 

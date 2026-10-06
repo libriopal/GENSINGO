@@ -211,6 +211,22 @@ class DemTileStore(
             return !m[y.coerceIn(0, grid.h - 1) * grid.w + x.coerceIn(0, grid.w - 1)]
         }
 
+        /**
+         * Real ground under a displayed point interpolated from cells ([x0], [y0])–([x0] + 1,
+         * [y0] + 1): a mesh vertex, a texel, a marker's height. The cells are clamped into the
+         * displayed interior first. The interior is drawn edge to edge, so a point on its edge is
+         * half a cell from the halo, and a halo tile that never loaded took the whole edge with it
+         * (the north and west walls vanished on B.1's device run). There the store's stand-in is a
+         * copy of the interior's own edge cells ([fillMissing]), so the point shows real ground.
+         */
+        fun displayable(x0: Int, y0: Int): Boolean {
+            if (noData == null) return true
+            val hiX = grid.w - haloPx - 1; val hiY = grid.h - haloPx - 1
+            val ax = x0.coerceIn(haloPx, hiX); val bx = (x0 + 1).coerceIn(haloPx, hiX)
+            val ay = y0.coerceIn(haloPx, hiY); val by = (y0 + 1).coerceIn(haloPx, hiY)
+            return hasData(ax, ay) && hasData(bx, ay) && hasData(ax, by) && hasData(bx, by)
+        }
+
         /** Every cell of the 3×3 Horn stencil around ([x], [y]) is real: the cell can be scored. */
         fun scorable(x: Int, y: Int): Boolean {
             if (noData == null) return true

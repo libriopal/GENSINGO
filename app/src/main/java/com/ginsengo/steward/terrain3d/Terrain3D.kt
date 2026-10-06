@@ -105,7 +105,7 @@ object Terrain3D {
             val gy = Projection.y(lat) * n - mosaic.tileY0 * DemTileStore.TILE - 0.5
             val x0 = floor(gx).toInt().coerceIn(0, g.w - 1); val y0 = floor(gy).toInt().coerceIn(0, g.h - 1)
             val x1 = (x0 + 1).coerceAtMost(g.w - 1); val y1 = (y0 + 1).coerceAtMost(g.h - 1)
-            if (!mosaic.hasData(x0, y0) || !mosaic.hasData(x1, y0) || !mosaic.hasData(x0, y1) || !mosaic.hasData(x1, y1)) return null
+            if (!mosaic.displayable(x0, y0)) return null
             val fx = (gx - x0).coerceIn(0.0, 1.0); val fy = (gy - y0).coerceIn(0.0, 1.0)
             val top = g[x0, y0] * (1 - fx) + g[x1, y0] * fx
             val bottom = g[x0, y1] * (1 - fx) + g[x1, y1] * fx

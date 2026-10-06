@@ -92,6 +92,27 @@ class NoDataTest {
         assertTrue("the relief must ignore the flat stand-in", mesh.maxElevationM <= full.maxElevationM)
     }
 
+    /**
+     * Found on B.1's device run: with the halo tiles north and west of the square uncached, the
+     * north and west walls vanished, because a vertex on the square's edge is interpolated half a
+     * cell into the halo. Every halo cell missing must leave the mesh exactly as it is.
+     */
+    @Test
+    fun aMissingHaloKeepsTheEdgesAndTheWalls() {
+        val n = 97
+        val g = holed().grid
+        val mask = BooleanArray(g.w * g.h) { i -> val x = i % g.w; val y = i / g.w
+            x < halo || x >= g.w - halo || y < halo || y >= g.h - halo }
+        val m = DemTileStore.Mosaic(g, 15, 8950, 12844, 1, 1, halo, 1, 1, noData = mask)
+        val full = TerrainMesh.build(m.copy(noData = null), buildCamera, n, Terrain3D.EXAGGERATION)
+        val mesh = TerrainMesh.build(m, buildCamera, n, Terrain3D.EXAGGERATION)
+        assertEquals("a missing halo removed triangles from the square", full.triangleCount, mesh.triangleCount)
+        val r = MeshTopology.check(mesh.indices)
+        assertEquals("the walls must all still be there", 4 * (n - 1), r.openEdges.size)
+        val s = Terrain3D.build(m)
+        assertNotNull("a marker on the square's west edge", s.elevationAt(Terrain3D.latOfEdge(m, 100.5), Terrain3D.lngOfEdge(m, halo + 0.01)))
+    }
+
     @Test
     fun noMarkerStandsOnMissingGround() {
         val m = holed()

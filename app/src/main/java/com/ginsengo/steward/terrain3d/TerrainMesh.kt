@@ -125,8 +125,7 @@ object TerrainMesh {
                 val e = bilinear(g, gx, gy).toFloat()
                 if (mosaic.noData != null) {
                     val x0 = gx.toInt().coerceIn(0, g.w - 2); val y0 = gy.toInt().coerceIn(0, g.h - 2)
-                    valid[j * n + i] = mosaic.hasData(x0, y0) && mosaic.hasData(x0 + 1, y0) &&
-                        mosaic.hasData(x0, y0 + 1) && mosaic.hasData(x0 + 1, y0 + 1)
+                    valid[j * n + i] = mosaic.displayable(x0, y0)
                 }
                 if (valid[j * n + i]) {
                     if (e < minE) minE = e

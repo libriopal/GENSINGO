@@ -112,7 +112,7 @@ object TerrainTextures {
                 elev[ty * size + tx] = e
                 if (unknown != null) {
                     val x0 = gx.toInt().coerceIn(0, g.w - 2); val y0 = gy.toInt().coerceIn(0, g.h - 2)
-                    if (!m.hasData(x0, y0) || !m.hasData(x0 + 1, y0) || !m.hasData(x0, y0 + 1) || !m.hasData(x0 + 1, y0 + 1)) {
+                    if (!m.displayable(x0, y0)) {
                         unknown[ty * size + tx] = true
                         continue
                     }
