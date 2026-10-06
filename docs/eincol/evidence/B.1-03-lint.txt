@@ -1,0 +1,15 @@
+# B.1 lint: ./gradlew :app:lint (2026-10-06)
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 1m 6s
+29 actionable tasks: 8 executed, 21 up-to-date
+EXIT 0
+severity counts: {'Warning': 79} (0 errors)
+(A first comparison script read the baseline TSV with the wrong column layout and was discarded; the comparison below reads it as BOOT wrote it: severity, check, file, line, message.)
+per (check, file) above the bootstrap baseline:
+  none
+total now 79 baseline total 81

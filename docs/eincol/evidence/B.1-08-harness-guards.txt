@@ -1,0 +1,44 @@
+# B.1 I20 harness guards (2026-10-06)
+
+## 1. Two mutations with one id: refused before any edit
+$ python3 <copy of tools/mutate.py with a second X1 entry> X1
+duplicate mutation ids ['X1']: rename before running (exe.md I20)
+exit=1
+tree unchanged by the refused run (git status hash identical before and after)
+
+## 2. SIGTERM mid-mutant: the file is restored
+GestureMath.kt has no uncommitted work
+$ python3 tools/mutate.py U3 &   (after 25 s:)
+mutant live mid-run (1 = yes): 1
+$ kill -TERM <harness>
+harness exit=130
+after SIGTERM: GestureMath.kt restored, git clean for that file
+
+## harness output
+Traceback (most recent call last):
+  File "/home/user/GENSINGO/tools/mutate.py", line 394, in <module>
+    main()
+  File "/home/user/GENSINGO/tools/mutate.py", line 379, in main
+    code, cerr, secs = run_tests(tests)
+                       ^^^^^^^^^^^^^^^^
+  File "/home/user/GENSINGO/tools/mutate.py", line 354, in run_tests
+    p = subprocess.run(args, capture_output=True, text=True)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/subprocess.py", line 550, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/subprocess.py", line 2115, in _communicate
+    ready = selector.select(timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/selectors.py", line 415, in select
+    fd_event_list = self._selector.poll(timeout)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/GENSINGO/tools/mutate.py", line 365, in <lambda>
+    signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
+                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/GENSINGO/tools/mutate.py", line 365, in <genexpr>
+    signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
+KeyboardInterrupt

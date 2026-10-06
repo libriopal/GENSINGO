@@ -1,0 +1,20 @@
+# B.1 test: ./gradlew :app:test (debug, release and field variants) (2026-10-06)
+
+> Task :app:testReleaseUnitTest
+
+> Task :app:test
+
+[Incubating] Problems report is available at: file:///home/user/GENSINGO/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 3m 12s
+93 actionable tasks: 23 executed, 70 up-to-date
+EXIT 0
+testDebugUnitTest: 402 tests, 0 failed, 1 skipped
+testFieldUnitTest: 402 tests, 0 failed, 1 skipped
+testReleaseUnitTest: 402 tests, 0 failed, 1 skipped

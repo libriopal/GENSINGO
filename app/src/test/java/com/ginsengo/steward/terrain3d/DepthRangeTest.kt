@@ -105,15 +105,21 @@ class DepthRangeTest {
     fun sixteenBitDepthResolvesACellAtTheFarthestGround() {
         val cell = mosaic.grid.cellSizeM
         var worstOld = 0.0
-        for (pitch in pitches) for (bearing in 0 until 360 step 45) {
-            for (aware in listOf(true, false)) {
+        for (pitch in pitches) {
+            var worstPitchNew = 0.0; var worstPitchOld = 0.0; var nearNew = 0.0; var nearOld = 0.0
+            for (bearing in 0 until 360 step 45) for (aware in listOf(true, false)) {
                 val v = view(fit, bearing.toDouble(), pitch, aware)
                 val far = maxOf(v.mc.farZ, v.near * 2.0)
                 val d = depthsInView(v.mvp).maxOrNull() ?: continue
                 val stepM = DepthRange.step(d, v.near, far, 16) * v.mc.metersPerPixel
-                if (aware) assertTrue("pitch %.0f bearing %d: 16-bit step %.2f m at the far ground".format(pitch, bearing, stepM), stepM < cell)
-                else worstOld = maxOf(worstOld, stepM)
+                if (aware) {
+                    assertTrue("pitch %.0f bearing %d: 16-bit step %.2f m at the far ground".format(pitch, bearing, stepM), stepM < cell)
+                    worstPitchNew = maxOf(worstPitchNew, stepM); nearNew = v.near
+                } else { worstOld = maxOf(worstOld, stepM); worstPitchOld = maxOf(worstPitchOld, stepM); nearOld = v.near }
             }
+            // The measurement itself, for the wave's evidence (the test report keeps stdout).
+            println("B7 pitch %2.0f: 16-bit step at the far ground %.2f m (near %.0f px), fixed near %.2f m (near %.0f px); cell %.2f m"
+                .format(pitch, worstPitchNew, nearNew, worstPitchOld, nearOld, cell))
         }
         assertTrue("the fixed 48-px plane should fail this somewhere (worst %.1f m)".format(worstOld), worstOld > cell)
     }

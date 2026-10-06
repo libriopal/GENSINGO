@@ -1,0 +1,13 @@
+# B.1 B7: DepthRangeTest's own measurement (stdout of the debug test run, 2026-10-06)
+# 3 x 3 zoom-15 tiles of real Boone terrain (mirrored), fit zoom, 1080 x 2400 portrait, eight bearings per pitch;
+# worst 16-bit depth step at the farthest ground in view, terrain-aware near plane vs MapLibre's fixed one.
+
+B7 pitch 15: 16-bit step at the far ground 0.11 m (near 2903 px), fixed near 13.50 m (near 48 px); cell 3.86 m
+B7 pitch 30: 16-bit step at the far ground 0.14 m (near 2599 px), fixed near 14.74 m (near 48 px); cell 3.86 m
+B7 pitch 45: 16-bit step at the far ground 0.22 m (near 2116 px), fixed near 15.85 m (near 48 px); cell 3.86 m
+B7 pitch 55: 16-bit step at the far ground 0.35 m (near 1709 px), fixed near 16.48 m (near 48 px); cell 3.86 m
+B7 pitch 60: 16-bit step at the far ground 0.45 m (near 1485 px), fixed near 16.76 m (near 48 px); cell 3.86 m
+B7 pitch 70: 16-bit step at the far ground 0.80 m (near 1005 px), fixed near 17.23 m (near 48 px); cell 3.86 m
+B7 pitch 80: 16-bit step at the far ground 1.70 m (near 492 px), fixed near 17.48 m (near 48 px); cell 3.86 m
+sixteenBitDepthResolvesACellAtTheFarthestGround passed
+theNearPlaneNeverClipsGroundInView passed

@@ -1,0 +1,29 @@
+# B.1 negative controls: python3 tools/mutate.py X1 … X11 (2026-10-06, at the tree committed as 6866b6f)
+
+('X1', 'an induced crack: one surface triangle dropped (I10)', 'KILLED', 32)
+('X2', 'the skirt removed (I11)', 'KILLED', 30)
+('X3', 'the north wall walked the old way (faces inward)', 'KILLED', 25)
+('X4', 'mesh normals with north and south swapped', 'KILLED', 25)
+('X5', "mesh normals from the nearest cell, not the analysis's blend", 'KILLED', 25)
+('X6', 'the mesh draws missing elevation as ground', 'KILLED', 28)
+('X7', 'the ranking scores missing elevation', 'KILLED', 27)
+('X8', 'unknown ground drawn as weak ground', 'KILLED', 26)
+('X9', "the near plane ignores the ground's height", 'KILLED', 25)
+('X10', 'a transparent or black pixel decodes as ground', 'KILLED', 27)
+('X11', 'a tile with no real pixel counts as loaded', 'KILLED', 27)
+
+| ID | Mutation | Result |
+|---|---|---|
+| X1 | an induced crack: one surface triangle dropped (I10) | KILLED |
+| X2 | the skirt removed (I11) | KILLED |
+| X3 | the north wall walked the old way (faces inward) | KILLED |
+| X4 | mesh normals with north and south swapped | KILLED |
+| X5 | mesh normals from the nearest cell, not the analysis's blend | KILLED |
+| X6 | the mesh draws missing elevation as ground | KILLED |
+| X7 | the ranking scores missing elevation | KILLED |
+| X8 | unknown ground drawn as weak ground | KILLED |
+| X9 | the near plane ignores the ground's height | KILLED |
+| X10 | a transparent or black pixel decodes as ground | KILLED |
+| X11 | a tile with no real pixel counts as loaded | KILLED |
+
+killed 11 / 11
