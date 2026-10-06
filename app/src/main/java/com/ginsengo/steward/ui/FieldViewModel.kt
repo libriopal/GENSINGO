@@ -147,12 +147,69 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Flies the map to a place and pins it (the map builds the square there). */
     fun goTo(p: com.ginsengo.steward.ui.map.PlaceSearch.Place) {
+        _placeChosen.value = true
         _searchPin.value = p
         _searchResults.value = null
         camera.move(camera.camera.copy(lat = p.lat, lng = p.lng, zoom = CameraStart.FOCUS_ZOOM, pitch = CameraStart.FOCUS_TILT))
     }
 
     fun clearSearch() { _searchPin.value = null; _searchResults.value = null }
+
+    // ------------------------------------------------------------ field chat (F.1)
+    val chat: StateFlow<com.ginsengo.steward.research.ChatState> = container.chat.state
+    private val _chatBusy = MutableStateFlow(false)
+    val chatBusy: StateFlow<Boolean> = _chatBusy.asStateFlow()
+    private val _chatError = MutableStateFlow<String?>(null)
+    val chatError: StateFlow<String?> = _chatError.asStateFlow()
+    fun chatBlocker(): String? = container.chat.blocker()
+    fun forgetNote(note: String) = container.chat.forgetNote(note)
+    fun clearChat() = container.chat.clearConversation()
+
+    fun sendChat(text: String) {
+        if (text.isBlank() || _chatBusy.value) return
+        viewModelScope.launch {
+            _chatBusy.value = true
+            _chatError.value = null
+            _chatError.value = container.chat.send(text, chatContext())
+            _chatBusy.value = false
+        }
+    }
+
+    /**
+     * What the chat model is told about the field with each message: the ~11 km cell (never a
+     * coordinate), the date and season status, the ranked places, saved places and the walking
+     * target as distance and direction from the owner, and counts of finds and walked ground.
+     */
+    private fun chatContext(): String = buildString {
+        val today = java.time.LocalDate.now()
+        appendLine("Date: $today (${today.month.name.lowercase().replaceFirstChar { it.uppercase() }})")
+        val here = _location.value
+        if (here == null) appendLine("Position: unknown (no GPS fix yet)") else {
+            appendLine("Area: ${com.ginsengo.steward.research.SuggestionAssembler.coarseRegion(here.lat, here.lng)} (approximate, ~11 km)")
+            runCatching { container.compliance.statusAt(here.lat, here.lng) }.getOrNull()?.let { st ->
+                appendLine("State: ${st.state?.stateName ?: "not detected"} · season: ${st.season} · ${st.seasonDetail}")
+                if (st.isProhibitedLand) appendLine("Land here: digging PROHIBITED (${st.landStatuses.joinToString { it.areaName }})")
+                else if (st.needsPermit) appendLine("Land here: permit required (${st.landStatuses.joinToString { it.areaName }})")
+            }
+        }
+        fun rel(lat: Double, lng: Double): String = here?.let {
+            val leg = com.ginsengo.steward.field.Guidance.leg(it.lat, it.lng, lat, lng)
+            com.ginsengo.steward.field.WayBack.describe(com.ginsengo.steward.field.WayBack.Leg(leg.distanceM, leg.bearingDeg)) + " from you"
+        } ?: "distance unknown"
+        val ranked = suggestions.value.sortedBy { it.rank }.take(8)
+        if (ranked.isNotEmpty()) {
+            appendLine("Ranked places within 10 miles (terrain model, best first):")
+            ranked.forEach { s ->
+                appendLine("  #${s.rank}: terrain score %.2f; %d m elevation; slope %.0f°, faces %s; %s; status %s; factors %s".format(
+                    s.terrainScore, s.elevationM.toInt(), s.slopeDeg, com.ginsengo.steward.field.Guidance.compass(s.aspectDeg),
+                    rel(s.lat, s.lng), s.status, s.factorsCsv.take(160)) + (if (s.lookFor.isNotBlank()) "; look for: ${s.lookFor.take(160)}" else ""))
+            }
+        } else appendLine("Ranked places: none yet (no terrain scan for this area)")
+        val pl = places.value
+        if (pl.isNotEmpty()) appendLine("Saved places: " + pl.take(12).joinToString("; ") { "${it.name} (${rel(it.lat, it.lng)})" })
+        _target.value?.let { appendLine("Walking to: ${it.name} (${rel(it.lat, it.lng)})") }
+        appendLine("Finds recorded: ${finds.value.size}" + (if (tracking.value.recording) " · Track is recording" else ""))
+    }
 
     // ------------------------------------------------------------ navigation (N.1)
     private val _target = MutableStateFlow<com.ginsengo.steward.ui.map.PlaceSearch.Place?>(null)
@@ -189,6 +246,7 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
 
     /** "Show on map": go to a suggestion (the map builds the square there). */
     fun focusOn(s: Suggestion) {
+        _placeChosen.value = true
         camera.move(
             camera.camera.copy(lat = s.lat, lng = s.lng, zoom = CameraStart.FOCUS_ZOOM, pitch = CameraStart.FOCUS_TILT),
             animate = true,
@@ -199,11 +257,23 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
     val toast: StateFlow<String?> = _toast.asStateFlow()
     fun consumeToast() { _toast.value = null }
 
+    private val _placeChosen = MutableStateFlow(false)
+    /**
+     * F.1: true once the map should build where the camera is without waiting for a first fix: the
+     * owner searched, picked a suggestion or a place, moved the map, or FIX_WAIT_MS passed. The
+     * phone report "search works, terrain doesn't" was the map waiting for a fix that never came.
+     */
+    val placeChosen: StateFlow<Boolean> = _placeChosen.asStateFlow()
+    fun placeChosen() { _placeChosen.value = true }
+
     init {
         viewModelScope.launch {
             history.value = container.database.trackDao().before(sessionStart)
         }
+        // F.1: indoors a first fix can take minutes; the map stops waiting after FIX_WAIT_MS.
+        viewModelScope.launch { delay(FIX_WAIT_MS); _placeChosen.value = true }
     }
+
 
     // ------------------------------------------------------------ battery (J32, J24)
     /** What the phone reports about its battery, read while the map is on screen. */
@@ -305,6 +375,7 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun onFix(loc: FieldLocation) {
         _location.value = loc
+        com.ginsengo.steward.perf.FieldDiagnostics.gps = "fix ±${loc.accuracyM.toInt()} m, ${((System.currentTimeMillis() - loc.timestamp) / 1000).coerceAtLeast(0)} s old when received"
         // Every fix the app receives is remembered (J31), in batches.
         container.travel.record(TravelMemory.Fix(loc.lat, loc.lng, loc.accuracyM, loc.timestamp))
         val from = movedFrom
@@ -446,6 +517,8 @@ class FieldViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         const val FIND_AVERAGE_MS = 20_000L
+        /** F.1: how long the map waits for a first fix before showing where the camera is. */
+        const val FIX_WAIT_MS = 15_000L
         /** How often stillness and the battery are looked at again while the map is on screen. */
         const val REPLAN_TICK_MS = 30_000L
         /** Moving means more than this, or the fix's own accuracy, from where it last moved. */

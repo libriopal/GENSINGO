@@ -172,6 +172,24 @@ object MapDrape {
     }
 
     /**
+     * F.1 self-test: renders a built-in style (an inline red line, no network, no tiles, no glyphs)
+     * and reports whether this phone's map renderer works and draws an overlay see-through. It
+     * separates "the renderer cannot snapshot here" from "the network or the cache had no tiles".
+     */
+    suspend fun selfTest(context: Context): String {
+        val style = """{"version":8,"sources":{"t":{"type":"geojson","data":{"type":"Feature","properties":{},""" +
+            """"geometry":{"type":"LineString","coordinates":[[-83.0,35.5],[-82.9,35.6]]}}}},""" +
+            """"layers":[{"id":"t","type":"line","source":"t","paint":{"line-color":"#FF0000","line-width":6}}]}"""
+        val t0 = SystemClock.elapsedRealtime()
+        val px = render(context, style, 35.6, -83.0, 35.5, -82.9, 256, 20_000L, maxZoom = 14.0, pixelRatio = 1f)
+            ?: return "FAILED: the map renderer gave no picture (${SystemClock.elapsedRealtime() - t0} ms)"
+        val red = px.count { (it ushr 24) > 0x80 && (it shr 16 and 255) > 180 && (it shr 8 and 255) < 90 }
+        val clear = mostlyClear(px)
+        return "OK in ${SystemClock.elapsedRealtime() - t0} ms · line pixels $red · background " +
+            (if (clear) "see-through (roads overlay can work)" else "OPAQUE (roads overlay will be refused)")
+    }
+
+    /**
      * True when an overlay snapshot is mostly see-through, as a style with no background draws it.
      * The guard against a renderer that clears to an opaque colour: such an overlay would paint
      * the whole ground, so it is refused instead (N.1).

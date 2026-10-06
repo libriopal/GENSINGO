@@ -28,6 +28,11 @@ object Guidance {
         return if (h == 0) 12 else h
     }
 
+    private val POINTS = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+
+    /** The eight-point compass name of a bearing. */
+    fun compass(deg: Double): String = POINTS[(((deg % 360 + 360) % 360 + 22.5) / 45).toInt() % 8]
+
     /** Within this, or the fix's own accuracy if larger, the walker has arrived. */
     const val ARRIVED_M = 12.0
 

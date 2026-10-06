@@ -32,6 +32,13 @@ class AppContainer(val context: Context) {
     val location: LocationProvider by lazy { LocationProvider(context) }
     val settings: SettingsStore by lazy { SettingsStore(context) }
     val keys: KeyVault by lazy { KeyVault(context) }
+    /** F.1: the field chat; its conversation is a file in app-private storage (no backup). */
+    val chat: com.ginsengo.steward.research.FieldChatRepository by lazy {
+        com.ginsengo.steward.research.FieldChatRepository(
+            com.ginsengo.steward.research.ChatStore(java.io.File(context.filesDir, "field_chat.json")),
+            settings, keys, ::isOnline,
+        )
+    }
 
     /**
      * Streaming elevation tiles, cached to app-private storage so ground already seen (or

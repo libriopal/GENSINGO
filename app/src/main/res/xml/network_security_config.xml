@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cleartext stays off everywhere. debug-overrides apply ONLY to a debuggable build (never the
+     delivered field APK): they let a test emulator behind a TLS-inspecting proxy trust that proxy's
+     certificate from the user store (wave F.1). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

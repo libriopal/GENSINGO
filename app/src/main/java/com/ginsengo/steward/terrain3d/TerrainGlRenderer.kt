@@ -47,6 +47,16 @@ class TerrainGlRenderer : GLTextureView.Renderer {
      */
     @Volatile var onTerrainDrawn: (() -> Unit)? = null
 
+    /** F.1: called on the GL thread when drawing fails, so the screen can say so instead of staying blank. */
+    @Volatile var onError: ((String) -> Unit)? = null
+
+    private fun fail(msg: String) {
+        lastError = msg
+        com.ginsengo.steward.perf.FieldDiagnostics.glError = msg
+        Log.e(TAG, msg)
+        onError?.invoke(msg)
+    }
+
     class Texture(val argb: IntArray, val size: Int)
 
     /** The travel memory mask (TravelMask.rg): two bytes per texel, [size] square. */
@@ -92,6 +102,8 @@ class TerrainGlRenderer : GLTextureView.Renderer {
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         val h = TerrainShaders.HAZE_RGB
         GLES30.glClearColor(h[0], h[1], h[2], 1f)
+        com.ginsengo.steward.perf.FieldDiagnostics.gpu =
+            "${GLES30.glGetString(GLES30.GL_RENDERER)} (${GLES30.glGetString(GLES30.GL_VERSION)})"
         GLES30.glEnable(GLES30.GL_DEPTH_TEST)
         GLES30.glDepthFunc(GLES30.GL_LEQUAL)
         // Terrain is a height field viewed from above; back faces are never wanted.
@@ -164,6 +176,7 @@ class TerrainGlRenderer : GLTextureView.Renderer {
         GLES30.glDrawElements(GLES30.GL_TRIANGLES, indexCount, GLES30.GL_UNSIGNED_INT, 0)
         GLES30.glBindVertexArray(0)
         trianglesDrawn = indexCount / 3
+        com.ginsengo.steward.perf.FieldDiagnostics.framesDrawn++
         onTerrainDrawn?.invoke()
     }
 
@@ -231,8 +244,7 @@ class TerrainGlRenderer : GLTextureView.Renderer {
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0)
         val err = GLES30.glGetError()
         if (err != GLES30.GL_NO_ERROR) {
-            lastError = "texture upload: GL error 0x%x".format(err)
-            Log.e(TAG, lastError!!)
+            fail("texture upload: GL error 0x%x".format(err))
         }
         hasTexture = err == GLES30.GL_NO_ERROR
     }
@@ -265,8 +277,7 @@ class TerrainGlRenderer : GLTextureView.Renderer {
         GLES30.glDeleteShader(vs)
         GLES30.glDeleteShader(fs)
         if (status[0] == 0) {
-            lastError = "link: " + GLES30.glGetProgramInfoLog(p)
-            Log.e(TAG, lastError!!)
+            fail("link: " + GLES30.glGetProgramInfoLog(p))
             GLES30.glDeleteProgram(p)
             return null
         }
@@ -280,8 +291,7 @@ class TerrainGlRenderer : GLTextureView.Renderer {
         val status = IntArray(1)
         GLES30.glGetShaderiv(s, GLES30.GL_COMPILE_STATUS, status, 0)
         if (status[0] == 0) {
-            lastError = "compile: " + GLES30.glGetShaderInfoLog(s)
-            Log.e(TAG, lastError!!)
+            fail("compile: " + GLES30.glGetShaderInfoLog(s))
             GLES30.glDeleteShader(s)
             return null
         }

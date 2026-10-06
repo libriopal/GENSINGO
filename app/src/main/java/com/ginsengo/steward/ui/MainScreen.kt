@@ -1,6 +1,11 @@
 package com.ginsengo.steward.ui
 
 import androidx.compose.foundation.background
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,7 +90,7 @@ import com.ginsengo.steward.terrain.GinsengSuitability
 import com.ginsengo.steward.ui.map.SceneLayer
 import kotlin.math.roundToInt
 
-private enum class Sheet { NONE, SUGGEST, FIND, LAYERS, PLACES }
+private enum class Sheet { NONE, SUGGEST, FIND, LAYERS, PLACES, CHAT }
 
 @Composable
 fun MainScreen(vm: FieldViewModel) {
@@ -105,11 +110,18 @@ fun MainScreen(vm: FieldViewModel) {
     val pin by vm.searchPin.collectAsState()
     val results by vm.searchResults.collectAsState()
     val searching by vm.searching.collectAsState()
+    val placeChosen by vm.placeChosen.collectAsState()
     val target by vm.target.collectAsState()
     val follow by vm.follow.collectAsState()
     val places by vm.places.collectAsState()
     val compassOn by vm.compass.collectAsState()
     val heading = rememberHeading(compassOn && me != null, me?.lat, me?.lng)
+    // F.1: while following, the screen stays on (the walker glances at it); off again when follow stops.
+    val hostView = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(follow) {
+        hostView.keepScreenOn = follow
+        onDispose { hostView.keepScreenOn = false }
+    }
 
     var sheet by remember { mutableStateOf(Sheet.NONE) }
     var habitatStatus by remember { mutableStateOf("") }
@@ -135,7 +147,7 @@ fun MainScreen(vm: FieldViewModel) {
             travel = vm.container.travelSource,
             lighter = lighter,
             // No square at the fallback start position, far from the owner: wait for the first fix.
-            waitForFix = permission && me == null,
+            waitForFix = permission && me == null && !placeChosen,
             pin = pin,
             onLegendChange = { vm.setLayers(layers.copy(legend = it)) },
             heading = heading,
@@ -143,7 +155,7 @@ fun MainScreen(vm: FieldViewModel) {
             places = places,
             onGoHere = { name, la, lo -> vm.goHere(name, la, lo) },
             onSave = { la, lo -> vm.savePlace(null, la, lo) },
-            onUserMove = { if (follow) vm.setFollow(false) },
+            onUserMove = { if (follow) vm.setFollow(false); vm.placeChosen() },
         )
 
         // ---- search (P.1) and the status line
@@ -219,6 +231,12 @@ fun MainScreen(vm: FieldViewModel) {
                 contentColor = if (follow) Gen.Bg else Gen.Text,
                 modifier = Modifier.semantics { contentDescription = if (follow) "Stop following me" else "Follow me" },
             ) { Icon(Icons.Filled.Explore, null) }
+            // F.1: the field chat.
+            SmallFloatingActionButton(
+                onClick = { sheet = Sheet.CHAT },
+                containerColor = Gen.SurfaceHigh, contentColor = Gen.Accent,
+                modifier = Modifier.semantics { contentDescription = "Ask the field chat" },
+            ) { Icon(Icons.Filled.Forum, null) }
         }
 
         // ---- bottom bar
@@ -245,6 +263,7 @@ fun MainScreen(vm: FieldViewModel) {
         Sheet.FIND -> FindSheet(vm) { sheet = Sheet.NONE }
         Sheet.LAYERS -> LayersSheet(vm, verdict) { sheet = Sheet.NONE }
         Sheet.PLACES -> PlacesSheet(vm, places, me) { sheet = Sheet.NONE }
+        Sheet.CHAT -> ChatSheet(vm) { sheet = Sheet.NONE }
         Sheet.NONE -> Unit
     }
 }
@@ -256,6 +275,95 @@ private fun Chip(text: String, color: Color, maxLines: Int = Int.MAX_VALUE) {
         modifier = Modifier.background(Gen.Bg.copy(alpha = 0.78f), RoundedCornerShape(10.dp))
             .padding(horizontal = 8.dp, vertical = 4.dp),
     )
+}
+
+/** F.1: the field chat, persistent, with the model's notes about the owner. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatSheet(vm: FieldViewModel, onClose: () -> Unit) {
+    val chat by vm.chat.collectAsState()
+    val busy by vm.chatBusy.collectAsState()
+    val error by vm.chatError.collectAsState()
+    val settings by vm.settings.collectAsState()
+    val ranked by vm.suggestions.collectAsState()
+    var input by remember { mutableStateOf("") }
+    var showNotes by remember { mutableStateOf(false) }
+    val blocker = remember(chat, busy) { vm.chatBlocker() }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    LaunchedEffect(chat.turns.size, busy) { if (chat.turns.isNotEmpty()) listState.animateScrollToItem(chat.turns.size) }
+    ModalBottomSheet(
+        onDismissRequest = onClose, containerColor = Gen.Surface,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight(0.92f).padding(horizontal = 14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Field chat", style = MaterialTheme.typography.titleMedium)
+                    Text("${settings.provider.label} · ${settings.model} · sees your ~11 km area, never coordinates",
+                        color = Gen.TextDim, fontSize = 11.sp)
+                }
+                TextButton(onClick = { showNotes = !showNotes }) { Text("Memory (${chat.notes.size})") }
+                TextButton(onClick = { vm.clearChat() }) { Text("Clear", color = Gen.TextDim) }
+            }
+            if (showNotes) {
+                Column(Modifier.fillMaxWidth().background(Gen.Bg, RoundedCornerShape(10.dp)).padding(8.dp)) {
+                    if (chat.notes.isEmpty()) Text("Nothing kept yet. Tell it about your county, habits or goals and it will remember.",
+                        color = Gen.TextDim, fontSize = 12.sp)
+                    chat.notes.forEach { n ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("• $n", color = Gen.Text, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                            Text("✕", color = Gen.TextDim, modifier = Modifier.clickable { vm.forgetNote(n) }.padding(6.dp))
+                        }
+                    }
+                }
+            }
+            if (blocker != null) Text(blocker, color = Gen.Amber, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp))
+            LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (chat.turns.isEmpty()) item {
+                    Text("Ask about where to look, what to check on arrival, the season and rules, or how to plan a walk. " +
+                        "It reads the app's ranked places, your saved places and the season with each question.",
+                        color = Gen.TextDim, fontSize = 12.sp, modifier = Modifier.padding(vertical = 8.dp))
+                }
+                items(chat.turns) { t ->
+                    val mine = t.role == com.ginsengo.steward.research.ChatTurn.USER
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
+                        androidx.compose.foundation.text.selection.SelectionContainer {
+                            Text(t.text, color = Gen.Text, fontSize = 14.sp,
+                                modifier = Modifier.widthIn(max = 320.dp)
+                                    .background(if (mine) Gen.SurfaceHigh else Gen.Bg, RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp))
+                        }
+                    }
+                    // The places a reply names (#2, #5) become one tap from the map.
+                    if (!mine) {
+                        val named = Regex("#(\\d{1,2})").findAll(t.text).mapNotNull { m ->
+                            ranked.firstOrNull { it.rank == m.groupValues[1].toInt() }
+                        }.distinctBy { it.rank }.take(4).toList()
+                        if (named.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            named.forEach { sg ->
+                                TextButton(onClick = { vm.focusOn(sg); onClose() }) { Text("Show #${sg.rank}", fontSize = 12.sp) }
+                                TextButton(onClick = { vm.goHere("#${sg.rank}", sg.lat, sg.lng); onClose() }) { Text("Go #${sg.rank}", fontSize = 12.sp) }
+                            }
+                        }
+                    }
+                }
+                if (busy) item { Text("Thinking…", color = Gen.TextDim, fontSize = 12.sp) }
+            }
+            error?.let { Text(it, color = Gen.Danger, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp)) }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                com.ginsengo.steward.research.ChatPrompt.QUICK.forEach { q ->
+                    FilterChip(selected = false, enabled = !busy, onClick = { vm.sendChat(q) }, label = { Text(q, fontSize = 12.sp) })
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 10.dp)) {
+                OutlinedTextField(input, { input = it }, placeholder = { Text("Ask anything about today's hunt") },
+                    modifier = Modifier.weight(1f), maxLines = 4)
+                Spacer(Modifier.width(6.dp))
+                Button(onClick = { vm.sendChat(input); input = "" }, enabled = !busy && input.isNotBlank()) { Text(if (busy) "…" else "Send") }
+            }
+        }
+    }
 }
 
 /** N.1: the owner's saved places, nearest first, each one a tap from guidance. */
@@ -525,6 +633,29 @@ private fun LayersSheet(vm: FieldViewModel, verdict: FindLearner.Verdict?, onClo
                 color = Gen.TextDim, fontSize = 12.sp)
             Slider(saverPct.toFloat(), { vm.setSaverPct(it.roundToInt()) },
                 valueRange = BatteryMode.THRESHOLD_RANGE.first.toFloat()..BatteryMode.THRESHOLD_RANGE.last.toFloat(), steps = 7)
+
+            Spacer(Modifier.height(14.dp))
+            // F.1: what the map is doing, to read out or paste into a report when something is blank.
+            Text("Field diagnostics", style = MaterialTheme.typography.titleSmall)
+            var diagTick by remember { mutableIntStateOf(0) }
+            val diag = remember(diagTick) { com.ginsengo.steward.perf.FieldDiagnostics.report() }
+            Text(diag, color = Gen.TextDim, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+            val ctx = LocalContext.current
+            val scope = androidx.compose.runtime.rememberCoroutineScope()
+            var testing by remember { mutableStateOf(false) }
+            Row {
+                TextButton(onClick = {
+                    ctx.getSystemService(android.content.ClipboardManager::class.java)
+                        ?.setPrimaryClip(android.content.ClipData.newPlainText("Gensingo diagnostics", diag))
+                }) { Text("Copy diagnostics") }
+                TextButton(enabled = !testing, onClick = {
+                    testing = true
+                    scope.launch {
+                        com.ginsengo.steward.perf.FieldDiagnostics.mapSelfTest = com.ginsengo.steward.ui.map.MapDrape.selfTest(ctx)
+                        testing = false; diagTick++
+                    }
+                }) { Text(if (testing) "Testing…" else "Test map rendering") }
+            }
 
             Spacer(Modifier.height(14.dp))
             Text("Learning from your finds", style = MaterialTheme.typography.titleSmall)

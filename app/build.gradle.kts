@@ -71,6 +71,10 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             applicationIdSuffix = ".field"
             versionNameSuffix = "-field"
+            // Test builds only (F.1): -Pgensingo.debuggableField makes the field build debuggable, so the
+            // network security config's debug-overrides let an emulator behind a TLS-inspecting proxy
+            // reach the tile servers. The delivered APK is built without it and is not debuggable.
+            isDebuggable = project.hasProperty("gensingo.debuggableField")
             matchingFallbacks += listOf("release")
             ndk {
                 abiFilters += (project.findProperty("gensingo.abis") as String? ?: "arm64-v8a").split(",")

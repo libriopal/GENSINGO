@@ -69,6 +69,7 @@ class DemTileStore(
 
         val f = File(cacheDir, "${z}_${x}_${y}.png")
         val bytes = if (f.exists() && f.length() > 0) {
+            com.ginsengo.steward.perf.FieldDiagnostics.tilesFromCache.incrementAndGet()
             runCatching { f.readBytes() }.getOrNull()
         } else {
             // Offline, every refresh used to retry every missing tile: up to 64 doomed HTTPS
@@ -76,8 +77,14 @@ class DemTileStore(
             // on the Phase 7 device run). A failed tile is not retried for RETRY_AFTER_MS.
             val failed = failedAt[key]
             if (failed != null && System.currentTimeMillis() - failed < RETRY_AFTER_MS) return@withContext null
-            download(z, x, y)?.also { runCatching { f.writeBytes(it) }; failedAt.remove(key) }
-                ?: run { failedAt[key] = System.currentTimeMillis(); null }
+            download(z, x, y)?.also {
+                runCatching { f.writeBytes(it) }; failedAt.remove(key)
+                com.ginsengo.steward.perf.FieldDiagnostics.tilesDownloaded.incrementAndGet()
+            } ?: run {
+                failedAt[key] = System.currentTimeMillis()
+                com.ginsengo.steward.perf.FieldDiagnostics.tilesFailed.incrementAndGet()
+                null
+            }
         } ?: return@withContext null
 
         val bmp = runCatching {
@@ -97,7 +104,10 @@ class DemTileStore(
             connectTimeout = 15_000
             readTimeout = 20_000
             setRequestProperty("User-Agent", "GENSINGO/1.0")
-            if (responseCode != 200) { disconnect(); return null }
+            if (responseCode != 200) {
+                com.ginsengo.steward.perf.FieldDiagnostics.lastTileFailure = "HTTP $responseCode"
+                disconnect(); return null
+            }
             inputStream.use { it.readBytes() }.also { disconnect() }
         }
     }.getOrElse {
@@ -105,6 +115,7 @@ class DemTileStore(
         // offline, every refresh fails dozens of tiles, and the traces flooded logcat until logd
         // pruned the app's own lines (A.2's device run).
         Log.w(TAG, "DEM tile unavailable at zoom $z: " + LogRedaction.describe(it))
+        com.ginsengo.steward.perf.FieldDiagnostics.lastTileFailure = it.javaClass.simpleName
         null
     }
 

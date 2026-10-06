@@ -217,7 +217,9 @@ fun Terrain3DView(
         val main = Handler(Looper.getMainLooper())
         val posted = java.util.concurrent.atomic.AtomicBoolean(false)
         renderer.onTerrainDrawn = { if (posted.compareAndSet(false, true)) main.post { glDrawn = true } }
-        onDispose { renderer.onTerrainDrawn = null }
+        // F.1: a drawing failure says so on screen (it used to be logged only, and the map stayed blank).
+        renderer.onError = { msg -> main.post { status("3D drawing failed on this phone: $msg (Layers → Field diagnostics)") } }
+        onDispose { renderer.onTerrainDrawn = null; renderer.onError = null }
     }
 
     // Frames on demand, paced (J32): the last request of a gesture is always drawn.
@@ -269,7 +271,11 @@ fun Terrain3DView(
     val (bLat, bLng) = buildAt
     val buildKey = "$level:${DemTileStore.lonToTileX(bLng, level)}:${DemTileStore.latToTileY(bLat, level)}"
     LaunchedEffect(buildKey, weights.contentHashCode(), lighter, waitForFix, relief) {
-        if (waitForFix && scene == null) { status("Waiting for a GPS fix…"); return@LaunchedEffect }
+        if (waitForFix && scene == null) {
+            status("Waiting for a GPS fix… (or search a place)")
+            com.ginsengo.steward.perf.FieldDiagnostics.square = "waiting for the first GPS fix"
+            return@LaunchedEffect
+        }
         val have = scene
         if (have != null && have === session.scene && !have.quick && have.level == level && have.contains(bLat, bLng) &&
             session.weightsKey == weights.contentHashCode() && session.lighter == lighter && have.exaggeration == relief.toDouble()) {
@@ -279,6 +285,7 @@ fun Terrain3DView(
         status("Loading elevation…")
         val area = loadArea(demStore, bLat, bLng, level)
         if (area == null) {
+            com.ginsengo.steward.perf.FieldDiagnostics.square = "no elevation tiles for level $level here (offline, or the tile server unreachable)"
             status("No elevation tiles here yet. Connect once, or save the area for offline use.")
             return@LaunchedEffect
         }
@@ -314,6 +321,7 @@ fun Terrain3DView(
         publish()
         //noinspection LogNotTimber
         Log.i(TAG, "relief: level ${q.level} in ${SystemClock.elapsedRealtime() - t0} ms")
+        com.ginsengo.steward.perf.FieldDiagnostics.square = "level ${q.level}, %.1f km, relief in %.1f s, colouring…".format(q.widthM / 1000, (SystemClock.elapsedRealtime() - t0) / 1000.0)
         // The habitat scores and the creeks, on the same mesh: the camera and its anchor stay put.
         val tpi = SquareLevel.tpiRadiusM(q.level, bLat, viewportW())
         val full = withContext(Dispatchers.Default) {
@@ -328,6 +336,7 @@ fun Terrain3DView(
         publish()
         //noinspection LogNotTimber
         Log.i(TAG, "habitat: level ${full.level} in ${SystemClock.elapsedRealtime() - t0} ms")
+        com.ginsengo.steward.perf.FieldDiagnostics.square = "level ${full.level}, %.1f km, complete in %.1f s".format(full.widthM / 1000, (SystemClock.elapsedRealtime() - t0) / 1000.0)
     }
 
     // ---- the chosen map (streets, satellite, topo), drawn by MapLibre for this square, under the
@@ -344,6 +353,7 @@ fun Terrain3DView(
         publish()
         val px = MapDrape.render(context, style, s.north, s.west, s.south, s.east, s.textureSize, DRAPE_TIMEOUT_MS, basemap.maxZoom)
         if (scene?.mosaic !== s.mosaic) return@LaunchedEffect
+        com.ginsengo.steward.perf.FieldDiagnostics.mapDrape = "${basemap.label}: " + (if (px != null) "drawn" else "failed (offline or not cached)")
         if (px != null) {
             drape = s.mosaic to px; drapeOf = basemap; drapeNote = " · ${basemap.label.lowercase()} map on the ground"
             // Under the shared budget (A13): evicted, the ground is coloured without the map.
@@ -369,6 +379,11 @@ fun Terrain3DView(
             s.textureSize, DRAPE_TIMEOUT_MS, maxZoom = 14.0, pixelRatio = 1f)
         if (scene?.mosaic !== s.mosaic) return@LaunchedEffect
         overlay = px?.takeIf { MapDrape.mostlyClear(it) }?.let { s.mosaic to it }
+        com.ginsengo.steward.perf.FieldDiagnostics.roads = when {
+            px == null -> "failed (offline or not cached)"
+            overlay == null -> "refused: the snapshot came back opaque"
+            else -> "drawn"
+        }
         roadsNote = if (overlay != null) "" else " · roads & trails need a connection here (or Save 10 miles)"
         if (roadsNote.isNotEmpty()) { drapeNote += roadsNote; publish() }
     }
