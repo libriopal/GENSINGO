@@ -110,6 +110,10 @@ object TerrainMesh {
         val verts = FloatArray(total * FLOATS_PER_VERTEX)
         var minE = Float.MAX_VALUE
         var maxE = -Float.MAX_VALUE
+        // A vertex stands on real ground only if all four cells it is interpolated from do (B4).
+        // Triangles and walls touching any other vertex are not emitted: missing elevation is a
+        // hole, never the flat stand-in the store fills it with for the analysis.
+        val valid = BooleanArray(interior) { true }
 
         for (j in 0 until n) {
             val fy = j.toDouble() / (n - 1)
@@ -119,8 +123,15 @@ object TerrainMesh {
                 val fx = i.toDouble() / (n - 1)
                 val gx = halo + fx * iw - 0.5
                 val e = bilinear(g, gx, gy).toFloat()
-                if (e < minE) minE = e
-                if (e > maxE) maxE = e
+                if (mosaic.noData != null) {
+                    val x0 = gx.toInt().coerceIn(0, g.w - 2); val y0 = gy.toInt().coerceIn(0, g.h - 2)
+                    valid[j * n + i] = mosaic.hasData(x0, y0) && mosaic.hasData(x0 + 1, y0) &&
+                        mosaic.hasData(x0, y0 + 1) && mosaic.hasData(x0 + 1, y0 + 1)
+                }
+                if (valid[j * n + i]) {
+                    if (e < minE) minE = e
+                    if (e > maxE) maxE = e
+                }
                 val wx = camera.worldX(west + (east - west) * fx) - originX
                 val base = (j * n + i) * FLOATS_PER_VERTEX
                 verts[base + OFF_POSITION] = wx.toFloat()
@@ -132,10 +143,11 @@ object TerrainMesh {
             }
         }
 
-        computeNormals(verts, n)
+        computeNormals(verts, n, g, halo, iw, ih, exaggeration)
 
         // Skirt vertices: copy the boundary ring, pushed down.
         // A flat base below the lowest point, so the model reads as a solid block of ground.
+        if (minE > maxE) { minE = 0f; maxE = 0f }   // no real ground at all: nothing is drawn
         val relief = (maxE - minE).coerceAtLeast(1f)
         val baseM = minE - maxOf(relief * 0.12f, 20f)
         val baseZ = (baseM * camera.pixelsPerMeter * exaggeration).toFloat()
@@ -167,24 +179,29 @@ object TerrainMesh {
                 val b = j * n + i + 1
                 val c = (j + 1) * n + i
                 val d = (j + 1) * n + i + 1
-                idx[k++] = a; idx[k++] = c; idx[k++] = b
-                idx[k++] = b; idx[k++] = c; idx[k++] = d
+                if (valid[a] && valid[c] && valid[b]) { idx[k++] = a; idx[k++] = c; idx[k++] = b }
+                if (valid[b] && valid[c] && valid[d]) { idx[k++] = b; idx[k++] = c; idx[k++] = d }
             }
         }
         fun skirtStrip(edge: List<Int>) {
             for (t in 0 until edge.size - 1) {
                 val a = edge[t]
                 val b = edge[t + 1]
+                if (!valid[a] || !valid[b]) continue
                 val a2 = skirtIndexOf[a] ?: continue
                 val b2 = skirtIndexOf[b] ?: continue
                 idx[k++] = a; idx[k++] = a2; idx[k++] = b
                 idx[k++] = b; idx[k++] = a2; idx[k++] = b2
             }
         }
-        skirtStrip((0 until n).map { it })
-        skirtStrip((0 until n).map { (n - 1) * n + it })
-        skirtStrip((0 until n).map { it * n })
-        skirtStrip((0 until n).map { it * n + (n - 1) })
+        // Each wall walks its boundary edge opposite to the surface triangle that owns that edge,
+        // so all four face outward (exe.md B1). Walked all the same way, as they were, the north
+        // and east walls faced inward: seen from outside they were culled, and a camera north or
+        // east of the square saw the sky under the edge of the model. MeshTopologyTest holds it.
+        skirtStrip((n - 1 downTo 0).map { it })                    // north edge, walked west
+        skirtStrip((0 until n).map { (n - 1) * n + it })           // south edge, walked east
+        skirtStrip((0 until n).map { it * n })                     // west edge, walked south
+        skirtStrip((n - 1 downTo 0).map { it * n + (n - 1) })      // east edge, walked north
 
         return Mesh(
             vertices = verts,
@@ -201,35 +218,42 @@ object TerrainMesh {
     }
 
     /**
-     * Central-difference normals over the vertex lattice.
+     * Normals from the habitat analysis's own slope stencil (exe.md B6): the Horn gradient
+     * ([TerrainMath.horn]) of the four cells a vertex is interpolated from, blended with the
+     * same bilinear weights as its elevation. They used to be central differences over the
+     * vertex lattice, two cells apart: a third stencil, so the lit slope and the scored slope
+     * could disagree by degrees on real ground.
+     *
+     * Mesh x runs east and y south (world pixels), as Horn's gradient does, and heights are
+     * metres × pixels-per-metre × [exaggeration], so the surface's slope in mesh units is the
+     * gradient times the exaggeration and its normal is (−dz/dx, −dz/dy, 1), normalised.
      *
      * Computed here rather than in the vertex shader because a shader would need the
      * neighbouring heights, which means either a height texture or a geometry stage. Doing
      * it once on the CPU costs one pass over a mesh that is rebuilt only when the camera
      * settles, and keeps the shader trivial enough to reason about without running it.
      */
-    private fun computeNormals(verts: FloatArray, n: Int) {
-        fun pos(i: Int, j: Int, c: Int): Float {
-            val ii = i.coerceIn(0, n - 1)
-            val jj = j.coerceIn(0, n - 1)
-            return verts[(jj * n + ii) * FLOATS_PER_VERTEX + OFF_POSITION + c]
-        }
+    private fun computeNormals(
+        verts: FloatArray, n: Int, g: TerrainMath.Grid, halo: Int, iw: Int, ih: Int, exaggeration: Float,
+    ) {
         for (j in 0 until n) {
+            val gy = halo + j.toDouble() / (n - 1) * ih - 0.5
+            val y0 = gy.toInt().coerceIn(0, g.h - 2)
+            val ty = (gy - y0).coerceIn(0.0, 1.0)
             for (i in 0 until n) {
-                val dxx = pos(i + 1, j, 0) - pos(i - 1, j, 0)
-                val dxz = pos(i + 1, j, 2) - pos(i - 1, j, 2)
-                val dyy = pos(i, j + 1, 1) - pos(i, j - 1, 1)
-                val dyz = pos(i, j + 1, 2) - pos(i, j - 1, 2)
-                // tangents: (dxx, 0, dxz) along +x, (0, dyy, dyz) along +y
-                var nx = -dxz * dyy
-                var ny = -dxx * dyz
-                var nz = dxx * dyy
-                val len = sqrt(nx * nx + ny * ny + nz * nz)
-                if (len > 1e-9f) { nx /= len; ny /= len; nz /= len } else { nx = 0f; ny = 0f; nz = 1f }
-                // World z is up, so a flat surface must yield a normal pointing at +z.
-                if (nz < 0f) { nx = -nx; ny = -ny; nz = -nz }
+                val gx = halo + i.toDouble() / (n - 1) * iw - 0.5
+                val x0 = gx.toInt().coerceIn(0, g.w - 2)
+                val tx = (gx - x0).coerceIn(0.0, 1.0)
+                var dx = 0.0; var dy = 0.0
+                for (c in 0..3) {
+                    val cx = x0 + (c and 1); val cy = y0 + (c shr 1)
+                    val wgt = (if (c and 1 == 0) 1 - tx else tx) * (if (c shr 1 == 0) 1 - ty else ty)
+                    TerrainMath.horn(g, cx, cy) { gdx, gdy -> dx += wgt * gdx; dy += wgt * gdy }
+                }
+                val nx = -dx * exaggeration; val ny = -dy * exaggeration
+                val len = sqrt(nx * nx + ny * ny + 1.0)
                 val b = (j * n + i) * FLOATS_PER_VERTEX + OFF_NORMAL
-                verts[b] = nx; verts[b + 1] = ny; verts[b + 2] = nz
+                verts[b] = (nx / len).toFloat(); verts[b + 1] = (ny / len).toFloat(); verts[b + 2] = (1.0 / len).toFloat()
             }
         }
     }

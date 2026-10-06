@@ -88,10 +88,14 @@ object Terrain3D {
 
         fun contains(lat: Double, lng: Double) = lat in south..north && lng in west..east
 
+        /** The displayed square has cells with no real elevation, drawn as holes (B4). */
+        val hasHoles: Boolean = mosaic.interiorNoDataCells() > 0
+
         /**
          * Elevation in metres at a position, bilinear between cell centres, or null outside the
          * displayed square: the halo is sampled for the analysis but not drawn, so a marker
-         * there would float in the air.
+         * there would float in the air. Null over no-data too (B4): the mesh has a hole there,
+         * and the store's flat stand-in is not ground to stand a marker on.
          */
         fun elevationAt(lat: Double, lng: Double): Double? {
             if (!contains(lat, lng)) return null
@@ -101,6 +105,7 @@ object Terrain3D {
             val gy = Projection.y(lat) * n - mosaic.tileY0 * DemTileStore.TILE - 0.5
             val x0 = floor(gx).toInt().coerceIn(0, g.w - 1); val y0 = floor(gy).toInt().coerceIn(0, g.h - 1)
             val x1 = (x0 + 1).coerceAtMost(g.w - 1); val y1 = (y0 + 1).coerceAtMost(g.h - 1)
+            if (!mosaic.hasData(x0, y0) || !mosaic.hasData(x1, y0) || !mosaic.hasData(x0, y1) || !mosaic.hasData(x1, y1)) return null
             val fx = (gx - x0).coerceIn(0.0, 1.0); val fy = (gy - y0).coerceIn(0.0, 1.0)
             val top = g[x0, y0] * (1 - fx) + g[x1, y0] * fx
             val bottom = g[x0, y1] * (1 - fx) + g[x1, y1] * fx
@@ -120,7 +125,8 @@ object Terrain3D {
         @Synchronized
         fun useBudget(b: MemoryBudget) {
             budget = b
-            val bytes = mosaic.grid.z.size * 4L + mesh.vertices.size * 4L + mesh.indices.size * 4L + (ground.scores?.size ?: 0) * 8L
+            val bytes = mosaic.grid.z.size * 4L + (mosaic.noData?.size ?: 0) + mesh.vertices.size * 4L +
+                mesh.indices.size * 4L + (ground.scores?.size ?: 0) * 8L
             b.put(BUDGET_SCENE, { }, id, bytes, pinned = true)
             for ((k, px) in baked) b.put(BUDGET_TEXTURES, evictTexture, id to k, px.size * 4L, pinned = k == onScreen)
         }
@@ -203,6 +209,14 @@ object Terrain3D {
     fun heightFn(s: Scene, anchorM: Double): (Double, Double) -> Double =
         { lat, lng -> ((s.elevationAt(lat, lng) ?: anchorM) - anchorM) * EXAGGERATION }
 
+    /**
+     * The highest ground of [s] above the camera's target plane (the ground at [anchorM]), in the
+     * pixels of a view at [viewZoom], with the relief scale [relief] and [EXAGGERATION] applied as
+     * [MapCamera.mvpForMeshBuiltAt] draws them: what [DepthRange.near] needs (exe.md B7).
+     */
+    fun highestAbovePlanePx(s: Scene, anchorM: Double, viewZoom: Double, relief: Double): Double =
+        (s.mesh.maxElevationM - anchorM) * s.mesh.pixelsPerMeter * EXAGGERATION * relief * Math.pow(2.0, viewZoom - BUILD_ZOOM)
+
     /** Bounds of [heightFn] over the square, padded: where the pan's ray march starts and stops. */
     fun rangeFor(s: Scene, anchorM: Double): ClosedFloatingPointRange<Double> =
         ((s.mesh.minElevationM - anchorM) * EXAGGERATION - 50.0)..((s.mesh.maxElevationM - anchorM) * EXAGGERATION + 50.0)
@@ -227,10 +241,13 @@ object Terrain3D {
     fun lngOfEdge(m: DemTileStore.Mosaic, col: Double): Double =
         Projection.lng((m.tileX0 * DemTileStore.TILE + col) / Projection.worldPx(m.zoom, DemTileStore.TILE))
 
-    /** Channel length inside the displayed square only (the halo is sampled, never shown). */
+    /**
+     * Channel length inside the displayed square only (the halo is sampled, never shown), and
+     * only over real elevation: a channel traced across the store's flat stand-in is invented (B4).
+     */
     fun interiorLengthM(m: DemTileStore.Mosaic, lines: List<Hydrology.Line>): Double {
         val w = m.grid.w; val h = m.grid.h; val halo = m.haloPx
-        fun inside(c: Int) = c % w in halo until w - halo && c / w in halo until h - halo
+        fun inside(c: Int) = c % w in halo until w - halo && c / w in halo until h - halo && m.hasData(c % w, c / w)
         var total = 0.0
         for (l in lines) for (k in 1 until l.cells.size) {
             val a = l.cells[k - 1]; val b = l.cells[k]

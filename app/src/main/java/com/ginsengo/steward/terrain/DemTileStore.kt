@@ -108,11 +108,12 @@ class DemTileStore(
         null
     }
 
+    /** Metres per pixel; NaN where the pixel holds no real elevation ([isNoData]). */
     private fun decodeTerrarium(bmp: Bitmap): FloatArray {
         val w = bmp.width; val h = bmp.height
         val px = IntArray(w * h)
         bmp.getPixels(px, 0, w, 0, 0, w, h)
-        return FloatArray(w * h) { i -> terrariumMetres(px[i]) }
+        return FloatArray(w * h) { i -> if (isNoData(px[i])) Float.NaN else terrariumMetres(px[i]) }
     }
 
     /**
@@ -160,6 +161,11 @@ class DemTileStore(
                 System.arraycopy(data, row * TILE, z0, (oy + row) * w + ox, TILE)
             }
         }
+        // No-data (exe.md B4): the grid is still filled below, because the neighbourhood operators
+        // need a finite value everywhere; the mask is how every consumer knows not to draw, score
+        // or rank it.
+        val noData = markNoData(z0, nx, ny, loaded)
+        got = loaded.count { it }
         if (got == 0) return@coroutineScope null
         fillMissing(z0, nx, ny, loaded)
         var missingInterior = 0
@@ -179,6 +185,7 @@ class DemTileStore(
             haloPx = haloTiles * TILE,
             tilesLoaded = got, tilesRequested = jobs.size,
             missingInterior = missingInterior,
+            noData = noData,
         )
     }
 
@@ -191,7 +198,34 @@ class DemTileStore(
         val tilesLoaded: Int, val tilesRequested: Int,
         /** Tiles inside the halo that could not be loaded (edge-extended; see [fillMissing]). */
         val missingInterior: Int = 0,
+        /**
+         * True for the cells with no real elevation (exe.md B4), same layout as [grid]; null when
+         * every cell is real. The grid holds an edge-extended stand-in there, for the analysis
+         * only: nothing may draw, score or rank it as ground.
+         */
+        val noData: BooleanArray? = null,
     ) {
+        /** Real elevation at cell ([x], [y]), clamped to the grid as [TerrainMath.Grid.get] is. */
+        fun hasData(x: Int, y: Int): Boolean {
+            val m = noData ?: return true
+            return !m[y.coerceIn(0, grid.h - 1) * grid.w + x.coerceIn(0, grid.w - 1)]
+        }
+
+        /** Every cell of the 3×3 Horn stencil around ([x], [y]) is real: the cell can be scored. */
+        fun scorable(x: Int, y: Int): Boolean {
+            if (noData == null) return true
+            for (dy in -1..1) for (dx in -1..1) if (!hasData(x + dx, y + dy)) return false
+            return true
+        }
+
+        /** Cells of the displayed interior (halo cropped) with no real elevation. */
+        fun interiorNoDataCells(): Int {
+            val m = noData ?: return 0
+            var n = 0
+            for (y in haloPx until grid.h - haloPx) for (x in haloPx until grid.w - haloPx) if (m[y * grid.w + x]) n++
+            return n
+        }
+
         val northLat: Double get() = tileYToLat(tileY0, zoom)
         val southLat: Double get() = tileYToLat(tileY0 + tilesY, zoom)
         val westLon: Double get() = tileXToLon(tileX0, zoom)
@@ -211,8 +245,8 @@ class DemTileStore(
          * Gives tiles that could not be loaded the elevation of the nearest loaded edge,
          * instead of 0 m. A zero tile is a cliff hundreds of metres deep: it wrecks every
          * neighbourhood measure near it (slope, position, wetness, the drainage it creates)
-         * and, in 3D, draws a pit. Edge extension is flat and wrong in its own way, so
-         * callers see [Mosaic.missingInterior] and decide whether to show the result.
+         * and, in 3D, draws a pit. Edge extension is flat and wrong in its own way, so it is
+         * for the analysis only: [Mosaic.noData] marks it, and no view draws it as ground (B4).
          * Rows of tiles are filled sideways from the nearest loaded tile in the same row;
          * rows with none are then copied from the nearest filled row.
          */
@@ -242,6 +276,77 @@ class DemTileStore(
                 for (r in ty * TILE until (ty + 1) * TILE) System.arraycopy(z, srcRow * w, z, r * w, w)
             }
         }
+
+        /**
+         * The no-data mask of an assembled mosaic (exe.md B4): every cell with no real elevation,
+         * whether its tile never loaded (`loaded` false) or its pixel decoded to none (NaN, see
+         * [isNoData]). A loaded tile with no real pixel at all is marked not loaded, for
+         * [fillMissing] to edge-extend like any missing tile; a loaded tile with some no-data
+         * pixels has them filled from its own real ones ([fillWithinTile]). Null when every cell is
+         * real. [z] is [nx] × [ny] tiles of [TILE] cells, row-major.
+         */
+        internal fun markNoData(z: FloatArray, nx: Int, ny: Int, loaded: BooleanArray): BooleanArray? {
+            val w = nx * TILE
+            var noData: BooleanArray? = null
+            for (ty in 0 until ny) for (tx in 0 until nx) {
+                val ox = tx * TILE; val oy = ty * TILE
+                var holes = 0
+                if (loaded[ty * nx + tx]) {
+                    for (r in oy until oy + TILE) for (c in ox until ox + TILE) if (z[r * w + c].isNaN()) holes++
+                    if (holes == 0) continue
+                }
+                val mask = noData ?: BooleanArray(w * ny * TILE).also { noData = it }
+                if (!loaded[ty * nx + tx] || holes == TILE * TILE) {
+                    loaded[ty * nx + tx] = false
+                    for (r in oy until oy + TILE) java.util.Arrays.fill(mask, r * w + ox, r * w + ox + TILE, true)
+                } else {
+                    for (r in oy until oy + TILE) for (c in ox until ox + TILE) if (z[r * w + c].isNaN()) mask[r * w + c] = true
+                    fillWithinTile(z, w, ox, oy, mask)
+                }
+            }
+            return noData
+        }
+
+        /**
+         * Fills the no-data pixels of one loaded tile (origin [ox], [oy] in a mosaic [w] wide) from
+         * the nearest real pixel in the same row, then rows with none from the nearest row that has
+         * some: edge extension inside the tile, as [fillMissing] does between tiles. The caller has
+         * checked that the tile holds at least one real pixel; [noData] is left as it is.
+         */
+        internal fun fillWithinTile(z: FloatArray, w: Int, ox: Int, oy: Int, noData: BooleanArray) {
+            val left = IntArray(TILE); val right = IntArray(TILE)
+            val rowHas = BooleanArray(TILE)
+            for (r in 0 until TILE) {
+                val base = (oy + r) * w + ox
+                var l = -1
+                for (c in 0 until TILE) { if (!noData[base + c]) l = c; left[c] = l }
+                if (l < 0) continue
+                rowHas[r] = true
+                var rr = -1
+                for (c in TILE - 1 downTo 0) { if (!noData[base + c]) rr = c; right[c] = rr }
+                for (c in 0 until TILE) {
+                    if (!noData[base + c]) continue
+                    val a = left[c]; val b = right[c]
+                    val src = when { a < 0 -> b; b < 0 -> a; c - a <= b - c -> a; else -> b }
+                    z[base + c] = z[base + src]
+                }
+            }
+            val rows = (0 until TILE).filter { rowHas[it] }
+            for (r in 0 until TILE) {
+                if (rowHas[r]) continue
+                val src = rows.minBy { kotlin.math.abs(it - r) }
+                System.arraycopy(z, (oy + src) * w + ox, z, (oy + r) * w + ox, TILE)
+            }
+        }
+
+        /** Deeper than any ocean (the Challenger Deep is about 10,935 m): no real elevation is lower. */
+        const val LOWEST_REAL_M = -11_000f
+
+        /**
+         * A Terrarium pixel that carries no elevation (exe.md B4): transparent, or decoding below
+         * [LOWEST_REAL_M]. Pure black decodes to −32,768 m: drawn, it was a pit 32 km deep.
+         */
+        fun isNoData(argb: Int): Boolean = (argb ushr 24) == 0 || terrariumMetres(argb) < LOWEST_REAL_M
 
         private const val TAG = "DemTileStore"
         const val TILE = 256

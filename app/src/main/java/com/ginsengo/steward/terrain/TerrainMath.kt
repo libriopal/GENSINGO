@@ -40,8 +40,26 @@ object TerrainMath {
      * Returns slope in DEGREES and aspect in DEGREES clockwise from north (downslope
      * direction), or aspect = -1 where the surface is flat and aspect is undefined.
      */
-    fun slopeAspect(g: Grid, x: Int, y: Int): Pair<Double, Double> {
-        // row 0 is north, so +y is south: dz/dy is negated to keep "north" positive
+    fun slopeAspect(g: Grid, x: Int, y: Int): Pair<Double, Double> = horn(g, x, y) { dzdx, dzdy ->
+        val rise = sqrt(dzdx * dzdx + dzdy * dzdy)
+        val slopeDeg = Math.toDegrees(atan(rise))
+        if (rise < 1e-9) slopeDeg to -1.0 else {
+            // aspect: direction of steepest DESCENT, clockwise from north
+            var aspect = Math.toDegrees(atan2(dzdy, -dzdx))
+            aspect = (90.0 - aspect) % 360.0
+            if (aspect < 0) aspect += 360.0
+            slopeDeg to aspect
+        }
+    }
+
+    /**
+     * Horn (1981) gradient at cell ([x], [y]): dz/dx toward EAST and dz/dy toward SOUTH (row 0
+     * is north, so rows run south), in metres per metre. The app's one slope stencil (exe.md B6):
+     * [slopeAspect], and through it the habitat score, and the 3D mesh's normals both read it, so
+     * the shading and the score cannot disagree about which way a slope faces. Inline, so neither
+     * caller allocates.
+     */
+    inline fun <R> horn(g: Grid, x: Int, y: Int, use: (dzdx: Double, dzdy: Double) -> R): R {
         val a = g[x - 1, y - 1]; val b = g[x, y - 1]; val c = g[x + 1, y - 1]
         val d = g[x - 1, y];                          val f = g[x + 1, y]
         val gg = g[x - 1, y + 1]; val hh = g[x, y + 1]; val i = g[x + 1, y + 1]
@@ -49,16 +67,7 @@ object TerrainMath {
         val cs = g.cellSizeM
         val dzdx = ((c + 2f * f + i) - (a + 2f * d + gg)) / (8.0 * cs)
         val dzdy = ((gg + 2f * hh + i) - (a + 2f * b + c)) / (8.0 * cs)
-
-        val rise = sqrt(dzdx * dzdx + dzdy * dzdy)
-        val slopeDeg = Math.toDegrees(atan(rise))
-        if (rise < 1e-9) return slopeDeg to -1.0
-
-        // aspect: direction of steepest DESCENT, clockwise from north
-        var aspect = Math.toDegrees(atan2(dzdy, -dzdx))
-        aspect = (90.0 - aspect) % 360.0
-        if (aspect < 0) aspect += 360.0
-        return slopeDeg to aspect
+        return use(dzdx, dzdy)
     }
 
     // ---------------------------------------------------------------- heat load

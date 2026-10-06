@@ -16,7 +16,9 @@ object WaterLines {
 
     fun of(m: DemTileStore.Mosaic, lines: List<Hydrology.Line>, keepEvery: Int = 2): List<Polyline> {
         val w = m.grid.w; val h = m.grid.h; val halo = m.haloPx
-        fun inside(c: Int) = c % w in halo until w - halo && c / w in halo until h - halo
+        // Inside the interior and on real elevation: a channel across the store's flat stand-in
+        // for a missing tile is invented (exe.md B4), so a line is cut where it enters one.
+        fun inside(c: Int) = c % w in halo until w - halo && c / w in halo until h - halo && m.hasData(c % w, c / w)
         val out = ArrayList<Polyline>()
         for (line in lines) {
             var start = -1

@@ -45,6 +45,8 @@ class RadiusScan private constructor(
     val tpiRadiusCells: Int,
     val tilesLoaded: Int,
     val tilesRequested: Int,
+    /** The mosaic's no-data cells ([DemTileStore.Mosaic.noData]); null when all are real. */
+    private val noData: BooleanArray? = null,
 ) {
     data class Candidate(
         /** Stable across scans of the same ground: the DEM cell it was picked at. */
@@ -82,7 +84,8 @@ class RadiusScan private constructor(
     fun waterAt(x: Int, y: Int): Water? {
         val minClass = (Hydrology.Kind.CREEK.ordinal + 1).toByte()
         val maxR = (WATER_SEARCH_M / cellSizeM).toInt()
-        val i = Hydrology.nearest(grid.w, grid.h, x, y, maxR) { channels[it] >= minClass }
+        // A channel cell on the store's flat stand-in is invented (exe.md B4): never the nearest water.
+        val i = Hydrology.nearest(grid.w, grid.h, x, y, maxR) { channels[it] >= minClass && (noData == null || !noData[it]) }
         if (i < 0) return null
         val cx = i % grid.w; val cy = i / grid.w
         val lat = latOfRow(y.toDouble()); val lng = lngOfCol(x.toDouble())
@@ -106,6 +109,19 @@ class RadiusScan private constructor(
 
     private fun rowOf(lat: Double): Double = Projection.y(lat) * worldPx - tileY0 * DemTileStore.TILE - 0.5
 
+    /**
+     * Every cell of the slope stencil around ([x], [y]) holds real elevation (exe.md B4), as the
+     * map's [DemTileStore.Mosaic.scorable] asks: a cell the map shows as unknown is not scored,
+     * ranked or sampled here either, so the map and the list cannot disagree about it.
+     */
+    fun scorable(x: Int, y: Int): Boolean {
+        val m = noData ?: return true
+        for (dy in -1..1) for (dx in -1..1) {
+            if (m[(y + dy).coerceIn(0, grid.h - 1) * grid.w + (x + dx).coerceIn(0, grid.w - 1)]) return false
+        }
+        return true
+    }
+
     /** Six factor values at a cell. Edge cells are clamped one in, as the rasteriser does. */
     fun factorsAtCell(x: Int, y: Int): DoubleArray {
         val xi = x.coerceIn(1, grid.w - 2)
@@ -121,11 +137,12 @@ class RadiusScan private constructor(
         )
     }
 
-    /** Factors at a position, or null outside the scanned ground. */
+    /** Factors at a position, or null outside the scanned ground or on ground with no real elevation. */
     fun factorsAt(lat: Double, lng: Double): DoubleArray? {
         val x = colOf(lng).roundToInt()
         val y = rowOf(lat).roundToInt()
         if (x !in 1 until grid.w - 1 || y !in 1 until grid.h - 1) return null
+        if (!scorable(x, y)) return null
         return factorsAtCell(x, y)
     }
 
@@ -157,7 +174,7 @@ class RadiusScan private constructor(
         for (y in m until h - m) {
             val lat = latOfRow(y.toDouble())
             for (x in m until w - m) {
-                if (!inRadius(lat, lngOfCol(x.toDouble()))) continue
+                if (!inRadius(lat, lngOfCol(x.toDouble())) || !scorable(x, y)) continue
                 score[y * w + x] = GinsengSuitability.weighted(factorsAtCell(x, y), weights).toFloat()
             }
         }
@@ -216,7 +233,7 @@ class RadiusScan private constructor(
             val x = m + r.nextInt((grid.w - 2 * m).coerceAtLeast(1))
             val y = m + r.nextInt((grid.h - 2 * m).coerceAtLeast(1))
             val lat = latOfRow(y.toDouble()); val lng = lngOfCol(x.toDouble())
-            if (!inRadius(lat, lng)) continue
+            if (!inRadius(lat, lng) || !scorable(x, y)) continue
             out += FindLearner.Sample(factorsAtCell(x, y), lat, lng)
         }
         return out
@@ -250,7 +267,7 @@ class RadiusScan private constructor(
                 val x = m + r.nextInt((grid.w - 2 * m).coerceAtLeast(1))
                 val y = m + r.nextInt((grid.h - 2 * m).coerceAtLeast(1))
                 val lat = latOfRow(y.toDouble()); val lng = lngOfCol(x.toDouble())
-                if (!inRadius(lat, lng)) continue
+                if (!inRadius(lat, lng) || !scorable(x, y)) continue
                 val theta = r.nextDouble() * 2 * PI
                 val lat2 = lat + lag * kotlin.math.cos(theta) / 111_320.0
                 val lng2 = lng + lag * kotlin.math.sin(theta) / (111_320.0 * cos(Math.toRadians(lat)))
@@ -320,6 +337,7 @@ class RadiusScan private constructor(
                 tileX0 = mosaic.tileX0, tileY0 = mosaic.tileY0,
                 tpiRadiusCells = (TPI_RADIUS_M / g.cellSizeM).roundToInt().coerceIn(1, 60),
                 tilesLoaded = mosaic.tilesLoaded, tilesRequested = mosaic.tilesRequested,
+                noData = mosaic.noData,
             )
         }
 

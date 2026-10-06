@@ -215,6 +215,9 @@ fun FieldMap(
             Log.i(TAG, "habitat: DEM zoom $z, ${mosaic.tilesLoaded}/${mosaic.tilesRequested} tiles")
             var uploaded = true
             var status = "%.1f m cells · %d/%d tiles".format(mosaic.grid.cellSizeM, mosaic.tilesLoaded, mosaic.tilesRequested)
+            // The legend for unknown ground (exe.md B5), only when there is some in view: missing
+            // elevation is hatched, not scored, and must not be read as weak ground.
+            if (wantHabitat && mosaic.interiorNoDataCells() > 0) status += " · hatched: no elevation data"
             if (wantHabitat) {
                 val t0 = android.os.SystemClock.elapsedRealtime()
                 val r = SuitabilityRasterizer.rasterise(

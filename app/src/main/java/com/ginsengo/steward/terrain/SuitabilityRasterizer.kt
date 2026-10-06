@@ -90,7 +90,7 @@ object SuitabilityRasterizer {
             ensureActive()
         }
         val t2 = System.nanoTime()
-        val px = IntArray(outSize * outSize) { colourFor(scores[it], minScore) }
+        val px = pixels(scores, outSize, minScore)
 
         val bmp = Bitmap.createBitmap(outSize, outSize, Bitmap.Config.ARGB_8888)
         bmp.setPixels(px, 0, outSize, 0, 0, outSize, outSize)
@@ -116,6 +116,9 @@ object SuitabilityRasterizer {
      * Split out so the drawn surface itself is testable on the JVM (android.graphics.Bitmap
      * is a stub there). The Phase 7 regression was precisely a drawn surface that no longer
      * matched the model its tests pinned; testing this function closes that gap.
+     *
+     * NaN where the ground is unknown (exe.md B4): a pixel none of whose samples lands on a cell
+     * whose whole slope stencil is real elevation ([DemTileStore.Mosaic.scorable]).
      */
     fun scoreGrid(
         mosaic: DemTileStore.Mosaic,
@@ -171,6 +174,8 @@ object SuitabilityRasterizer {
                         val fy = (oy + (sy + 0.5) / superSample) / outSize
                         val gx = ix0 + fx * iw
                         val gy = iy0 + fy * ih
+                        // The cell scoreAt reads; a sample on unknown ground counts for nothing.
+                        if (!mosaic.scorable(gx.toInt().coerceIn(1, g.w - 2), gy.toInt().coerceIn(1, g.h - 2))) continue
                         acc += if (memo == null) {
                             scoreAt(g, analysis, gx, gy, mosaic, tpiRadiusCells, superSample == 1, weights)
                         } else {
@@ -188,7 +193,7 @@ object SuitabilityRasterizer {
                         n++
                     }
                 }
-                out[oy * outSize + ox] = if (n == 0) 0.0 else acc / n
+                out[oy * outSize + ox] = if (n == 0) Double.NaN else acc / n
             }
         }
         return out
@@ -288,7 +293,31 @@ object SuitabilityRasterizer {
         0xEAF6C8, // 1.00  pale chartreuse
     )
 
+    /**
+     * The raster's pixels for [scores] ([scoreGrid]'s layout): [unknownAt] where the score is NaN
+     * (no real elevation), [colourFor] elsewhere. What [rasterise] hands to the map.
+     */
+    fun pixels(scores: DoubleArray, outSize: Int, minScore: Double): IntArray = IntArray(outSize * outSize) {
+        val s = scores[it]
+        if (s.isNaN()) unknownAt(it % outSize, it / outSize) else colourFor(s, minScore)
+    }
+
+    /**
+     * Unknown ground (exe.md B5): a diagonal hatch covering a quarter of the pixels, in the UI's dim text
+     * colour (`Gen.TextDim`, frozen palette; no new colour). It must not look like weak ground,
+     * which [colourFor] leaves fully transparent, nor like any colour of [RAMP]; the clear pixels
+     * between the lines keep the basemap readable under it. [x], [y] are output pixels.
+     */
+    fun unknownAt(x: Int, y: Int): Int = if (Math.floorMod(x + y, HATCH_PERIOD) < HATCH_WIDTH) HATCH else 0
+
+    const val HATCH = (0xB0 shl 24) or 0x8FA89A
+    const val HATCH_PERIOD = 8
+    const val HATCH_WIDTH = 2
+
     fun colourFor(score: Double, minScore: Double): Int {
+        // Callers draw unknown ground with unknownAt before they get here; this only keeps a stray
+        // NaN from crashing roundToInt below.
+        if (score.isNaN()) return 0
         if (score < minScore) return 0
         val t = ((score - minScore) / (1.0 - minScore)).coerceIn(0.0, 1.0)
 

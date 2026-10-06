@@ -6,6 +6,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
@@ -77,6 +78,7 @@ import com.ginsengo.steward.research.RadiusScan
 import com.ginsengo.steward.terrain.DemTileStore
 import com.ginsengo.steward.terrain.SuitabilityRasterizer
 import com.ginsengo.steward.terrain3d.CameraMath
+import com.ginsengo.steward.terrain3d.DepthRange
 import com.ginsengo.steward.terrain3d.GestureMath
 import com.ginsengo.steward.terrain3d.Handoff
 import com.ginsengo.steward.terrain3d.MeshSession
@@ -361,6 +363,7 @@ fun Terrain3DView(
         // The app logs through android.util.Log throughout (Timber is not a dependency).
         //noinspection LogNotTimber
         if (ready) Log.i(TAG, "ready: hand-off relief %.3f at pitch %.0f (tolerance %.1f px)".format(handoff, cam.pitch, tolerancePx) +
+            " · depth ${DepthFallbackChooser.chosenBits} bits" + (if (s?.hasHoles == true) " · holes (no elevation)" else "") +
             (budget?.let { " · " + it.report() } ?: ""))
     }
     // Gone means not ready: the next visit builds anew and must not fade in before it has drawn.
@@ -372,7 +375,9 @@ fun Terrain3DView(
             renderer.submitFrame(
                 TerrainGlRenderer.Frame(
                     mvp = mc.mvpForMeshBuiltAt(Terrain3D.BUILD_ZOOM, s.mesh.originWorldX, s.mesh.originWorldY,
-                        groundZ = anchorM * s.mesh.pixelsPerMeter * Terrain3D.EXAGGERATION, relief = relief),
+                        groundZ = anchorM * s.mesh.pixelsPerMeter * Terrain3D.EXAGGERATION, relief = relief,
+                        // Depth precision from the ground in view (exe.md B7), not a fixed 48 px.
+                        nearPx = DepthRange.near(mc, Terrain3D.highestAbovePlanePx(s, anchorM, mc.zoom, relief))),
                     hazeStart = (mc.cameraToCenterDistance * 1.1).toFloat(),
                     hazeEnd = (mc.cameraToCenterDistance * 3.6).toFloat(),
                 )
@@ -570,6 +575,12 @@ private fun Legend(s: Terrain3D.Scene, mode: TerrainTextures.Mode, layers: MapLa
                 color = Gen.Text, fontSize = 11.sp,
             )
         }
+        // Unknown ground (exe.md B5): a hole showing the sky, not weak ground. Only when there is one.
+        if (s.hasHoles) Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(18.dp).height(10.dp).background(Color(0xFF0E191E)).border(1.dp, Gen.TextDim))
+            Spacer(Modifier.size(6.dp))
+            Text("Hole: no elevation data", color = Gen.TextDim, fontSize = 11.sp)
+        }
         if (layers.water) Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(18.dp).height(3.dp).background(Color(0xFF3FB2F7)))
             Spacer(Modifier.size(6.dp))
@@ -604,7 +615,7 @@ private suspend fun loadArea(demStore: DemTileStore, lat: Double, lng: Double): 
         if (best == null || m.missingInterior < best.missingInterior) best = m
     }
     val m = best ?: return null
-    return m to " · ${m.missingInterior} tile(s) missing, flattened"
+    return m to " · ${m.missingInterior} tile(s) without elevation, left as holes"
 }
 
 private fun fitZoomFor(s: Terrain3D.Scene, viewportWidthPx: Int): Double =
@@ -684,6 +695,11 @@ private const val MAX_TRACK_POINTS = 3_000
  * request cannot be met, which would take the whole app down with the 3D view.
  */
 private class DepthFallbackChooser : GLTextureView.EGLConfigChooser {
+    companion object {
+        /** The depth size the last chooser got (logged on ready: B7's precision depends on it). */
+        @Volatile var chosenBits = 0
+    }
+
     override fun chooseConfig(egl: EGL10, display: EGLDisplay): EGLConfig {
         for (depth in intArrayOf(24, 16)) {
             val attribs = intArrayOf(
@@ -694,7 +710,7 @@ private class DepthFallbackChooser : GLTextureView.EGLConfigChooser {
             )
             val found = IntArray(1)
             val configs = arrayOfNulls<EGLConfig>(1)
-            if (egl.eglChooseConfig(display, attribs, configs, 1, found) && found[0] > 0) return configs[0]!!
+            if (egl.eglChooseConfig(display, attribs, configs, 1, found) && found[0] > 0) { chosenBits = depth; return configs[0]!! }
         }
         throw IllegalArgumentException("No OpenGL ES 3 configuration on this device")
     }

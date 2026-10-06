@@ -164,9 +164,11 @@ class MapCamera(
          * plane the 2D map draws, which is where the cross-fade between them starts ([Handoff]).
          */
         relief: Double = 1.0,
+        /** The near plane: [DepthRange.near] for the ground in view, else MapLibre's [nearZ]. */
+        nearPx: Double = nearZ,
     ): FloatArray {
         val k = Math.pow(2.0, zoom - buildZoom)
-        var m = perspective(FOV, viewportWidth.toDouble() / viewportHeight, nearZ, farZ)
+        var m = perspective(FOV, viewportWidth.toDouble() / viewportHeight, nearPx, maxOf(farZ, nearPx * 2.0))
         m = m * scale(1.0, -1.0, 1.0)
         m = m * translate(0.0, 0.0, -cameraToCenterDistance)
         m = m * rotateX(pitch)

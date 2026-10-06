@@ -7,13 +7,19 @@ expected to kill it. The harness:
   1. refuses a mutation whose `old` text is not found exactly once (a vacuous mutation
      that edits nothing is the "vacuous control" failure mode, not a pass),
   2. applies it, runs the named test classes, records KILLED (tests failed) or SURVIVED,
-  3. restores the file byte-for-byte, and verifies the restore.
+  3. restores the file byte-for-byte, and verifies the restore,
+  4. refuses to start when two mutations share an id (exe.md I20: A.2's R1-R10 ran the old
+     hydrology R1-R3 instead, and B.1's first V1-V5 and W1-W2 collided again), and restores the
+     mutated file when it is stopped by SIGTERM or SIGINT, not only when a test run ends (a
+     killed A.2 run left RadiusScan.kt mutated).
 
 A SURVIVED row is a candidate defect, not a verdict: it may be an equivalent mutant.
 Survivors are triaged by hand in EINCOL_REPORT.md Phase 7.
 
 Usage: tools/mutate.py [ID ...]      (no IDs = all)
 """
+import collections
+import signal
 import subprocess
 import sys
 import time
@@ -294,6 +300,49 @@ MUTATIONS = [
      "ceilingBytes = minOf(ceilingBytes, (baseCeilingBytes * share).toLong())",
      "ceilingBytes = minOf(ceilingBytes, baseCeilingBytes)",
      [T + "perf.MemoryBudgetTest"]),
+
+    # --- wave B.1: a mesh that can be believed (walls, cracks, no-data, one slope, depth)
+    ("X1", "an induced crack: one surface triangle dropped (I10)", M + "terrain3d/TerrainMesh.kt",
+     "if (valid[b] && valid[c] && valid[d]) {",
+     "if (valid[b] && valid[c] && valid[d] && !(i == n / 2 && j == n / 2)) {",
+     [T + "terrain3d.MeshTopologyTest"]),
+    ("X2", "the skirt removed (I11)", M + "terrain3d/TerrainMesh.kt",
+     "if (!valid[a] || !valid[b]) continue", "continue",
+     [T + "terrain3d.MeshTopologyTest"]),
+    ("X3", "the north wall walked the old way (faces inward)", M + "terrain3d/TerrainMesh.kt",
+     "skirtStrip((n - 1 downTo 0).map { it })", "skirtStrip((0 until n).map { it })",
+     [T + "terrain3d.MeshTopologyTest"]),
+    ("X4", "mesh normals with north and south swapped", M + "terrain3d/TerrainMesh.kt",
+     "val nx = -dx * exaggeration; val ny = -dy * exaggeration",
+     "val nx = -dx * exaggeration; val ny = dy * exaggeration",
+     [T + "terrain3d.MeshNormalsTest"]),
+    ("X5", "mesh normals from the nearest cell, not the analysis's blend", M + "terrain3d/TerrainMesh.kt",
+     "val wgt = (if (c and 1 == 0) 1 - tx else tx) * (if (c shr 1 == 0) 1 - ty else ty)",
+     "val wgt = if (c == 0) 1.0 else 0.0",
+     [T + "terrain3d.MeshNormalsTest"]),
+    ("X6", "the mesh draws missing elevation as ground", M + "terrain3d/TerrainMesh.kt",
+     "valid[j * n + i] = mosaic.hasData(x0, y0) &&",
+     "valid[j * n + i] = true || mosaic.hasData(x0, y0) &&",
+     [T + "terrain3d.NoDataTest"]),
+    ("X7", "the ranking scores missing elevation", M + "research/RadiusScan.kt",
+     "if (!inRadius(lat, lngOfCol(x.toDouble())) || !scorable(x, y)) continue",
+     "if (!inRadius(lat, lngOfCol(x.toDouble()))) continue",
+     [T + "terrain3d.NoDataTest"]),
+    ("X8", "unknown ground drawn as weak ground", M + "terrain/SuitabilityRasterizer.kt",
+     "if (s.isNaN()) unknownAt(it % outSize, it / outSize) else colourFor(s, minScore)",
+     "colourFor(s, minScore)",
+     [T + "terrain3d.NoDataTest"]),
+    ("X9", "the near plane ignores the ground's height", M + "terrain3d/DepthRange.kt",
+     "val bound = (eyeHeight - highestAbovePlanePx) * cos(halfDiagonal) * SAFETY",
+     "val bound = eyeHeight * cos(halfDiagonal) * SAFETY",
+     [T + "terrain3d.DepthRangeTest"]),
+    ("X10", "a transparent or black pixel decodes as ground", M + "terrain/DemTileStore.kt",
+     "fun isNoData(argb: Int): Boolean = (argb ushr 24) == 0 || terrariumMetres(argb) < LOWEST_REAL_M",
+     "fun isNoData(argb: Int): Boolean = false",
+     [T + "terrain3d.NoDataTest"]),
+    ("X11", "a tile with no real pixel counts as loaded", M + "terrain/DemTileStore.kt",
+     "if (!loaded[ty * nx + tx] || holes == TILE * TILE) {", "if (!loaded[ty * nx + tx]) {",
+     [T + "terrain3d.NoDataTest"]),
 ]
 
 
@@ -309,6 +358,11 @@ def run_tests(classes):
 
 
 def main():
+    dup = [k for k, v in collections.Counter(m[0] for m in MUTATIONS).items() if v > 1]
+    if dup:
+        sys.exit(f"duplicate mutation ids {sorted(dup)}: rename before running (exe.md I20)")
+    # SIGTERM unwinds like Ctrl-C, so the finally below restores the file a mutant is in.
+    signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     want = set(sys.argv[1:])
     rows = []
     for mid, what, path, old, new, tests in MUTATIONS:

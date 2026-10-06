@@ -99,7 +99,10 @@ object TerrainTextures {
         val elev = FloatArray(size * size)
         val map = ground.basemap?.takeIf { mode == Mode.MAP && it.size == size * size }
 
-        // Elevation at every texel centre, and the relief it spans.
+        // Elevation at every texel centre, and the relief it spans. A texel interpolated from any
+        // cell without real elevation is unknown (B4/B5): it gets the unknown hatch and nothing
+        // else, and the store's flat stand-in does not stretch the elevation tint's range.
+        val unknown = if (m.noData == null) null else BooleanArray(size * size)
         var lo = Float.MAX_VALUE; var hi = -Float.MAX_VALUE
         for (ty in 0 until size) {
             val gy = halo + (ty + 0.5) / size * ih - 0.5
@@ -107,9 +110,17 @@ object TerrainTextures {
                 val gx = halo + (tx + 0.5) / size * iw - 0.5
                 val e = bilinear(g.z, g.w, g.h, gx, gy)
                 elev[ty * size + tx] = e
+                if (unknown != null) {
+                    val x0 = gx.toInt().coerceIn(0, g.w - 2); val y0 = gy.toInt().coerceIn(0, g.h - 2)
+                    if (!m.hasData(x0, y0) || !m.hasData(x0 + 1, y0) || !m.hasData(x0, y0 + 1) || !m.hasData(x0 + 1, y0 + 1)) {
+                        unknown[ty * size + tx] = true
+                        continue
+                    }
+                }
                 if (e < lo) lo = e; if (e > hi) hi = e
             }
         }
+        if (lo > hi) { lo = 0f; hi = 0f }
         val span = (hi - lo).coerceAtLeast(1f)
         val cellX = g.cellSizeM * iw / size          // metres per texel
         val cellY = g.cellSizeM * ih / size
@@ -117,6 +128,10 @@ object TerrainTextures {
         for (ty in 0 until size) {
             for (tx in 0 until size) {
                 val i = ty * size + tx
+                if (unknown != null && unknown[i]) {
+                    out[i] = over(NEUTRAL_RAMP[0], SuitabilityRasterizer.unknownAt(tx, ty)) or (0xFF shl 24)
+                    continue
+                }
                 val e = elev[i]
                 val t = ((e - lo) / span).toDouble()
                 var rgb = when (mode) {
@@ -131,7 +146,9 @@ object TerrainTextures {
                             val score = bilinear(s, ground.scoreSize, ground.scoreSize,
                                 (tx + 0.5) / size * ground.scoreSize - 0.5,
                                 (ty + 0.5) / size * ground.scoreSize - 0.5).toDouble()
-                            over(base, fade(SuitabilityRasterizer.colourFor(score, MIN_SCORE), layers.habitatOpacity))
+                            // NaN at the rim of a hole, where a neighbouring score is unknown.
+                            if (score.isNaN()) over(base, SuitabilityRasterizer.unknownAt(tx, ty))
+                            else over(base, fade(SuitabilityRasterizer.colourFor(score, MIN_SCORE), layers.habitatOpacity))
                         }
                     }
                 }
@@ -151,7 +168,7 @@ object TerrainTextures {
             }
         }
 
-        if (layers.contours) drawContours(out, elev, size, contourInterval((hi - lo).toDouble()))
+        if (layers.contours) drawContours(out, elev, size, contourInterval((hi - lo).toDouble()), unknown)
         if (layers.water) drawChannels(out, ground, size)
         return out
     }
@@ -162,10 +179,12 @@ object TerrainTextures {
      * dark on light ground and light on dark ground: dark-only contours vanished in shaded
      * coves and at the low end of the elevation tint (caught by Terrain3DTest).
      */
-    private fun drawContours(px: IntArray, elev: FloatArray, size: Int, interval: Double) {
+    private fun drawContours(px: IntArray, elev: FloatArray, size: Int, interval: Double, unknown: BooleanArray?) {
         fun band(v: Float) = floor(v / interval).toInt()
         for (ty in 0 until size - 1) for (tx in 0 until size - 1) {
             val i = ty * size + tx
+            // No contour on, or along the edge of, ground with no real elevation.
+            if (unknown != null && (unknown[i] || unknown[i + 1] || unknown[i + size])) continue
             val b = band(elev[i])
             val be = band(elev[i + 1]); val bs = band(elev[i + size])
             if (b == be && b == bs) continue
@@ -191,7 +210,12 @@ object TerrainTextures {
             smooth(xs); smooth(ys)
             val style = WATER.getValue(line.kind)
             val half = max(0.6, style.widthM / metresPerTexel / 2)
-            for (k in 1 until n) stroke(px, size, xs[k - 1], ys[k - 1], xs[k], ys[k], half, style.rgb, style.alpha)
+            for (k in 1 until n) {
+                // A channel across the store's flat stand-in is invented (B4): not drawn.
+                val a = line.cells[k - 1]; val b = line.cells[k]
+                if (!m.hasData(a % g.w, a / g.w) || !m.hasData(b % g.w, b / g.w)) continue
+                stroke(px, size, xs[k - 1], ys[k - 1], xs[k], ys[k], half, style.rgb, style.alpha)
+            }
         }
     }
 

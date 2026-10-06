@@ -15,11 +15,12 @@ object ContourLines {
         val points: Int get() = lngLat.size / 2
     }
 
-    /** Highest minus lowest elevation over the interior, metres. */
+    /** Highest minus lowest real elevation over the interior, metres (no-data cells do not count). */
     fun interiorReliefM(m: DemTileStore.Mosaic): Double {
         val g = m.grid; val halo = m.haloPx
         var lo = Float.MAX_VALUE; var hi = -Float.MAX_VALUE
         for (y in halo until g.h - halo) for (x in halo until g.w - halo) {
+            if (!m.hasData(x, y)) continue
             val v = g.z[y * g.w + x]
             if (v < lo) lo = v
             if (v > hi) hi = v
@@ -41,12 +42,13 @@ object ContourLines {
         val out = ArrayList<Line>()
         for ((level, lines) in isolines(z, iw, ih, intervalM)) {
             val index = (level / intervalM).roundToInt() % 5 == 0
-            for (xy in lines) {
-                val n = xy.size / 2
+            for (xy in lines) for (run in realRuns(m, xy)) {
+                val n = run.size
                 if (n < 2) continue
                 val keep = (0 until n).filter { it % keepEvery == 0 || it == n - 1 }
                 val ll = DoubleArray(keep.size * 2)
-                keep.forEachIndexed { k, i ->
+                keep.forEachIndexed { k, r ->
+                    val i = run[r]
                     // Isoline coordinates are interior samples; the mosaic's cells start at the halo.
                     ll[2 * k] = WaterLines.lngOfCell(m, xy[2 * i] + halo.toDouble())
                     ll[2 * k + 1] = WaterLines.latOfCell(m, xy[2 * i + 1] + halo.toDouble())
@@ -55,5 +57,25 @@ object ContourLines {
             }
         }
         return out
+    }
+
+    /**
+     * The runs of [xy]'s vertices (indices) that lie between cells of real elevation (B4): a
+     * contour crossing the store's flat stand-in, or stacked along its edge, is not drawn. The
+     * whole line when the mosaic has no gap.
+     */
+    private fun realRuns(m: DemTileStore.Mosaic, xy: FloatArray): List<IntArray> {
+        val n = xy.size / 2
+        if (m.noData == null) return listOf(IntArray(n) { it })
+        val runs = ArrayList<IntArray>()
+        var cur = ArrayList<Int>()
+        for (i in 0 until n) {
+            val x0 = kotlin.math.floor(xy[2 * i].toDouble()).toInt() + m.haloPx
+            val y0 = kotlin.math.floor(xy[2 * i + 1].toDouble()).toInt() + m.haloPx
+            if (m.hasData(x0, y0) && m.hasData(x0 + 1, y0) && m.hasData(x0, y0 + 1) && m.hasData(x0 + 1, y0 + 1)) cur += i
+            else { if (cur.size >= 2) runs += cur.toIntArray(); cur = ArrayList() }
+        }
+        if (cur.size >= 2) runs += cur.toIntArray()
+        return runs
     }
 }
