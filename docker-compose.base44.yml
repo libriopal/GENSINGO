@@ -1,0 +1,27 @@
+# Base44 dev environment for GENSINGO.
+# This is a native Android app (Kotlin + Jetpack Compose) that builds to an APK.
+# The compose service compiles the project, runs JVM unit tests, and serves a
+# live status page on port 3000 showing the results.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.base44
+    volumes:
+      - .:/workspace
+      - gradle-cache:/root/.gradle
+    ports:
+      - "3000:3000"
+    environment:
+      - BASE44_PREVIEW_MODE=1
+    command: ["python3", "/workspace/base44_dev.py"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:3000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: on-failure
+
+volumes:
+  gradle-cache:

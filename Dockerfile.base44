@@ -1,0 +1,29 @@
+# Base44 dev environment for GENSINGO — a native Android app (Kotlin + Compose).
+# The app builds to an APK and cannot run in a web browser, so this image sets up
+# the Android SDK to compile the project and run JVM unit tests, then serves a
+# status page on port 3000.
+
+FROM eclipse-temurin:17-jdk
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        wget unzip python3 curl \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV ANDROID_HOME=/opt/android-sdk
+ENV ANDROID_SDK_ROOT=$ANDROID_HOME
+
+# Install Android command-line tools
+RUN mkdir -p $ANDROID_HOME/cmdline-tools && \
+    wget -q "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" \
+        -O /tmp/cmdline-tools.zip && \
+    unzip -q /tmp/cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools && \
+    mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest && \
+    rm /tmp/cmdline-tools.zip
+
+ENV PATH="${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools"
+
+# Accept licenses and install the SDK components the project needs
+RUN yes | sdkmanager --licenses && \
+    sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+
+WORKDIR /workspace
